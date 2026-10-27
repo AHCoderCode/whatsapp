@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#00a884">
+  <meta name="theme-color" content="#25D366">
   <meta name="description" content="Responsive messaging app with Supabase accounts, real-time chats, contacts and voice/video calling.">
   <meta name="color-scheme" content="light">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -22,10 +22,10 @@
   <meta name="twitter:description" content="An installable messaging web app with account-based chats and voice/video calls.">
   <meta name="twitter:image" content="https://whatsapp-for.vercel.app/icon-512.svg">
   <title>WhatsApp</title>
-  <link rel="icon" href="/icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="/icon-192.svg">
-  <link rel="manifest" href="/manifest.webmanifest?v=desktop-requests-20261027e">
-  <link rel="stylesheet" href="/styles.css?v=desktop-requests-20261027e">
+  <link rel="icon" href="/icon.svg?v=whatsapp-empty-20261027f" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon-192.svg?v=whatsapp-empty-20261027f">
+  <link rel="manifest" href="/manifest.webmanifest?v=whatsapp-empty-20261027f">
+  <link rel="stylesheet" href="/styles.css?v=whatsapp-empty-20261027f">
 </head>
 <body>
 <svg id="wa-icons" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="position:absolute;overflow:hidden">
@@ -117,7 +117,7 @@
   <div class="app-workspace">
     <aside class="app-rail" aria-label="Main navigation">
       <nav class="rail-group">
-        <div class="rail-brand" title="WhatsApp" aria-label="WhatsApp"><img src="/icon.svg" alt="WhatsApp"></div>
+        <div class="rail-brand" title="WhatsApp" aria-label="WhatsApp"><img src="/icon.svg?v=whatsapp-empty-20261027f" alt="WhatsApp"></div>
         <button class="rail-button active" data-view="chats" title="Chats" aria-label="Chats"><svg><use href="#i-chat"/></svg><span class="nav-count" id="rail-chat-count"></span></button>
         <button class="rail-button" data-view="updates" title="Updates" aria-label="Updates"><svg><use href="#i-status"/></svg></button>
         <button class="rail-button" data-view="communities" title="Communities" aria-label="Communities"><svg><use href="#i-communities"/></svg></button>
@@ -187,10 +187,10 @@
 </div>
 <div id="overlay-root"></div>
 <div id="toast-root" aria-live="polite"></div>
-<script src="/app.js?v=desktop-requests-20261027e" defer></script>
+<script src="/app.js?v=whatsapp-empty-20261027f" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-<script src="/backend.js?v=desktop-requests-20261027e" defer></script>
-<script src="/calls.js?v=desktop-requests-20261027e" defer></script>
+<script src="/backend.js?v=whatsapp-empty-20261027f" defer></script>
+<script src="/calls.js?v=whatsapp-empty-20261027f" defer></script>
 <script>
 if("serviceWorker" in navigator){
   const releaseKey="vexel_desktop_requests_reload_20261027e";
@@ -203,7 +203,7 @@ if("serviceWorker" in navigator){
     }catch(_){}
   });
   window.addEventListener("load",()=>{
-    navigator.serviceWorker.register("/sw.js?v=desktop-requests-20261027e",{updateViaCache:"none"})
+    navigator.serviceWorker.register("/sw.js?v=whatsapp-empty-20261027f",{updateViaCache:"none"})
       .then(registration=>registration.update().catch(()=>{}))
       .catch(()=>{});
   });
