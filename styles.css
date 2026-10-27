@@ -274,3 +274,65 @@ button,input,textarea,select{max-width:100%}
   .app-screen.mobile-section-open .mobile-nav{display:grid}
 }
 @media(min-width:701px){.mobile-nav{display:none!important}}
+
+/* Message selection toolbar, live replies, and persistent reactions */
+.message-action-toolbar{position:absolute;top:0;left:0;right:0;z-index:40;display:flex;flex-direction:column;gap:7px;padding:8px 12px 10px;background:rgba(250,252,253,.98);border-bottom:1px solid #dfe6e8;box-shadow:0 6px 18px #0b252b1a;color:#203238;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.message-toolbar-top{display:flex;align-items:center;gap:10px;min-height:34px;color:#687b81;font-size:12px;font-weight:600}
+.message-toolbar-close{width:28px;height:28px;flex:0 0 auto;display:grid;place-items:center;border:0;border-radius:50%;background:#eaf0f2;color:#42565c;font-size:20px;line-height:1}
+.message-toolbar-reactions{display:flex;align-items:center;gap:4px;margin-left:auto}
+.message-toolbar-emoji{width:34px;height:34px;display:grid;place-items:center;border:0;border-radius:50%;background:#eef3f4;font-size:19px;touch-action:manipulation}
+.message-toolbar-emoji:hover,.message-toolbar-emoji:focus-visible{background:#d8f5e6;outline:2px solid #9fd9ba;outline-offset:1px}
+.message-toolbar-actions{display:flex;align-items:stretch;gap:4px;overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:1px}
+.message-toolbar-actions button{min-width:64px;flex:1 0 64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:7px 4px;border:0;border-radius:9px;background:transparent;color:#34484e;font-size:11px;white-space:nowrap;touch-action:manipulation}
+.message-toolbar-actions button:hover,.message-toolbar-actions button:focus-visible{background:#e9f5ef;outline:0}
+.message-toolbar-actions svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8}
+.message-toolbar-actions .message-toolbar-delete{color:#c2393c}
+.message-row.selected-message .message-bubble{outline:2px solid #00a884;outline-offset:2px}
+.message-row{-webkit-touch-callout:none;user-select:none;-webkit-user-select:none}
+.message-text,.message-reply-quote{user-select:text;-webkit-user-select:text}
+.message-reactions{position:absolute;left:8px;bottom:-17px;z-index:2;display:flex;gap:4px;max-width:calc(100vw - 48px);flex-wrap:wrap}
+.message-reaction{min-width:31px;min-height:22px;display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:2px 6px;border:1px solid #dce6e4;border-radius:13px;background:#fff;color:#273c40;font-size:12px;line-height:1.2;box-shadow:0 1px 3px #0000000c}
+.message-reaction span{font-size:10px;color:#52676d}
+.message-reaction.selected{background:#dff8e9;border-color:#45b887}
+.message-reply-quote{display:flex;flex-direction:column;gap:3px;width:100%;margin:0 0 6px;padding:6px 8px;border:0;border-left:3px solid #00a884;border-radius:4px;background:rgba(0,128,105,.08);text-align:left;color:#263d41}
+.message-reply-quote strong{font-size:11px;color:#007b68}
+.message-reply-quote span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:12px;line-height:1.35;white-space:pre-wrap}
+.reply-composer-preview{position:relative;z-index:2;display:flex;align-items:stretch;gap:9px;min-height:54px;padding:7px 12px;background:#f8fbfa;border-top:1px solid #e3eeea}
+.reply-composer-mark{width:3px;flex:0 0 3px;border-radius:3px;background:#00a884}
+.reply-composer-copy{display:flex;flex-direction:column;justify-content:center;gap:3px;min-width:0;flex:1}
+.reply-composer-copy strong{font-size:12px;color:#00806b}
+.reply-composer-copy span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:#5d7076;font-size:12px;line-height:1.3;white-space:pre-wrap}
+.reply-composer-cancel{width:30px;height:30px;align-self:center;border:0;border-radius:50%;background:transparent;color:#54656f;font-size:22px}
+.forward-target-list{display:flex;flex-direction:column;max-height:min(48dvh,420px);overflow-y:auto;margin-top:8px;border:1px solid #e4eaec;border-radius:12px}
+.forward-target-row{display:flex;align-items:center;gap:11px;min-height:62px;padding:8px 12px;border-bottom:1px solid #eff2f3;cursor:pointer}
+.forward-target-row:last-child{border-bottom:0}
+.forward-target-row input{accent-color:#008069;width:18px;height:18px;flex:0 0 auto}
+.forward-target-avatar{display:block;flex:0 0 auto}
+.forward-target-row>span:last-child{display:flex;flex-direction:column;gap:3px;min-width:0}
+.forward-target-row strong{font-size:14px;font-weight:600;color:#14272b}
+.forward-target-row small{font-size:12px;color:#65777c}
+.mobile-call-button{display:none}
+.message-meta .message-read-status.is-read{color:#078ee8}
+.message-read-status.is-read svg{color:#078ee8;stroke-width:2.25}
+.theme-dark .message-action-toolbar{background:rgba(27,40,46,.98);border-color:#34464c;color:#e9edef}
+.theme-dark .message-toolbar-actions button,.theme-dark .message-toolbar-close{color:#e9edef}
+.theme-dark .message-toolbar-close,.theme-dark .message-toolbar-emoji{background:#283c42}
+.theme-dark .message-reply-quote{background:rgba(0,168,132,.13);color:#e9edef}
+.theme-dark .message-reply-quote span,.theme-dark .reply-composer-copy span{color:#b7c5c9}
+.theme-dark .reply-composer-preview{background:#172a2f;border-color:#283d42}
+.theme-dark .forward-target-list,.theme-dark .forward-target-row{background:#172a2f;border-color:#31444a}
+.theme-dark .forward-target-row strong{color:#e9edef}
+@media(min-width:701px){.mobile-call-button{display:none!important}}
+@media(max-width:700px){
+  .desktop-call-button{display:none!important}
+  .mobile-call-button{display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center}
+  .message-action-toolbar{padding:7px 8px 8px;gap:4px}
+  .message-toolbar-top{gap:6px}
+  .message-toolbar-reactions{gap:2px}
+  .message-toolbar-emoji{width:31px;height:31px;font-size:17px}
+  .message-toolbar-actions{gap:2px}
+  .message-toolbar-actions button{min-width:55px;flex-basis:55px;padding:6px 2px;font-size:10px}
+  .message-toolbar-actions svg{width:19px;height:19px}
+  .message-reactions{left:6px;bottom:-16px}
+  .message-reply-quote{padding:5px 7px}
+}
