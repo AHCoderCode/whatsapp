@@ -949,46 +949,54 @@
     if(input)input.dispatchEvent(new Event("input",{bubbles:true}));
   },true);
 
-  document.addEventListener("input",event=>{
-    const target=event.target;
-    if(!target||target.id!=="friend-search")return;
-    event.stopImmediatePropagation();
+  // One search routine is shared by live typing, the visible button, and Enter.
+  // This guarantees the button invokes the Supabase lookup directly and always updates visible status.
+  function executePeopleSearch(value, immediate) {
     clearTimeout(searchTimer);
     const seq=++searchCounter;
-    const value=String(target.value||"");
-    const query=value.trim().replace(/^@+/,"").replace(/\s+/g," ").trim();
-    const initialBox=$("#friend-lookup-result");
-    if(!initialBox)return;
+    const query=String(value||"").trim().replace(/^@+/,"").replace(/\s+/g," ").trim();
+    const box=$("#friend-lookup-result");
+    const button=$("#friend-search-submit");
+    const explicit=immediate===true;
+    if(!box)return;
+    const setButton=(busyNow)=>{
+      if(!button||!button.isConnected)return;
+      button.disabled=!!busyNow;
+      button.setAttribute("aria-busy",busyNow?"true":"false");
+      button.textContent=busyNow?"Searching…":"Search people";
+    };
     const renderStatus=(message,isLoading)=>{
       if(seq!==searchCounter)return;
-      const box=$("#friend-lookup-result");
-      if(!box)return;
-      box.innerHTML=isLoading
+      const liveBox=$("#friend-lookup-result");
+      if(!liveBox)return;
+      liveBox.innerHTML=isLoading
         ? "<div class='empty-state' role='status' data-search-loading='true'>"+esc(message)+"</div>"
         : "<div class='empty-state' role='status'>"+esc(message)+"</div>";
     };
-    if(!query){renderStatus("Search by display name, username, or in-app number.",false);return;}
+    setButton(false);
+    if(!query){renderStatus("Enter a name, username, or in-app ID to search.",false);return;}
     if(query.length<2){renderStatus("Enter at least 2 characters or digits.",false);return;}
     if(query.length>80){renderStatus("Search text must be 80 characters or fewer.",false);return;}
-    if(!db){renderStatus("The account directory connection did not load. Refresh the app and try again.",false);return;}
+    if(!db){renderStatus("The account service did not load. Refresh the page and check your connection.",false);return;}
     const signedIn=getUser();
-    if(!signedIn||!signedIn.isSupabase){renderStatus("Sign in to your shared WhatsApp account to find people.",false);return;}
-    renderStatus("Searching the account directory…",true);
+    if(!signedIn||!signedIn.isSupabase){renderStatus("You are not signed in to the shared account service. Log in again, then search.",false);return;}
+    setButton(true);
+    renderStatus("Searching registered accounts…",true);
     searchTimer=setTimeout(async()=>{
       try{
-        const found=await withTimeout(searchPeople(query),7000,"The account directory did not respond within 7 seconds. Check your connection and tap to search again.");
+        const found=await withTimeout(searchPeople(query),9000,"The directory did not respond. Check your connection and tap Search people to retry.");
         if(seq!==searchCounter)return;
         const liveBox=$("#friend-lookup-result");
         if(!liveBox)return;
         if(!Array.isArray(found)||!found.length){
-          liveBox.innerHTML="<div class='empty-state' role='status'>No matching accounts found. Check the spelling and make sure the other person has finished creating their account.</div>";
+          liveBox.innerHTML="<div class='empty-state' role='status'>No matching accounts found. Try the exact username without @, or check that the other account finished signing up.</div>";
           return;
         }
         const s=appState()||{};
         const chats=Array.isArray(s.chats)?s.chats:[];
         const requests=Array.isArray(s.requests)?s.requests:[];
         const sentRequests=Array.isArray(s.sentRequests)?s.sentRequests:[];
-        liveBox.innerHTML=found.map(p=>{
+        liveBox.innerHTML="<div class='search-result-summary' role='status'>Found "+found.length+" account"+(found.length===1?"":"s")+".</div>"+found.map(p=>{
           const friend=chats.find(c=>String(c.id)===String(p.id));
           const incoming=requests.find(r=>(r.requestUserId===p.id||r.username===p.username)&&(!r.status||r.status==="received"||r.status==="pending"));
           const sent=sentRequests.some(r=>r.requestUserId===p.id||r.username===p.username);
@@ -1009,16 +1017,40 @@
         }).join("");
       }catch(error){
         if(seq!==searchCounter)return;
-        renderStatus(safeError(error,"Could not search the account directory. Refresh and try again."),false);
+        renderStatus(safeError(error,"Could not search the account directory. Tap Search people to retry."),false);
       }finally{
         if(seq===searchCounter){
+          setButton(false);
           const liveBox=$("#friend-lookup-result");
           if(liveBox&&liveBox.querySelector('[data-search-loading="true"]')){
-            liveBox.innerHTML="<div class='empty-state' role='status'>Search stopped before a result arrived. Clear the text and try again; if it repeats, refresh the app.</div>";
+            liveBox.innerHTML="<div class='empty-state' role='status'>Search did not return a result. Check your connection and retry.</div>";
           }
         }
       }
-    },120);
+    },explicit?0:180);
+  }
+
+  document.addEventListener("click",event=>{
+    const button=event.target&&event.target.closest("#friend-search-submit");
+    if(!button)return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    executePeopleSearch($("#friend-search")&&$("#friend-search").value,true);
+  },true);
+
+  document.addEventListener("keydown",event=>{
+    const input=event.target;
+    if(!input||input.id!=="friend-search"||event.key!=="Enter"||event.isComposing)return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    executePeopleSearch(input.value,true);
+  },true);
+
+  document.addEventListener("input",event=>{
+    const target=event.target;
+    if(!target||target.id!=="friend-search")return;
+    event.stopImmediatePropagation();
+    executePeopleSearch(target.value,false);
   },true);
   document.addEventListener("change",event=>{const target=event.target;if(target&&target.id==="profile-photo-input"&&target.files&&target.files[0]&&getUser()&&getUser().isSupabase)void updateAvatar(target.files[0]);},true);
   document.addEventListener("click",event=>{
