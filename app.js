@@ -400,7 +400,7 @@
     const active = !!(selectedMessage && chat && String(selectedMessage.chatId) === String(chat.id));
     if (bar) bar.hidden = !active;
     if (header) header.hidden = active;
-    $(".message-row", main).forEach(row => row.classList.toggle("message-selected", active && String(row.dataset.messageId) === String(selectedMessage.id)));
+    $$(".message-row", main).forEach(row => row.classList.toggle("message-selected", active && String(row.dataset.messageId) === String(selectedMessage.id)));
     const count = $("#message-selection-count", main);
     if (count) count.textContent = active ? "1" : "";
     const picker = $("#message-reaction-picker", main);
@@ -1083,7 +1083,7 @@
       }
       if(action==="save-participants"){
         const c=findChat(t.dataset.chatId);if(!c)return;
-        const selected=$("#dialog-backdrop input[type=checkbox]:checked").map(input=>input.value);
+        const selected=$$("#dialog-backdrop input[type=checkbox]:checked").map(input=>input.value);
         c.participants=Array.from(new Set((c.participants||[]).concat(selected)));
         saveState();closeDialog();renderMain();toast(selected.length+" participant(s) added to this local group.");return;
       }
@@ -1331,7 +1331,7 @@
     if(action==="cancel-reply"){replyingTo=null;updateReplyPreview();const input=$("#message-input");if(input)input.focus();return;}
     if(action==="jump-to-reply"){
       const targetId=el.dataset.replyTargetId;
-      const row=$(".message-row",main).find(node=>String(node.dataset.messageId)===String(targetId));
+      const row=$$(".message-row",main).find(node=>String(node.dataset.messageId)===String(targetId));
       if(row){row.scrollIntoView({behavior:"smooth",block:"center"});row.classList.add("reply-target-flash");setTimeout(()=>row.classList.remove("reply-target-flash"),1200);}
       return;
     }
