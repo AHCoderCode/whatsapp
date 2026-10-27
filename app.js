@@ -26,20 +26,7 @@
   let state = null;
   let currentUser = null;
   let attachmentFile = null;
-  let demoDirectory = [
-    { username:"ayesha.k", name:"Ayesha Khan", phone:"+990 700 100 101", about:"Available", avatar:1, online:true },
-    { username:"hassan.r", name:"Hassan Raza", phone:"+990 700 100 102", about:"Hey there! I am using Vexel Chat.", avatar:3, online:false },
-    { username:"mom", name:"Mom", phone:"+990 700 100 103", about:"Love you always", avatar:5, online:false },
-    { username:"dad", name:"Dad", phone:"+990 700 100 104", about:"Busy", avatar:6, online:false },
-    { username:"ali.r", name:"Ali Raza", phone:"+990 700 100 105", about:"At work", avatar:7, online:true },
-    { username:"sara.a", name:"Sara Ahmed", phone:"+990 700 100 106", about:"Good vibes only", avatar:9, online:false },
-    { username:"noor.f", name:"Noor Fatima", phone:"+990 700 100 107", about:"At school", avatar:2, online:false },
-    { username:"zainab", name:"Zainab", phone:"+990 700 100 108", about:"Available", avatar:5, online:false },
-    { username:"bilal.k", name:"Bilal Khan", phone:"+990 700 100 109", about:"Can't talk, Vexel Chat only", avatar:4, online:false },
-    { username:"mina.s", name:"Mina Shah", phone:"+990 700 100 110", about:"✨", avatar:8, online:true },
-    { username:"hira.m", name:"Hira Malik", phone:"+990 700 100 111", about:"Available", avatar:10, online:false },
-    { username:"hamza", name:"Hamza", phone:"+990 700 100 112", about:"At the gym", avatar:11, online:false }
-  ];
+  let demoDirectory = [];
   const settingsTabs = [
     ["account","key","Account"],["privacy","shield","Privacy"],["chats","chat","Chats"],
     ["notifications","bell","Notifications"],["personalization","palette","Appearance"],
@@ -81,7 +68,7 @@
     personalization:[
       ["palette","Theme","Choose light or dark appearance.","toggle-theme"],
       ["image","Chat wallpaper","Change the conversation wallpaper.","wallpaper"],
-      ["sparkles","Accent color","Vexel Chat green accent theme.","Green"]
+      ["sparkles","Accent color","WhatsApp green accent theme.","Green"]
     ],
     storage:[
       ["database","Manage storage","Review the local data used by this preview.","button"],
@@ -102,7 +89,7 @@
       ["help","Help center","Browse common questions.","button"],
       ["phone","Contact us","Contact support (preview only).","button"],
       ["file","Terms and privacy policy","Review the demo privacy note.","button"],
-      ["info","App info","Vexel Chat · v1.0","button"]
+      ["info","App info","WhatsApp · v1.0","button"]
     ],
     shortcuts:[
       ["new","New chat","Ctrl + Alt + N","Ctrl + Alt + N"],
@@ -124,42 +111,12 @@
   function normalizePhone(value) { return String(value || "").replace(/\D/g, ""); }
   function nowTime() { return new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}); }
   function dayLabel() { return "TODAY"; }
-  function seedMessages(parts) { return parts.map(p => ({id:uid("m"), from:p[0], text:p[1], time:p[2], date:p[3] || "TODAY", sender:p[4] || "", status:p[0] === "me" ? "read" : "received", reactions:p[5] || []})); }
-  function seedChat(id,name,username,phone,avatar,type,time,preview,unread,favorite,pinned,online,messages,extra) {
-    return Object.assign({id:id,name:name,username:username,phone:phone,avatar:avatar,type:type,time:time,preview:preview,unread:unread,favorite:favorite,pinned:pinned,online:!!online,muted:false,archived:false,locked:false,about:"Available",participants:[],messages:seedMessages(messages || []),attachments:[]},extra || {});
-  }
-  function defaultChats() {
-    return [
-      seedChat("c1","Ayesha Khan","ayesha.k","+990 700 100 101",1,"person","12:48 PM","That sounds great! 😊",0,true,true,true,[["them","Hey! How are you?","12:39 PM"],["me","I'm good, thank you! How are you?","12:41 PM"],["them","Doing well 😊 Are we still meeting later?","12:44 PM"],["me","Yes, absolutely. I'll be there around 5.","12:46 PM"],["them","That sounds great! 😊","12:48 PM"]],{about:"Available",phone:"+990 700 100 101"}),
-      seedChat("c2","Family Group","family.group","+990 700 900 001",2,"group","12:41 PM","Ammi: Everyone be home by 6",3,true,false,false,[["them","Reminder: family dinner tonight!","12:34 PM","TODAY","Ammi"],["them","What time should everyone arrive?","12:36 PM","TODAY","Ayesha Khan"],["them","Everyone be home by 6","12:41 PM","TODAY","Ammi"]],{about:"Family first ❤️",participants:["Ammi","Abu","Ayesha Khan","Hassan Raza","You"]}),
-      seedChat("c3","Hassan Raza","hassan.r","+990 700 100 102",3,"person","12:25 PM","😂😂😂",1,true,false,false,[["them","Did you see that video?","12:18 PM"],["me","Not yet, send it 😄","12:22 PM"],["them","😂😂😂","12:25 PM"]],{phone:"+990 700 100 102"}),
-      seedChat("c4","School Friends","school.friends","+990 700 900 002",4,"group","11:52 AM","Zain: Send the notes when you can",8,false,false,false,[["them","Is anyone free to study together this weekend?","11:41 AM","TODAY","Mina"],["them","I'm free Saturday afternoon","11:48 AM","TODAY","Sara Ahmed"],["them","Send the notes when you can","11:52 AM","TODAY","Zain"]],{about:"Class group",participants:["Zain","Mina","Sara Ahmed","Hassan Raza","You"]}),
-      seedChat("c5","Mom","mom","+990 700 100 103",5,"person","11:30 AM","Okay, I'll be there soon.",0,true,false,false,[["me","I'm on my way home","11:27 AM"],["them","Okay, I'll be there soon.","11:30 AM"]],{about:"Love you always"}),
-      seedChat("c6","Dad","dad","+990 700 100 104",6,"person","10:58 AM","Call me when you're free",1,true,false,false,[["them","Call me when you're free","10:58 AM"]],{about:"Busy"}),
-      seedChat("c7","Ali Raza","ali.r","+990 700 100 105",7,"person","10:31 AM","See you tomorrow!",0,true,true,true,[["them","Same cafe tomorrow?","10:27 AM"],["me","Perfect. See you tomorrow!","10:31 AM"]],{about:"At work"}),
-      seedChat("c8","Study Group","study.group","+990 700 900 003",8,"group","Yesterday","Mina: Did anyone finish the worksheet?",4,false,false,false,[["them","Can someone explain question 4?","Yesterday","YESTERDAY","Noor Fatima"],["them","I can help after lunch","Yesterday","YESTERDAY","Mina"],["them","Did anyone finish the worksheet?","Yesterday","YESTERDAY","Mina"]],{about:"Study together, succeed together 📚",participants:["Mina","Noor Fatima","Sara Ahmed","You"]}),
-      seedChat("c9","Sara Ahmed","sara.a","+990 700 100 106",9,"person","Yesterday","Good morning ☀️",0,false,false,false,[["them","Hope you have a lovely day!","Yesterday","YESTERDAY"],["me","Good morning ☀️","Yesterday","YESTERDAY"]]),
-      seedChat("c10","Cousins Group","cousins.group","+990 700 900 004",10,"group","Yesterday","Hira: Shared a photo",2,true,false,false,[["them","Weekend plan?","Yesterday","YESTERDAY","Bilal"],["them","Shared a photo","Yesterday","YESTERDAY","Hira"]],{muted:true,about:"Cousins ❤️",participants:["Hira","Bilal","Ayesha Khan","You"]}),
-      seedChat("c11","Hamza","hamza","+990 700 100 112",11,"person","Yesterday","Voice message",0,false,false,false,[["them","Voice message · 0:18","Yesterday","YESTERDAY"]]),
-      seedChat("c12","Work Group","work.group","+990 700 900 005",12,"group","Tuesday","Meeting moved to 3:30 PM",6,false,false,false,[["them","Agenda is ready for the team meeting.","Tuesday","TUESDAY","Manager"],["them","Meeting moved to 3:30 PM","Tuesday","TUESDAY","Ahmed"]],{about:"Work updates",participants:["Manager","Ahmed","Mina","You"]}),
-      seedChat("c13","Noor Fatima","noor.f","+990 700 100 107",2,"person","Monday","Sure, no problem!",0,false,false,false,[["me","Could you share the notes?","Monday","MONDAY"],["them","Sure, no problem!","Monday","MONDAY"]]),
-      seedChat("c14","Project Group","project.group","+990 700 900 006",3,"group","Monday","You: Let's do it 👍",2,false,false,false,[["them","I added the latest updates to the document.","Monday","MONDAY","Ali Raza"],["me","Let's do it 👍","Monday","MONDAY"]],{participants:["Ali Raza","Sara Ahmed","You"]}),
-      seedChat("c15","Zainab","zainab","+990 700 100 108",5,"person","Sunday","Thank you ❤️",0,true,false,false,[["them","You really helped me today.","Sunday","SUNDAY"],["me","Thank you ❤️","Sunday","SUNDAY"]]),
-      seedChat("c16","Weekend Plans","weekend.plans","+990 700 900 007",4,"group","Saturday","I'll check and let you know",0,false,false,false,[["me","I'll check and let you know","Saturday","SATURDAY"]],{archived:true,participants:["Hassan Raza","Noor Fatima","You"]})
-    ];
-  }
-  function defaultRequests() {
-    // Contact requests must come from a real action; never seed fake incoming requests.
-    return [];
-  }
-  function freshDb() { return {version:2,accounts:[],directory:demoDirectory.map(o=>Object.assign({},o))}; }
-  function readDb() {
-    try {
-      const parsed = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
-      if (parsed && Array.isArray(parsed.accounts) && Array.isArray(parsed.directory)) return parsed;
-    } catch (_) {}
-    return freshDb();
-  }
+  // New accounts start empty; chats and requests come only from the shared backend.
+  function defaultChats() { return []; }
+  function defaultRequests() { return []; }
+  function freshDb() { return {version:3,accounts:[],directory:[]}; }
+  // Browser-only accounts are obsolete; authentication is handled by Supabase.
+  function readDb() { return freshDb(); }
   let db = readDb();
   function saveDb() {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(db)); } catch (_) { toast("Browser storage is full; some demo changes may not persist."); }
@@ -174,8 +131,8 @@
       contacts:[],
       calls:[],
       backendStatuses:[],backendChannels:[],backendChannelPosts:[],backendCommunities:[],
-      communities:[{id:"community-school",name:"School community",description:"Class updates and school friends",groups:["School Friends","Study Group"]},{id:"community-family",name:"Family community",description:"Family updates in one place",groups:["Family Group","Cousins Group"]}],
-      channels:[{id:"whatsapp-official",name:"Vexel Chat",initials:"VC",avatar:2,description:"Updates from the Vexel Chat team",following:true},{id:"meta-official",name:"Meta",initials:"M",avatar:3,description:"Updates from Meta",following:false},{id:"tech-today",name:"Technology Today",initials:"T",avatar:7,description:"Technology news and updates",following:false}],
+      communities:[],
+      channels:[],
       settings:{dark:false,wallpaper:"default",readReceipts:true,keepArchived:true,enterToSend:true,mediaVisibility:true,appLock:false,reduceMotion:false,keyboardNav:true,highContrast:false,spellcheck:true,reactionNotifications:true,securityNotifications:true},
       starredMessages:[],
       blocked:[],
@@ -245,37 +202,28 @@
     });
     const phone = generatePhone();
     if (authMode === "signup") {
-      authSlot.innerHTML = "<h2 class='auth-heading'>Create your account</h2><p class='auth-subheading'>Create a secure account using a username and a custom in-app ID. No real phone number or SMS verification is required.</p>" +
+      authSlot.innerHTML = "<h2 class='auth-heading'>Create your account</h2><p class='auth-subheading'>Create an account to find people by username or in-app ID. Your chats and contact requests sync through the shared messaging service.</p>" +
         "<form class='auth-form' id='signup-form' novalidate>" +
         "<div id='auth-error' class='form-error' role='alert'></div>" +
         authField("signup-name","Your display name","text","How people see you","","This can be changed later.","autocomplete='name' maxlength='48' required") +
         authField("signup-username","Username","text","Choose a unique username","","3–20 characters: letters, numbers or underscores. Other people can find you by this.","autocomplete='username' maxlength='20' required") +
-        "<div class='form-field'><label for='signup-phone'>Your custom in-app ID</label><div class='phone-field-wrap'><span class='phone-prefix'>" + icon("phone") + "+990</span><input id='signup-phone' name='phone' type='tel' value='" + esc(phone.replace("+990 ","")) + "' inputmode='numeric' autocomplete='tel-national' required></div><span class='field-help'>A unique in-app ID, not a real telephone number. It can be used to find your username.</span><span class='form-username-match' id='signup-phone-match'></span></div>" +
-        authField("signup-password","Password","password","At least 8 characters","","Supabase securely handles your password. Do not share it with anyone.","autocomplete='new-password' minlength='8' required") +
+        "<div class='form-field'><label for='signup-phone'>Your in-app ID</label><div class='phone-field-wrap'><span class='phone-prefix'>" + icon("phone") + "+990</span><input id='signup-phone' name='phone' type='tel' value='" + esc(phone.replace("+990 ","")) + "' inputmode='numeric' autocomplete='tel-national' required></div><span class='field-help'>This is an in-app ID, not a telephone number. You can share it to help people find your account.</span><span class='form-username-match' id='signup-phone-match'></span></div>" +
+        authField("signup-password","Password","password","At least 8 characters","","Use a unique password and do not share it.","autocomplete='new-password' minlength='8' required") +
         authField("signup-confirm","Confirm password","password","Type your password again","","","autocomplete='new-password' minlength='8' required") +
-        "<div class='form-error' id='signup-error' role='alert'></div><button class='auth-primary' type='submit'>Create account " + icon("chevron") + "</button></form>" +
-        "<div class='auth-separator'>OR</div><button class='auth-secondary' type='button' data-action='demo-login'>" + icon("sparkles") + " Try the interactive demo (local only)</button>";
+        "<div class='form-error' id='signup-error' role='alert'></div><button class='auth-primary' type='submit'>Create account " + icon("chevron") + "</button></form>";
       const phoneInput = $("#signup-phone");
       if (phoneInput) phoneInput.addEventListener("input", () => {
-        phoneInput.value = phoneInput.value.replace(/[^\d\s()-]/g,"").slice(0,18);
-        const match = lookupIdentity("+990 " + phoneInput.value);
+        phoneInput.value = phoneInput.value.replace(/[^0-9\\s()-]/g,"").slice(0,18);
         const label = $("#signup-phone-match");
-        if (label) label.textContent = match ? "This in-app ID belongs to @" + match.username + ". Choose another number." : "Checking the shared account directory…";
+        if (label) label.textContent = "This ID will be checked when you create your account.";
       });
     } else {
-      authSlot.innerHTML = "<h2 class='auth-heading'>Welcome back</h2><p class='auth-subheading'>Log in with your username or custom in-app number.</p>" +
+      authSlot.innerHTML = "<h2 class='auth-heading'>Welcome back</h2><p class='auth-subheading'>Log in with the username you registered for this messaging app.</p>" +
         "<form class='auth-form' id='login-form' novalidate><div class='form-error' id='login-error' role='alert'></div>" +
-        authField("login-identity","Username or custom number","text","@username or +990 number","","Typing a known number will show its username.","autocomplete='username' required") +
+        authField("login-identity","Username or in-app ID","text","@username or +990 ID","","Use your username or custom in-app ID.","autocomplete='username' required") +
         "<div id='login-identity-match' class='form-username-match'></div>" +
         authField("login-password","Password","password","Enter your password","","","autocomplete='current-password' required") +
-        "<button class='auth-primary' type='submit'>Log in " + icon("chevron") + "</button></form>" +
-        "<div class='auth-separator'>OR</div><button class='auth-secondary' type='button' data-action='demo-login'>" + icon("sparkles") + " Try the interactive demo</button>";
-      const identity = $("#login-identity");
-      if (identity) identity.addEventListener("input", () => {
-        const match = lookupIdentity(identity.value);
-        const label = $("#login-identity-match");
-        if (label) label.textContent = match ? "Username found: @" + match.username : "";
-      });
+        "<button class='auth-primary' type='submit'>Log in " + icon("chevron") + "</button></form>";
     }
   }
   function lookupIdentity(value) {
@@ -296,57 +244,15 @@
       (phoneDigits.length >= 7 ? db.accounts.concat(db.directory).find(u => normalizePhone(u.phone) === phoneDigits) : null) ||
       db.accounts.concat(db.directory).find(u => String(u.name || "").toLowerCase().includes(raw.toLowerCase())) || null;
   }
-  function persistUser(user) {
-    currentUser = user;
-    localStorage.setItem(SESSION_KEY, normalizeUsername(user.username));
-    state = loadState(user);
-    auth.classList.add("hidden");
-    app.classList.remove("hidden");
-    applySettings();
-    renderApp();
-  }
-  function handleSignup(form) {
-    const name = $("#signup-name").value.trim();
-    const username = normalizeUsername($("#signup-username").value);
-    let phoneDigits = normalizePhone($("#signup-phone").value);
-    if (phoneDigits.startsWith("990")) phoneDigits = phoneDigits.slice(3);
-    const phone = "+990 " + phoneDigits.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3");
-    const password = $("#signup-password").value;
-    const confirm = $("#signup-confirm").value;
-    const error = $("#signup-error");
-    const fail = text => { error.textContent=text; error.classList.add("show"); };
-    if (!name) return fail("Enter a display name.");
-    if (!/^[a-z0-9_]{3,20}$/.test(username)) return fail("Username must be 3–20 characters using letters, numbers or underscores.");
-    if (db.accounts.some(a=>normalizeUsername(a.username)===username)) return fail("That username is already taken on this browser.");
-    if (phoneDigits.length !== 9) return fail("Enter exactly 9 digits after the +990 demo prefix.");
-    if (db.accounts.concat(db.directory).some(a=>normalizePhone(a.phone)===normalizePhone(phone))) return fail("That custom number is already in use. Choose another.");
-    if (password.length < 8) return fail("Use a password with at least 8 characters.");
-    if (password !== confirm) return fail("The passwords do not match.");
-    const user = {id:uid("account"),username:username,name:name,phone:phone,about:"Available",password:password,avatar:initials(name),avatarColor:Math.floor(Math.random()*12)+1,createdAt:new Date().toISOString()};
-    db.accounts.push(user); saveDb();
-    persistUser(user);
-    toast("Demo account created locally. This account does not sync to other devices.");
+  // Never create or authenticate browser-only accounts. If the Supabase module is unavailable,
+  // fail clearly rather than silently opening a fake local account.
+  function handleSignup() {
+    const error = $("#signup-error") || $("#auth-error", authSlot);
+    if (error) { error.textContent = "Secure account service is unavailable. Refresh the page and try again."; error.classList.add("show"); }
   }
   function handleLogin() {
-    const identity = $("#login-identity").value.trim();
-    const password = $("#login-password").value;
     const error = $("#login-error");
-    const user = lookupIdentity(identity);
-    if (!user || !db.accounts.some(a=>a.id===user.id) || user.password !== password) {
-      error.textContent = "Account not found or password incorrect. Try your username and password again.";
-      error.classList.add("show"); return;
-    }
-    persistUser(user);
-    toast("Logged in to this browser-only demo account.");
-  }
-  function enterDemo() {
-    let user = db.accounts.find(a=>a.demoAccount);
-    if (!user) {
-      user = {id:"demo-account",username:"demo",name:"Demo User",phone:"+990 700 000 001",about:"Available",password:"demo123",avatar:"DU",avatarColor:2,demoAccount:true,createdAt:new Date().toISOString()};
-      db.accounts.push(user); saveDb();
-    }
-    persistUser(user);
-    toast("Demo opened. Everything is stored in this browser.");
+    if (error) { error.textContent = "Secure account service is unavailable. Refresh the page and try again."; error.classList.add("show"); }
   }
   function logout() {
     try { localStorage.removeItem(SESSION_KEY); } catch (_) {}
@@ -463,7 +369,7 @@
     return "<div class='message-row " + (outgoing?"outgoing":"incoming") + "' data-message-id='" + esc(message.id) + "'><div class='message-bubble'>" + sender + "<span class='message-text'>" + textBody + "</span>" + pollCard + eventCard + attachmentAction + "<span class='message-meta'>" + time + checks + "</span>" + reactions + "</div></div>";
   }
   function renderWelcome() {
-    main.innerHTML = "<div class='welcome-pane'><div class='welcome-content'><svg class='welcome-art' viewBox='0 0 320 250' aria-hidden='true'><ellipse cx='161' cy='220' rx='112' ry='9' fill='#e0e6e8'/><path d='M61 142c-1-40 39-70 89-70 45 0 79 25 83 60 4 36-31 66-78 69l-30 24 4-26c-40-8-67-29-68-57Z' fill='#d9fdd3'/><path d='M76 139c0-30 31-54 71-54 40 0 72 24 72 54s-32 54-72 54c-10 0-20-1-29-4l-22 14 4-22c-15-10-24-24-24-42Z' fill='#25d366'/><path d='M128 114c-3-5-5-5-8-5s-7 3-8 7c-2 5 2 15 7 23 8 11 18 19 30 25 7 3 13 5 17 4 5-1 8-6 8-10 0-2-1-3-4-5l-10-5c-2-1-3 0-5 2l-4 5c-1 1-2 2-4 1-6-2-12-7-17-12-4-4-7-9-8-12 0-1 0-2 1-3l4-4c1-2 1-3 1-4l-4-7Z' fill='#fff'/></svg><h2>Messaging Web</h2><p>Send and receive messages with ease, right from your computer.</p><div class='welcome-divider'></div><div class='welcome-caption'>" + icon("lock") + "<span>Your messages sync through the connected account backend</span></div></div><div class='welcome-footer'>" + icon("lock") + "<span>Vexel Chat is an independent messaging app and is not connected to other messaging accounts</span></div></div>";
+    main.innerHTML = "<div class='welcome-pane'><div class='welcome-content'><svg class='welcome-art' viewBox='0 0 320 250' aria-hidden='true'><ellipse cx='161' cy='220' rx='112' ry='9' fill='#e0e6e8'/><path d='M61 142c-1-40 39-70 89-70 45 0 79 25 83 60 4 36-31 66-78 69l-30 24 4-26c-40-8-67-29-68-57Z' fill='#d9fdd3'/><path d='M76 139c0-30 31-54 71-54 40 0 72 24 72 54s-32 54-72 54c-10 0-20-1-29-4l-22 14 4-22c-15-10-24-24-24-42Z' fill='#25d366'/><path d='M128 114c-3-5-5-5-8-5s-7 3-8 7c-2 5 2 15 7 23 8 11 18 19 30 25 7 3 13 5 17 4 5-1 8-6 8-10 0-2-1-3-4-5l-10-5c-2-1-3 0-5 2l-4 5c-1 1-2 2-4 1-6-2-12-7-17-12-4-4-7-9-8-12 0-1 0-2 1-3l4-4c1-2 1-3 1-4l-4-7Z' fill='#fff'/></svg><h2>Messaging Web</h2><p>Send and receive messages with ease, right from your computer.</p><div class='welcome-divider'></div><div class='welcome-caption'>" + icon("lock") + "<span>Your messages sync through the connected account backend</span></div></div><div class='welcome-footer'>" + icon("lock") + "<span>WhatsApp is an independent messaging app and is not connected to other messaging accounts</span></div></div>";
   }
   function renderConversation(chat) {
     if (!chat) { renderWelcome(); return; }
@@ -718,8 +624,8 @@
   function createNewChatDialog() {
     const sharedAccount = !!(currentUser && currentUser.isSupabase);
     const intro = sharedAccount
-      ? "<p class='screen-description'>Search the shared Vexel Chat account directory by display name, username, or custom in-app number. Type a username with or without @; results update as you type.</p>"
-      : "<p class='screen-description'><strong>Local demo mode:</strong> This only searches sample contacts stored in this browser. It cannot discover accounts on other devices. Log out, then sign in with a shared Vexel Chat account to find real usernames and send contact requests.</p>";
+      ? "<p class='screen-description'>Search the shared WhatsApp account directory by display name, username, or custom in-app number. Type a username with or without @; results update as you type.</p>"
+      : "<p class='screen-description'><strong>Local demo mode:</strong> This only searches sample contacts stored in this browser. It cannot discover accounts on other devices. Log out, then sign in with a shared WhatsApp account to find real usernames and send contact requests.</p>";
     const body = intro + "<div class='dialog-field'><label for='friend-search'>Display name, username, or number</label><input id='friend-search' placeholder='Name, @username, or 700100101' autocomplete='off' aria-label='Search by display name, username, or number'></div><div id='friend-lookup-result' role='status' aria-live='polite'><div class='empty-state'>Search by display name, username, or in-app number.</div></div>";
     openDialog("Find people",body,"<button class='secondary-button' data-action='close-dialog'>Close</button>");
   }
@@ -836,7 +742,6 @@
     if(action==="back-to-chat"){view="chats";renderMain();updateMobile();return;}
     if(action==="edit-profile"){editProfileDialog();return;}
     if(action==="find-friends"){createNewChatDialog();return;}
-    if(action==="demo-login"){enterDemo();return;}
     if(action==="copy-phone"){copyText(state.profile.phone);return;}
     if(action==="copy-username"){copyText("@"+state.profile.username);return;}
     if(action==="change-profile-photo"){const input=$("#profile-photo-input");if(input)input.click();return;}
@@ -1049,7 +954,7 @@
     if(target.id==="friend-search"){
       const contact=lookupDirectory(target.value);const box=$("#friend-lookup-result");if(!box)return;
       if(!target.value.trim()){box.innerHTML="";return;}
-      if(!contact){box.innerHTML="<div class='empty-state'>No local sample matched. Demo mode only searches contacts on this device; sign in with a shared Vexel Chat account to find real usernames.</div>";return;}
+      if(!contact){box.innerHTML="<div class='empty-state'>No local sample matched. Demo mode only searches contacts on this device; sign in with a shared WhatsApp account to find real usernames.</div>";return;}
       const isSelf=normalizeUsername(contact.username)===normalizeUsername(currentUser.username);
       const existing=state.chats.find(c=>normalizeUsername(c.username)===normalizeUsername(contact.username));
       const sent=state.sentRequests.some(r=>normalizeUsername(r.username)===normalizeUsername(contact.username));
@@ -1157,20 +1062,36 @@
     originalUseAction(action,chat);
   };
 
+  function clearLegacyLocalDemoState() {
+    // Remove the old browser-only account and cached demo conversations. Supabase's
+    // auth storage is separate and is intentionally left untouched.
+    try {
+      localStorage.removeItem(STORE_KEY);
+      localStorage.removeItem(SESSION_KEY);
+      const keys = [];
+      for (let i=0; i<localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith("wa_local_state_")) keys.push(key);
+      }
+      keys.forEach(key => {
+        try {
+          const oldState = JSON.parse(localStorage.getItem(key) || "null");
+          const settings = oldState && oldState.settings && typeof oldState.settings === "object" ? oldState.settings : {};
+          if (Object.keys(settings).length) localStorage.setItem(key, JSON.stringify({version:3,settings}));
+          else localStorage.removeItem(key);
+        } catch (_) { localStorage.removeItem(key); }
+      });
+    } catch (_) {}
+  }
+
   function init() {
+    clearLegacyLocalDemoState();
     const addInput=document.createElement("input");
     addInput.type="file";addInput.id="attachment-input";addInput.hidden=true;addInput.accept="*/*";document.body.appendChild(addInput);
     const photoInput=document.createElement("input");
     photoInput.type="file";photoInput.id="profile-photo-input";photoInput.hidden=true;photoInput.accept="image/*";document.body.appendChild(photoInput);
     renderAuth("signup");
-    let session=null;
-    try {session=localStorage.getItem(SESSION_KEY);} catch (_) {}
-    if(session) {
-      const user=db.accounts.find(a=>normalizeUsername(a.username)===normalizeUsername(session));
-      if(user && user.demoAccount) persistUser(user);
-      else { try { localStorage.removeItem(SESSION_KEY); } catch (_) {} renderAuth("signup"); }
-    }
-    if(!currentUser)auth.classList.remove("hidden");
+    auth.classList.remove("hidden");
     const closeBackdrop=document.createElement("style");
     closeBackdrop.textContent=".wallpaper-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.wallpaper-swatch{display:flex;flex-direction:column;gap:8px;padding:8px;border:1px solid #e2e6e8;border-radius:9px;background:#fff;font-size:12px}.wallpaper-preview{height:90px;border-radius:6px;display:block;border:1px solid #e8ecee}.default-wallpaper{background:#efeae2 repeating-linear-gradient(45deg,transparent,transparent 12px,#e4ddd2 13px,transparent 14px)}.plain-wallpaper{background:#fff}.green-wallpaper{background:#dbeee5}.setting-side-label{font-size:12px;color:#667781}.settings-summary h4{margin:0 0 4px;font-size:16px;font-weight:500}.settings-summary p{margin:0;color:#667781;font-size:12px}.settings-option{display:flex;align-items:center;gap:14px;min-height:72px;padding:12px 16px;border-bottom:1px solid #f0f2f2;background:#fff}.settings-option:first-child{border-top:1px solid #f0f2f2}.settings-option-copy{min-width:0;flex:1}.settings-option-copy strong{display:block;font-size:14px;font-weight:500;margin-bottom:5px}.settings-option-copy span{display:block;color:#667781;font-size:12px;line-height:1.45}.toggle{width:38px;height:22px;flex:0 0 auto;border:0;border-radius:12px;background:#d6dcdf;padding:3px;display:flex;align-items:center}.toggle:after{content:'';height:16px;width:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px #0002}.toggle.on{justify-content:flex-end;background:#00a884}.mobile-open .chat-sidebar{display:none}.mobile-open .main-pane{display:flex}@media(max-width:700px){.wallpaper-preview{height:65px}.wide{max-width:100%}}";
     document.head.appendChild(closeBackdrop);
@@ -1200,7 +1121,6 @@
         about: currentUser.about, avatar: initials(name), avatarColor: 1, avatarData: currentUser.avatarData };
       fresh.chats = []; fresh.requests = []; fresh.sentRequests = []; fresh.contacts = []; fresh.calls = []; fresh.backendStatuses=[]; fresh.backendChannels=[]; fresh.backendChannelPosts=[]; fresh.backendCommunities=[]; fresh.statusUpdates=[]; fresh.channels=[]; fresh.communities=[];
       state = fresh; selectedChatId = null; view = "chats";
-      try { localStorage.setItem(SESSION_KEY, currentUser.username); } catch (_) {}
       auth.classList.add("hidden"); app.classList.remove("hidden"); applySettings(); renderApp();
     },
     setBackendData: (data) => {
