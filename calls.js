@@ -62,6 +62,25 @@
     if(placeholder&&remoteStream&&remoteStream.getVideoTracks().some(t=>t.readyState==="live"))placeholder.style.display="none";
   }
   function setPhase(next,notice){phase=next;renderCallOverlay(notice);}
+  function updateConnectedDuration(){
+    const text=formatTime(elapsed),host=root();
+    const header=host.querySelector(".wa-call-title small");
+    if(header&&phase==="connected")header.textContent=text;
+    const stage=host.querySelector(".wa-call-audio-stage p");
+    if(stage&&phase==="connected")stage.textContent=text;
+  }
+  function updateMuteButton(){
+    const button=root().querySelector("[data-wa-call='mute']");
+    if(!button)return;
+    button.classList.toggle("active",muted);
+    button.innerHTML=(muted?"🎙":"🎤")+"<span>"+(muted?"Unmute":"Mute")+"</span>";
+  }
+  function updateCameraButton(){
+    const button=root().querySelector("[data-wa-call='camera']");
+    if(!button)return;
+    button.classList.toggle("active",cameraOff);
+    button.innerHTML=(cameraOff?"◻":"▣")+"<span>"+(cameraOff?"Camera on":"Camera off")+"</span>";
+  }
   async function relayServers(callId){
     const client=db();if(!client)throw new Error("Supabase is not connected.");
     const {data,error}=await client.functions.invoke("master-chat-turn-credentials",{body:{callId}});
@@ -117,7 +136,7 @@
       if(pc.connectionState==="connected"){
         callStart=Date.now();setPhase("connected");
         if(callTimer!==null)clearInterval(callTimer);
-        callTimer=setInterval(()=>{if(phase==="connected"){elapsed=Math.floor((Date.now()-callStart)/1000);renderCallOverlay();}},1000);
+        callTimer=setInterval(()=>{if(phase==="connected"){elapsed=Math.floor((Date.now()-callStart)/1000);updateConnectedDuration();}},1000);
       }else if(pc.connectionState==="failed"||pc.connectionState==="disconnected"){
         setPhase("connecting","The call relay is reconnecting…");
         if(pc.connectionState==="failed")void endCall("The secure relay connection failed. No direct-connection fallback was attempted.");
@@ -230,10 +249,10 @@
     cleanupLocal();if(message)say(message);
   }
   function toggleMute(){
-    muted=!muted;if(localStream)localStream.getAudioTracks().forEach(t=>t.enabled=!muted);renderCallOverlay();
+    muted=!muted;if(localStream)localStream.getAudioTracks().forEach(t=>t.enabled=!muted);updateMuteButton();
   }
   function toggleCamera(){
-    cameraOff=!cameraOff;if(localStream)localStream.getVideoTracks().forEach(t=>t.enabled=!cameraOff);renderCallOverlay();
+    cameraOff=!cameraOff;if(localStream)localStream.getVideoTracks().forEach(t=>t.enabled=!cameraOff);updateCameraButton();
   }
   function openPicker(mediaType){
     const s=appState(),options=(s&&s.chats||[]).filter(p=>p.type==="person").map(person=>"<button class='wa-call-picker-row' type='button' data-wa-call-person='"+esc(person.id)+"'><span class='wa-call-picker-avatar'>"+esc(person.avatar||String(person.name||"U").slice(0,2))+"</span><span><strong>"+esc(person.name||person.username)+"</strong><small>@"+esc(person.username||"")+"</small></span><span>Call</span></button>").join("");
