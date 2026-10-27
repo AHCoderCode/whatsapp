@@ -373,3 +373,12 @@ button,input,textarea,select{max-width:100%}
 .message-reaction-picker button{height:36px;min-width:36px;flex:0 0 36px;border:0;border-radius:18px;background:#fff;font-size:20px;display:grid;place-items:center;box-shadow:0 1px 2px #00000012}
 .message-reaction-picker button:hover,.message-reaction-picker button:focus-visible{background:#d9fdd3;outline:2px solid #00a884;outline-offset:1px}
 @media(max-width:700px){.message-reaction-picker{padding:6px 8px;gap:5px}.message-reaction-picker button{height:34px;min-width:34px;flex-basis:34px}}
+
+/* Keep the long-press action bar usable on narrow phone screens. */
+.message-selection-toolbar{min-width:0;overflow-x:auto;overflow-y:hidden;gap:4px;scrollbar-width:none}
+.message-selection-toolbar::-webkit-scrollbar,.message-reaction-picker::-webkit-scrollbar{display:none}
+.message-selection-toolbar>.icon-button{flex:0 0 34px;width:34px}
+.message-selection-count{flex:0 0 auto}
+.message-selection-actions{flex:0 0 auto;min-width:max-content}
+.message-selection-toolbar .icon-button{flex:0 0 34px;width:34px}
+@media(max-width:390px){.message-selection-toolbar{padding-left:4px;padding-right:4px}.message-selection-actions{gap:0}.message-selection-toolbar .icon-button{flex-basis:32px;width:32px}}
