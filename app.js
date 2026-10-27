@@ -33,6 +33,7 @@
   let messageHoldRow = null;
   let messageHoldStart = null;
   let messageHoldTriggered = false;
+  let messageReactionPickerOpen = false;
   let forwardDraft = null;
   const settingsTabs = [
     ["account","key","Account"],["privacy","shield","Privacy"],["chats","chat","Chats"],
@@ -402,6 +403,8 @@
     $(".message-row", main).forEach(row => row.classList.toggle("message-selected", active && String(row.dataset.messageId) === String(selectedMessage.id)));
     const count = $("#message-selection-count", main);
     if (count) count.textContent = active ? "1" : "";
+    const picker = $("#message-reaction-picker", main);
+    if (picker) picker.hidden = !active || !messageReactionPickerOpen;
   }
   function selectMessageForActions(row) {
     const chat = currentChat();
@@ -458,7 +461,7 @@
     });
     const callActions = "<button class='call-button' data-action='call-menu'>" + icon("video") + "<span>Video call</span>" + icon("chevron") + "</button>";
     main.innerHTML = "<section class='conversation'>" +
-      "<header class='message-selection-toolbar' id='message-selection-toolbar' hidden><button class='icon-button' type='button' data-message-toolbar-action='cancel' aria-label='Cancel selection'>" + icon("x") + "</button><span class='message-selection-count' id='message-selection-count'>1</span><div class='message-selection-actions'><button class='icon-button' type='button' data-message-toolbar-action='reply' title='Reply' aria-label='Reply'>" + icon("reply") + "</button><button class='icon-button' type='button' data-message-toolbar-action='forward' title='Forward' aria-label='Forward'>" + icon("forward") + "</button><button class='icon-button' type='button' data-message-toolbar-action='star' title='Star' aria-label='Star'>" + icon("star") + "</button><button class='icon-button' type='button' data-message-toolbar-action='copy' title='Copy' aria-label='Copy'>" + icon("copy") + "</button><button class='icon-button' type='button' data-message-toolbar-action='delete' title='Delete' aria-label='Delete'>" + icon("trash") + "</button><button class='icon-button' type='button' data-message-toolbar-action='more' title='More options' aria-label='More message options'>" + icon("more") + "</button></div></header>" +
+      "<header class='message-selection-toolbar' id='message-selection-toolbar' hidden><button class='icon-button' type='button' data-message-toolbar-action='cancel' aria-label='Cancel selection'>" + icon("x") + "</button><span class='message-selection-count' id='message-selection-count'>1</span><div class='message-selection-actions'><button class='icon-button' type='button' data-message-toolbar-action='react' title='React' aria-label='React to message'>" + icon("smile") + "</button><button class='icon-button' type='button' data-message-toolbar-action='reply' title='Reply' aria-label='Reply'>" + icon("reply") + "</button><button class='icon-button' type='button' data-message-toolbar-action='forward' title='Forward' aria-label='Forward'>" + icon("forward") + "</button><button class='icon-button' type='button' data-message-toolbar-action='star' title='Star' aria-label='Star'>" + icon("star") + "</button><button class='icon-button' type='button' data-message-toolbar-action='copy' title='Copy' aria-label='Copy'>" + icon("copy") + "</button><button class='icon-button' type='button' data-message-toolbar-action='delete' title='Delete' aria-label='Delete'>" + icon("trash") + "</button><button class='icon-button' type='button' data-message-toolbar-action='more' title='More options' aria-label='More message options'>" + icon("more") + "</button></div></header><div class='message-reaction-picker' id='message-reaction-picker' hidden><span class='message-reaction-picker-label'>React</span><button type='button' data-message-reaction-emoji='👍' aria-label='Like'>👍</button><button type='button' data-message-reaction-emoji='❤️' aria-label='Love'>❤️</button><button type='button' data-message-reaction-emoji='😂' aria-label='Laugh'>😂</button><button type='button' data-message-reaction-emoji='😮' aria-label='Wow'>😮</button><button type='button' data-message-reaction-emoji='🙏' aria-label='Thanks'>🙏</button></div>" +
       "<header class='conversation-header'><button class='back-button' data-action='back-to-list' aria-label='Back to chats'>" + icon("back") + "</button><button class='conversation-person' data-action='chat-info' aria-label='Open contact information'>" +
       avatarHTML(chat) + "<span class='person-copy'><span class='person-name'>" + esc(chat.name) + "</span><span class='person-subtitle'>" + esc(subtitle) + "</span></span></button><div class='conversation-actions'>" + callActions +
       "<button class='icon-button' data-action='chat-search' title='Search in chat' aria-label='Search in chat'>" + icon("search") + "</button><button class='icon-button' data-action='chat-menu' title='More options' aria-label='More options'>" + icon("more") + "</button></div></header>" +
@@ -1271,12 +1274,43 @@
       event.preventDefault();event.stopImmediatePropagation();messageHoldTriggered=false;
     }
   },true);
+  async function applySelectedMessageReaction(emoji) {
+    const ref=selectedMessage||state&&state.lastContextMessage;
+    if(!ref||!ref.id){toast("Hold a message first to react.");return;}
+    const allowed=["👍","❤️","😂","😮","🙏"];
+    if(!allowed.includes(emoji))return;
+    messageReactionPickerOpen=false;
+    syncMessageSelectionUI();
+    try {
+      if(currentUser&&currentUser.isSupabase){
+        const react=window.waAppBridge&&window.waAppBridge.reactBackendMessage;
+        if(typeof react!=="function")throw new Error("Message reactions are not ready. Reload and try again.");
+        await react(ref.id,emoji);
+      } else {
+        const chat=state.chats.find(c=>String(c.id)===String(ref.chatId));
+        const message=chat&&chat.messages.find(m=>String(m.id)===String(ref.id));
+        if(!message)throw new Error("That message is no longer in this chat.");
+        message.reactions=Array.isArray(message.reactions)?message.reactions:[];
+        const same=message.reactions.indexOf(emoji);
+        if(same>=0)message.reactions.splice(same,1);else message.reactions.push(emoji);
+        saveState();renderSidebar();renderMain();
+      }
+      toast("Reaction updated.");
+    } catch(error) { toast("Could not react: "+String(error&&error.message||"Unknown error")); }
+  }
   main.addEventListener("click",event=>{
+    const reactionButton=event.target.closest("[data-message-reaction-emoji]");
+    if(reactionButton){
+      event.preventDefault();event.stopPropagation();
+      void applySelectedMessageReaction(reactionButton.dataset.messageReactionEmoji);
+      return;
+    }
     const button=event.target.closest("[data-message-toolbar-action]");
     if(!button)return;
     event.preventDefault();event.stopPropagation();
     const action=button.dataset.messageToolbarAction,chat=currentChat();
-    if(action==="cancel"){dismissMessageSelection(false);return;}
+    if(action==="cancel"){dismissMessageSelection(false);messageReactionPickerOpen=false;return;}
+    if(action==="react"){messageReactionPickerOpen=!messageReactionPickerOpen;syncMessageSelectionUI();return;}
     if(action==="more"){const bar=$("#message-selection-toolbar",main);if(chat&&bar)openPopup(bar,menuItems("message-menu",chat),chat.id);return;}
     const map={reply:"reply-message",forward:"forward-message",star:"star-message",copy:"copy-message",delete:"delete-message"};
     if(map[action])runMenuAction(map[action],chat);
