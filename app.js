@@ -52,7 +52,7 @@
       ["shield","Two-step verification","Add an extra layer of security to your account.","button"],
       ["phone","Change number","Change the phone number linked to your account.","button"],
       ["database","Request account info","Request a report of your account information.","button"],
-      ["log-out","Log out","Leave this demo account on this device.","button"]
+      ["log-out","Log out","Sign out on this device.","button"]
     ],
     privacy:[
       ["lock","Last seen and online","Control who can see when you’re online.","Everyone"],
@@ -68,7 +68,7 @@
       ["palette","Theme","Choose light, dark or system theme.","Light"],
       ["image","Wallpaper","Set the chat wallpaper.","Default"],
       ["archive","Keep chats archived","Archived chats stay archived when new messages arrive.","toggle"],
-      ["database","Chat backup","Back up your local demo data.","button"],
+      ["database","Chat backup","Download the conversations and profile loaded in this app.","button"],
       ["image","Media visibility","Show downloaded media in your device gallery.","toggle"],
       ["keyboard","Enter is send","Press Enter to send messages.","toggle"]
     ],
@@ -240,9 +240,9 @@
         "<div id='auth-error' class='form-error' role='alert'></div>" +
         authField("signup-name","Your display name","text","How people see you","","This can be changed later.","autocomplete='name' maxlength='48' required") +
         authField("signup-username","Username","text","Choose a unique username","","3–20 characters: letters, numbers or underscores. Other people can find you by this.","autocomplete='username' maxlength='20' required") +
-        "<div class='form-field'><label for='signup-phone'>Your custom WhatsApp number</label><div class='phone-field-wrap'><span class='phone-prefix'>" + icon("phone") + "+990</span><input id='signup-phone' name='phone' type='tel' value='" + esc(phone.replace("+990 ","")) + "' inputmode='numeric' autocomplete='tel-national' required></div><span class='field-help'>A unique in-app ID, not a real telephone number. It can be used to find your username.</span><span class='form-username-match' id='signup-phone-match'></span></div>" +
-        authField("signup-password","Password","password","","","Supabase securely handles your password. Do not share it with anyone.","autocomplete='new-password' minlength='8' required") +
-        authField("signup-confirm","Confirm password","password","Type your password again","","","autocomplete='new-password' minlength='6' required") +
+        "<div class='form-field'><label for='signup-phone'>Your custom in-app ID</label><div class='phone-field-wrap'><span class='phone-prefix'>" + icon("phone") + "+990</span><input id='signup-phone' name='phone' type='tel' value='" + esc(phone.replace("+990 ","")) + "' inputmode='numeric' autocomplete='tel-national' required></div><span class='field-help'>A unique in-app ID, not a real telephone number. It can be used to find your username.</span><span class='form-username-match' id='signup-phone-match'></span></div>" +
+        authField("signup-password","Password","password","At least 8 characters","","Supabase securely handles your password. Do not share it with anyone.","autocomplete='new-password' minlength='8' required") +
+        authField("signup-confirm","Confirm password","password","Type your password again","","","autocomplete='new-password' minlength='8' required") +
         "<div class='form-error' id='signup-error' role='alert'></div><button class='auth-primary' type='submit'>Create account " + icon("chevron") + "</button></form>" +
         "<div class='auth-separator'>OR</div><button class='auth-secondary' type='button' data-action='demo-login'>" + icon("sparkles") + " Try the interactive demo (local only)</button>";
       const phoneInput = $("#signup-phone");
@@ -306,7 +306,7 @@
     const error = $("#signup-error");
     const fail = text => { error.textContent=text; error.classList.add("show"); };
     if (!name) return fail("Enter a display name.");
-    if (!/^[a-z0-9._]{3,20}$/.test(username)) return fail("Username must be 3–20 characters using letters, numbers, dots or underscores.");
+    if (!/^[a-z0-9_]{3,20}$/.test(username)) return fail("Username must be 3–20 characters using letters, numbers or underscores.");
     if (db.accounts.some(a=>normalizeUsername(a.username)===username)) return fail("That username is already taken on this browser.");
     if (phoneDigits.length !== 9) return fail("Enter exactly 9 digits after the +990 demo prefix.");
     if (db.accounts.concat(db.directory).some(a=>normalizePhone(a.phone)===normalizePhone(phone))) return fail("That custom number is already in use. Choose another.");
@@ -501,7 +501,7 @@
       openDialog(title,"<p class='screen-description'>Create a local six-digit demo PIN. It is saved only in this browser and does not protect a real account.</p><div class='dialog-field'><label for='two-step-pin'>Six-digit PIN</label><input id='two-step-pin' inputmode='numeric' maxlength='6' placeholder='••••••'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='save-two-step'>Save PIN</button>");return;
     }
     if(title==="Delete account"){
-      openDialog("Delete local demo account","<p class='screen-description'>This removes this demo account and its browser-stored chat state. No remote WhatsApp account is affected.</p>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='danger-button' data-dialog-action='delete-local-account'>Delete local account</button>");return;
+      openDialog("Delete local demo account","<p class='screen-description'>This removes this local demo account and its browser-stored chat state only. It does not delete a Supabase account.</p>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='danger-button' data-dialog-action='delete-local-account'>Delete local account</button>");return;
     }
     if(["Last seen and online","Profile photo","About","Status","Groups"].includes(title) && settingsTab==="privacy"){
       const values=["Everyone","My contacts","My contacts except…","Nobody"];
@@ -536,7 +536,7 @@
       else if(opt[3]==="button")side="<span class='end-icon'>"+icon("chevron")+"</span>";
       else side="<span class='setting-side-label'>"+esc(opt[3]||"")+"</span>";
       return "<div class='setting-option' data-setting-option='"+esc(opt[1])+"' role='button' tabindex='0'><span class='row-icon'>"+icon(opt[0])+"</span><div class='setting-option-copy'><strong>"+esc(opt[1])+"</strong><span>"+esc(opt[2])+"</span></div>"+side+"</div>";
-    }).join("")+"</div><p class='screen-description'>Settings here change the local interface only. No WhatsApp account, server, or device settings are affected.</p>";
+    }).join("")+"</div><p class='screen-description'>"+(currentUser&&currentUser.isSupabase?"Appearance and legacy privacy options are local preferences. Account profile changes, accepted contacts, groups and text messages use Supabase. Some older screens remain previews.":"Settings here change the local demo interface only. They do not change a remote account or device settings.")+"</p>";
     return "<div class='settings-detail-header'><h3>"+esc(tab[2])+"</h3></div><div class='settings-detail-content'>"+content+"</div>";
   }
   function renderSettings() {
