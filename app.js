@@ -201,7 +201,13 @@
   }
   function saveState(s = state, username = currentUser && currentUser.username) {
     if (!s || !username) return;
-    try { localStorage.setItem(stateKey(username), JSON.stringify(s)); } catch (_) { toast("Could not save all changes to browser storage."); }
+    try {
+      if (currentUser && currentUser.isSupabase) {
+        const localPrefs = { version: 3, profile: { username: s.profile.username, name: s.profile.name, phone: s.profile.phone, about: s.profile.about },
+          settings: s.settings || {}, starredMessages: [], blocked: s.blocked || [], archived: [], locked: [], customLists: s.customLists || [] };
+        localStorage.setItem(stateKey(username), JSON.stringify(localPrefs));
+      } else localStorage.setItem(stateKey(username), JSON.stringify(s));
+    } catch (_) { toast("Could not save all changes to browser storage."); }
   }
   function initials(name) { return String(name || "User").trim().split(/\s+/).filter(Boolean).slice(0,2).map(p=>p[0].toUpperCase()).join("") || "U"; }
   function generatePhone() {
@@ -1110,13 +1116,77 @@
     try {session=localStorage.getItem(SESSION_KEY);} catch (_) {}
     if(session) {
       const user=db.accounts.find(a=>normalizeUsername(a.username)===normalizeUsername(session));
-      if(user)persistUser(user);
-      else {localStorage.removeItem(SESSION_KEY);renderAuth("signup");}
+      if(user && user.demoAccount) persistUser(user);
+      else { try { localStorage.removeItem(SESSION_KEY); } catch (_) {} renderAuth("signup"); }
     }
     if(!currentUser)auth.classList.remove("hidden");
     const closeBackdrop=document.createElement("style");
     closeBackdrop.textContent=".wallpaper-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.wallpaper-swatch{display:flex;flex-direction:column;gap:8px;padding:8px;border:1px solid #e2e6e8;border-radius:9px;background:#fff;font-size:12px}.wallpaper-preview{height:90px;border-radius:6px;display:block;border:1px solid #e8ecee}.default-wallpaper{background:#efeae2 repeating-linear-gradient(45deg,transparent,transparent 12px,#e4ddd2 13px,transparent 14px)}.plain-wallpaper{background:#fff}.green-wallpaper{background:#dbeee5}.setting-side-label{font-size:12px;color:#667781}.settings-summary h4{margin:0 0 4px;font-size:16px;font-weight:500}.settings-summary p{margin:0;color:#667781;font-size:12px}.settings-option{display:flex;align-items:center;gap:14px;min-height:72px;padding:12px 16px;border-bottom:1px solid #f0f2f2;background:#fff}.settings-option:first-child{border-top:1px solid #f0f2f2}.settings-option-copy{min-width:0;flex:1}.settings-option-copy strong{display:block;font-size:14px;font-weight:500;margin-bottom:5px}.settings-option-copy span{display:block;color:#667781;font-size:12px;line-height:1.45}.toggle{width:38px;height:22px;flex:0 0 auto;border:0;border-radius:12px;background:#d6dcdf;padding:3px;display:flex;align-items:center}.toggle:after{content:'';height:16px;width:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px #0002}.toggle.on{justify-content:flex-end;background:#00a884}.mobile-open .chat-sidebar{display:none}.mobile-open .main-pane{display:flex}@media(max-width:700px){.wallpaper-preview{height:65px}.wide{max-width:100%}}";
     document.head.appendChild(closeBackdrop);
   }
+
+  // Small public bridge used by backend.js; database/auth code remains in a separate module.
+  window.waAppBridge = {
+    getState: () => state,
+    getCurrentUser: () => currentUser,
+    getCurrentChat: () => currentChat(),
+    setBackendUser: (authUser, profile) => {
+      const name = String(profile.display_name || profile.username || "User");
+      const phoneDigits = String(profile.custom_number || "").replace(/\D/g, "");
+      const tail = phoneDigits.startsWith("990") ? phoneDigits.slice(3) : phoneDigits;
+      const number = tail.length === 9 ? "+990 " + tail.slice(0,3) + " " + tail.slice(3,6) + " " + tail.slice(6,9) : String(profile.custom_number || "");
+      currentUser = { id: authUser.id, username: String(profile.username || "").toLowerCase(), name, phone: number,
+        about: profile.about || "Available", avatarData: profile.avatar_data || "", avatarColor: 1,
+        avatar: initials(name), createdAt: authUser.created_at || profile.created_at || new Date().toISOString(),
+        email: authUser.email || "", isSupabase: true };
+      const fresh = createUserState(currentUser);
+      let saved = null;
+      try { saved = JSON.parse(localStorage.getItem(stateKey(currentUser.username)) || "null"); } catch (_) {}
+      if (saved && saved.settings) fresh.settings = Object.assign(fresh.settings, saved.settings);
+      if (saved && saved.customLists) fresh.customLists = saved.customLists;
+      fresh.profile = { username: currentUser.username, name: currentUser.name, phone: currentUser.phone,
+        about: currentUser.about, avatar: initials(name), avatarColor: 1, avatarData: currentUser.avatarData };
+      fresh.chats = []; fresh.requests = []; fresh.sentRequests = []; fresh.contacts = []; fresh.calls = [];
+      state = fresh; selectedChatId = null; view = "chats";
+      try { localStorage.setItem(SESSION_KEY, currentUser.username); } catch (_) {}
+      auth.classList.add("hidden"); app.classList.remove("hidden"); applySettings(); renderApp();
+    },
+    setBackendData: (data) => {
+      if (!state || !currentUser || !currentUser.isSupabase) return;
+      if (data.profile) state.profile = data.profile;
+      if (data.chats) state.chats = data.chats;
+      if (data.requests) state.requests = data.requests;
+      if (data.sentRequests) state.sentRequests = data.sentRequests;
+      if (data.calls) state.calls = data.calls;
+      if (selectedChatId && !state.chats.some(c => String(c.id) === String(selectedChatId))) selectedChatId = null;
+      renderApp();
+    },
+    render: () => renderApp(),
+    renderMain: () => renderMain(),
+    renderSidebar: () => renderSidebar(),
+    selectChat: (id) => selectChat(id),
+    setView: (next) => setView(next),
+    closeDialog: () => closeDialog(),
+    openDialog: (title, body, footer) => openDialog(title, body, footer),
+    toast: (message) => toast(message),
+    handleAction: (action, element) => handleAction(action, element),
+    useAction: (action, chat) => useAction(action, chat),
+    saveState: () => saveState(),
+    updateCounts: () => updateCounts(),
+    currentUser: () => currentUser,
+    icon: (name) => icon(name),
+    avatarHTML: (person) => avatarHTML(person),
+    escapeHTML: (value) => esc(value),
+    updateBackendProfile: (profile) => {
+      if (!currentUser || !state) return;
+      currentUser.name = profile.name || currentUser.name;
+      currentUser.about = profile.about || currentUser.about;
+      currentUser.phone = profile.phone || currentUser.phone;
+      currentUser.avatarData = profile.avatarData || currentUser.avatarData;
+      state.profile = Object.assign(state.profile, profile);
+      renderApp();
+    }
+  };
+
   init();
 })();
