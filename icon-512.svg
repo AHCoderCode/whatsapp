@@ -1,5 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#25D366"/>
-  <path d="M256 88c-92 0-166 72-166 162 0 32 9 61 25 87L93 418l84-22c24 12 51 18 79 18 92 0 166-73 166-164S348 88 256 88Z" fill="none" stroke="#fff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M197 165c-8-2-17 1-24 9-7 8-12 19-12 31 0 21 15 48 31 68 24 30 52 52 81 65 17 8 32 12 44 10 16-2 29-17 30-31 1-6-2-10-10-14l-31-15c-7-3-11-2-15 4l-14 18c-3 4-7 5-12 3-18-7-37-22-52-38-13-14-25-30-28-41-1-4 0-8 4-12l14-15c5-5 5-9 2-15l-13-29c-3-6-7-8-15-8Z" fill="#fff"/>
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#11c981"/><stop offset="1" stop-color="#067b62"/></linearGradient><linearGradient id="bubble" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e5fff4"/></linearGradient></defs>
+  <rect width="512" height="512" rx="118" fill="url(#bg)"/>
+  <path d="M93 151c0-31 25-56 56-56h124c31 0 56 25 56 56v75c0 31-25 56-56 56h-82l-49 39 7-39h-1c-31 0-55-25-55-56z" fill="#064f46" opacity=".2"/>
+  <path d="M85 139c0-31 25-56 56-56h126c31 0 56 25 56 56v77c0 31-25 56-56 56h-83l-48 39 7-39h-2c-31 0-56-25-56-56z" fill="url(#bubble)"/>
+  <path d="M223 235c0-30 24-54 54-54h82c30 0 54 24 54 54v69c0 30-24 54-54 54h-3l6 32-43-32h-42c-30 0-54-24-54-54z" fill="#075e50"/>
+  <g fill="#087e64"><circle cx="147" cy="151" r="12"/><circle cx="186" cy="151" r="12"/><circle cx="225" cy="151" r="12"/></g>
+  <g fill="#f0fff7"><circle cx="279" cy="270" r="10"/><circle cx="318" cy="270" r="10"/><circle cx="357" cy="270" r="10"/></g>
+  <circle cx="398" cy="104" r="22" fill="#b9ffe1" opacity=".9"/><path d="M398 91v26m-13-13h26" stroke="#087e64" stroke-width="7" stroke-linecap="round"/>
 </svg>
