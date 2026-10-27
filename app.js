@@ -707,7 +707,11 @@
     return[];
   }
   function createNewChatDialog() {
-    const body="<p class='screen-description'>Find people by display name, username, or custom in-app number. Enter the number with or without the +990 prefix. Results show the profile photo and contact-request options.</p><div class='dialog-field'><label for='friend-search'>Display name, username, or number</label><input id='friend-search' placeholder='Name, @username, or 700100101' autocomplete='off' aria-label='Search by display name, username, or number'></div><div id='friend-lookup-result'><div class='empty-state'>Search by display name, username, or in-app number.</div></div>";
+    const sharedAccount = !!(currentUser && currentUser.isSupabase);
+    const intro = sharedAccount
+      ? "<p class='screen-description'>Search the shared Vexel Chat account directory by display name, username, or custom in-app number. Type a username with or without @; results update as you type.</p>"
+      : "<p class='screen-description'><strong>Local demo mode:</strong> This only searches sample contacts stored in this browser. It cannot discover accounts on other devices. Log out, then sign in with a shared Vexel Chat account to find real usernames and send contact requests.</p>";
+    const body = intro + "<div class='dialog-field'><label for='friend-search'>Display name, username, or number</label><input id='friend-search' placeholder='Name, @username, or 700100101' autocomplete='off' aria-label='Search by display name, username, or number'></div><div id='friend-lookup-result' role='status' aria-live='polite'><div class='empty-state'>Search by display name, username, or in-app number.</div></div>";
     openDialog("Find people",body,"<button class='secondary-button' data-action='close-dialog'>Close</button>");
   }
   function createGroupDialog() {
@@ -1036,7 +1040,7 @@
     if(target.id==="friend-search"){
       const contact=lookupDirectory(target.value);const box=$("#friend-lookup-result");if(!box)return;
       if(!target.value.trim()){box.innerHTML="";return;}
-      if(!contact){box.innerHTML="<div class='empty-state'>No account matched that username or in-app ID. Try another value.</div>";return;}
+      if(!contact){box.innerHTML="<div class='empty-state'>No local sample matched. Demo mode only searches contacts on this device; sign in with a shared Vexel Chat account to find real usernames.</div>";return;}
       const isSelf=normalizeUsername(contact.username)===normalizeUsername(currentUser.username);
       const existing=state.chats.find(c=>normalizeUsername(c.username)===normalizeUsername(contact.username));
       const sent=state.sentRequests.some(r=>normalizeUsername(r.username)===normalizeUsername(contact.username));
