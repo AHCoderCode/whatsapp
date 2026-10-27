@@ -841,7 +841,7 @@
   async function createGroup(){
     const me=getUser();if(!me||!me.isSupabase)return say("Sign in to create a shared group.");
     const name=String($("#group-name")?.value||"").trim(),description=String($("#group-description")?.value||"").trim().slice(0,500);
-    const memberIds=$("#group-contact-list input[type=checkbox]:checked").map(el=>el.value).filter(id=>appState().chats.some(c=>String(c.id)===String(id)&&c.type==="person"));
+    const memberIds=$$("#group-contact-list input[type=checkbox]:checked").map(el=>el.value).filter(id=>appState().chats.some(c=>String(c.id)===String(id)&&c.type==="person"));
     if(!name)return say("Enter a group name.");
     if(name.length>60)return say("Group names are limited to 60 characters.");
     try{
@@ -874,7 +874,7 @@
   async function addGroupParticipants(groupId) {
     const me=getUser(),s=appState();
     if(!me||!me.isSupabase)return;
-    const ids=$("#dialog-backdrop input[type=checkbox]:checked").map(el=>el.value).filter(id=>(s.chats||[]).some(c=>String(c.id)===String(id)&&c.type==="person"));
+    const ids=$$("#dialog-backdrop input[type=checkbox]:checked").map(el=>el.value).filter(id=>(s.chats||[]).some(c=>String(c.id)===String(id)&&c.type==="person"));
     if(!ids.length)return say("Select at least one accepted contact.");
     try{
       const rows=ids.map(id=>({group_id:groupId,user_id:id,role:"member",added_by:me.id}));
