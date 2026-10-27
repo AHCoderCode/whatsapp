@@ -1130,6 +1130,7 @@
     getState: () => state,
     getCurrentUser: () => currentUser,
     getCurrentChat: () => currentChat(),
+    getSelectedChatId: () => selectedChatId,
     setBackendUser: (authUser, profile) => {
       const name = String(profile.display_name || profile.username || "User");
       const phoneDigits = String(profile.custom_number || "").replace(/\D/g, "");
