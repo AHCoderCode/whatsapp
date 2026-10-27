@@ -71,10 +71,10 @@
       ["sparkles","Accent color","WhatsApp green accent theme.","Green"]
     ],
     storage:[
-      ["database","Manage storage","Review the local data used by this preview.","button"],
-      ["image","Manage media","No uploaded media is stored in this demo.","button"],
+      ["database","Manage storage","Review storage for this app.","button"],
+      ["image","Manage media","Manage media shared in your account's conversations.","button"],
       ["download","Media auto-download","Choose when media should download.","button"],
-      ["database","Network usage","No network usage in this frontend demo.","button"]
+      ["database","Network usage","Network usage details are not available here.","button"]
     ],
     accessibility:[
       ["help","Reduce motion","Limit interface animations.","toggle"],
@@ -88,7 +88,7 @@
     help:[
       ["help","Help center","Browse common questions.","button"],
       ["phone","Contact us","Contact support (preview only).","button"],
-      ["file","Terms and privacy policy","Review the demo privacy note.","button"],
+      ["file","Terms and privacy policy","Review the app's privacy details.","button"],
       ["info","App info","WhatsApp · v1.0","button"]
     ],
     shortcuts:[
@@ -111,7 +111,16 @@
   function normalizePhone(value) { return String(value || "").replace(/\D/g, ""); }
   function nowTime() { return new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}); }
   function dayLabel() { return "TODAY"; }
-  // New accounts start empty; chats and requests come only from the shared backend.
+  // New accounts start empty; this factory is only for explicit create/accept actions.
+  function seedChat(id,name,username,phone,avatar,type,time,preview,unread,favorite,pinned,online,messages,extra) {
+    const contactName = String(name || "Contact");
+    return Object.assign({
+      id:String(id), name:contactName, username:normalizeUsername(username), phone:String(phone || ""),
+      avatar:avatar || initials(contactName), type:type || "person", time:"", preview:"", unread:0,
+      favorite:!!favorite, pinned:!!pinned, online:!!online, muted:false, archived:false, locked:false,
+      about:"Available", participants:[], messages:[], attachments:[]
+    }, extra || {});
+  }
   function defaultChats() { return []; }
   function defaultRequests() { return []; }
   function freshDb() { return {version:3,accounts:[],directory:[]}; }
@@ -213,7 +222,7 @@
         "<div class='form-error' id='signup-error' role='alert'></div><button class='auth-primary' type='submit'>Create account " + icon("chevron") + "</button></form>";
       const phoneInput = $("#signup-phone");
       if (phoneInput) phoneInput.addEventListener("input", () => {
-        phoneInput.value = phoneInput.value.replace(/[^0-9\\s()-]/g,"").slice(0,18);
+        phoneInput.value = phoneInput.value.replace(/[^0-9\s()-]/g,"").slice(0,18);
         const label = $("#signup-phone-match");
         if (label) label.textContent = "This ID will be checked when you create your account.";
       });
@@ -398,7 +407,7 @@
   function renderProfile() {
     const p=state.profile;
     const photo=p.avatarData?"<img src='"+esc(p.avatarData)+"' alt='Profile photo'>":esc(p.avatar||initials(p.name));
-    main.innerHTML="<section class='section-screen'>"+screenHeader("Profile","<button class='icon-button' data-action='edit-profile' aria-label='Edit profile'>"+icon("edit")+"</button>")+"<div class='screen-content'><div class='profile-card'><button class='profile-photo photo-button' data-action='change-profile-photo' aria-label='Change profile photo'>"+photo+"</button><div><h3>"+esc(p.name)+"</h3><p>@"+esc(p.username)+" · "+esc(p.phone)+"</p><button class='secondary-button' data-action='change-profile-photo'>"+icon("image")+" Change photo</button> <button class='primary-button' data-action='edit-profile'>"+icon("edit")+" Edit profile</button></div></div><div class='section-card'><h3 class='section-card-title'>Profile information</h3><div class='setting-row'><span class='row-icon'>"+icon("edit")+"</span><span class='setting-copy'><span class='setting-subtitle'>Name</span><span class='setting-title'>"+esc(p.name)+"</span></span><button class='icon-button' data-action='edit-profile' aria-label='Edit name'>"+icon("edit")+"</button></div><div class='setting-row'><span class='row-icon'>"+icon("info")+"</span><span class='setting-copy'><span class='setting-subtitle'>About</span><span class='setting-title'>"+esc(p.about)+"</span></span><button class='icon-button' data-action='edit-profile' aria-label='Edit about'>"+icon("edit")+"</button></div><div class='setting-row'><span class='row-icon'>"+icon("phone")+"</span><span class='setting-copy'><span class='setting-subtitle'>Custom in-app number</span><span class='setting-title'>"+esc(p.phone)+"</span></span><button class='icon-button' data-action='copy-phone' aria-label='Copy number'>"+icon("copy")+"</button></div><div class='setting-row'><span class='row-icon'>"+icon("users")+"</span><span class='setting-copy'><span class='setting-subtitle'>Username</span><span class='setting-title'>@"+esc(p.username)+"</span></span><button class='icon-button' data-action='copy-username' aria-label='Copy username'>"+icon("copy")+"</button></div></div><p class='screen-description'>Your number is a custom demo ID. It is not a real phone number and cannot receive SMS or phone calls.</p></div></section>";
+    main.innerHTML="<section class='section-screen'>"+screenHeader("Profile","<button class='icon-button' data-action='edit-profile' aria-label='Edit profile'>"+icon("edit")+"</button>")+"<div class='screen-content'><div class='profile-card'><button class='profile-photo photo-button' data-action='change-profile-photo' aria-label='Change profile photo'>"+photo+"</button><div><h3>"+esc(p.name)+"</h3><p>@"+esc(p.username)+" · "+esc(p.phone)+"</p><button class='secondary-button' data-action='change-profile-photo'>"+icon("image")+" Change photo</button> <button class='primary-button' data-action='edit-profile'>"+icon("edit")+" Edit profile</button></div></div><div class='section-card'><h3 class='section-card-title'>Profile information</h3><div class='setting-row'><span class='row-icon'>"+icon("edit")+"</span><span class='setting-copy'><span class='setting-subtitle'>Name</span><span class='setting-title'>"+esc(p.name)+"</span></span><button class='icon-button' data-action='edit-profile' aria-label='Edit name'>"+icon("edit")+"</button></div><div class='setting-row'><span class='row-icon'>"+icon("info")+"</span><span class='setting-copy'><span class='setting-subtitle'>About</span><span class='setting-title'>"+esc(p.about)+"</span></span><button class='icon-button' data-action='edit-profile' aria-label='Edit about'>"+icon("edit")+"</button></div><div class='setting-row'><span class='row-icon'>"+icon("phone")+"</span><span class='setting-copy'><span class='setting-subtitle'>Custom in-app number</span><span class='setting-title'>"+esc(p.phone)+"</span></span><button class='icon-button' data-action='copy-phone' aria-label='Copy number'>"+icon("copy")+"</button></div><div class='setting-row'><span class='row-icon'>"+icon("users")+"</span><span class='setting-copy'><span class='setting-subtitle'>Username</span><span class='setting-title'>@"+esc(p.username)+"</span></span><button class='icon-button' data-action='copy-username' aria-label='Copy username'>"+icon("copy")+"</button></div></div><p class='screen-description'>Your in-app ID is not a real telephone number. It is not a real phone number and cannot receive SMS or phone calls.</p></div></section>";
   }
   function renderRequests() {
     const received=state.requests.filter(r=>r.status==="received");
@@ -487,23 +496,62 @@
     main.innerHTML="<section class='details-layout'><header class='details-header'><button class='icon-button' data-action='back-to-chat' aria-label='Back'>"+icon("back")+"</button><h2>"+(chat.type==="group"?"Group info":"Contact info")+"</h2><button class='icon-button' data-action='chat-menu' aria-label='More options'>"+icon("more")+"</button></header><div class='details-content'>"+detail+"</div></section>";
   }
   function renderUpdates() {
-    if(currentUser&&currentUser.isSupabase){
-      const statuses=state.backendStatuses||[],own=statuses.filter(s=>s.userId===currentUser.id);
-      const latestByUser=new Map();
-      statuses.filter(s=>s.userId!==currentUser.id).forEach(s=>{if(!latestByUser.has(s.userId))latestByUser.set(s.userId,s);});
-      const mine=own[0];
-      const myRow="<div class='status-row' data-action='"+(mine?"status-preview":"new-status")+"' "+(mine?"data-status-id='"+esc(mine.id)+"'":"")+"><div class='status-ring'><div class='status-inner'>"+(state.profile.avatarData?"<img class='avatar-image' src='"+esc(state.profile.avatarData)+"' alt=''>":esc(state.profile.avatar||initials(state.profile.name)))+"</div></div><div class='status-copy'><strong>My status</strong><span>"+esc(mine?mine.text:"Tap to add a text status")+"</span></div><button class='icon-button' data-action='new-status' aria-label='Add status'>"+icon("new")+"</button></div>";
-      const recent=Array.from(latestByUser.values()).map(s=>"<div class='status-row' data-action='status-preview' data-status-id='"+esc(s.id)+"'><div class='status-ring'><div class='status-inner'>"+(s.avatarData?"<img class='avatar-image' src='"+esc(s.avatarData)+"' alt=''>":esc(s.avatar||initials(s.name)))+"</div></div><div class='status-copy'><strong>"+esc(s.name)+"</strong><span>"+esc(s.text)+" · "+esc(new Date(s.createdAt).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}))+"</span></div></div>").join("");
-      main.innerHTML="<section class='section-screen'>"+screenHeader("Updates","<button class='icon-button' data-action='new-status' aria-label='New text status'>"+icon("new")+"</button>")+"<div class='screen-content'><p class='screen-description'>Text status updates expire automatically after 24 hours. Statuses are visible to accepted contacts.</p><div class='section-card'><h3 class='section-card-title'>Status</h3>"+myRow+"</div><div class='section-card'><h3 class='section-card-title'>Recent updates</h3>"+(recent||"<div class='empty-state'>No contact status updates yet.</div>")+"</div></div></section>";
-      return;
-    }
-    const names=[{name:"My status",label:state.statusUpdates.length?state.statusUpdates[0].text:"Tap to add status update",initials:state.profile.avatar||"ME",avatar:2,action:"new-status"},{name:"Ayesha Khan",label:"Today, 12:24 PM",initials:"AK",avatar:1,action:"status-preview"},{name:"Hassan Raza",label:"Today, 11:58 AM",initials:"HR",avatar:3,action:"status-preview"},{name:"Sara Ahmed",label:"Today, 10:42 AM",initials:"SA",avatar:9,action:"status-preview"},{name:"Noor Fatima",label:"Yesterday, 8:30 PM",initials:"NF",avatar:2,action:"status-preview"}];
-    main.innerHTML="<section class='section-screen'>"+screenHeader("Updates","<button class='icon-button' data-action='camera' aria-label='Camera'>"+icon("camera")+"</button><button class='icon-button' data-action='new-status' aria-label='New status'>"+icon("new")+"</button>")+"<div class='screen-content'><p class='screen-description'>Share everyday moments with status updates that disappear after 24 hours.</p><div class='section-card'><h3 class='section-card-title'>Status</h3>"+names.map((n,i)=>"<div class='status-row' data-action='"+n.action+"' data-status-name='"+esc(n.name)+"'><div class='status-ring'><div class='status-inner'>"+esc(n.initials)+"</div></div><div class='status-copy'><strong>"+esc(n.name)+"</strong><span>"+esc(n.label)+"</span></div></div>").join("")+"</div><div class='section-card'><h3 class='section-card-title'>Channels</h3>"+settingRow("channels","Discover channels","Follow updates from people and organizations","nav-channels")+"</div></div></section>";
+    const statuses = currentUser && currentUser.isSupabase && state ? (state.backendStatuses || []) : [];
+    const profile = state && state.profile ? state.profile : {name:"",avatar:"ME",avatarData:""};
+    const userId = currentUser && currentUser.isSupabase ? currentUser.id : "";
+    const own = statuses.filter(status => status.userId === userId);
+    const latestByUser = new Map();
+    statuses.filter(status => status.userId !== userId).forEach(status => {
+      if (!latestByUser.has(status.userId)) latestByUser.set(status.userId,status);
+    });
+    const mine = own[0];
+    const myAvatar = profile.avatarData
+      ? "<img class='avatar-image' src='" + esc(profile.avatarData) + "' alt=''>"
+      : esc(profile.avatar || initials(profile.name));
+    const myRow = "<div class='status-row' data-action='" + (mine ? "status-preview" : "new-status") + "' " +
+      (mine ? "data-status-id='" + esc(mine.id) + "'" : "") + "><div class='status-ring'><div class='status-inner'>" +
+      myAvatar + "</div></div><div class='status-copy'><strong>My status</strong><span>" +
+      esc(mine ? mine.text : "Tap to add a text status") +
+      "</span></div><button class='icon-button' data-action='new-status' aria-label='Add status'>" + icon("new") + "</button></div>";
+    const recent = Array.from(latestByUser.values()).map(status => {
+      const avatar = status.avatarData
+        ? "<img class='avatar-image' src='" + esc(status.avatarData) + "' alt=''>"
+        : esc(status.avatar || initials(status.name));
+      return "<div class='status-row' data-action='status-preview' data-status-id='" + esc(status.id) +
+        "'><div class='status-ring'><div class='status-inner'>" + avatar +
+        "</div></div><div class='status-copy'><strong>" + esc(status.name) + "</strong><span>" +
+        esc(status.text) + " · " + esc(new Date(status.createdAt).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})) +
+        "</span></div></div>";
+    }).join("");
+    main.innerHTML = "<section class='section-screen'>" +
+      screenHeader("Updates","<button class='icon-button' data-action='new-status' aria-label='New text status'>" + icon("new") + "</button>") +
+      "<div class='screen-content'><p class='screen-description'>Text status updates expire automatically after 24 hours and are shared with your accepted contacts.</p>" +
+      "<div class='section-card'><h3 class='section-card-title'>Status</h3>" + myRow + "</div>" +
+      "<div class='section-card'><h3 class='section-card-title'>Recent updates</h3>" +
+      (recent || "<div class='empty-state'>No contact status updates yet.</div>") +
+      "</div><div class='section-card'><h3 class='section-card-title'>Channels</h3>" +
+      settingRow("channels","Discover channels","Follow updates from channels you choose","nav-channels") +
+      "</div></div></section>";
   }
+
   function renderCalls() {
-    const rows=state.calls.length?state.calls:[{name:"Ayesha Khan",time:"Today, 11:45 AM",type:"incoming",avatar:1},{name:"Hassan Raza",time:"Yesterday, 8:10 PM",type:"outgoing",avatar:3},{name:"Family Group",time:"Yesterday, 6:30 PM",type:"missed",avatar:2},{name:"Mom",time:"Monday, 2:42 PM",type:"incoming",avatar:5}];
-    const displayRows=(currentUser&&currentUser.isSupabase)?state.calls:rows; const description=(currentUser&&currentUser.isSupabase)?"Call history from your account. Voice/video calls require the other contact to be online and accept the call.":"Preview call history. Create an account to use real one-to-one calls."; main.innerHTML="<section class='section-screen'>"+screenHeader("Calls","<button class='icon-button' data-action='new-call' aria-label='New call'>"+icon("phone")+"</button>")+"<div class='screen-content'><p class='screen-description'>"+description+"</p><div class='section-card'>"+(displayRows.length?displayRows.map((r,i)=>"<button class='setting-row' data-action='call-entry' data-call-name='"+esc(r.name)+"' data-chat-id='"+esc(r.contactId||"")+"' data-media-type='"+esc(r.mediaType||"audio")+"'>"+avatarHTML({name:r.name,avatar:r.avatar||i+1})+"<span class='setting-copy'><span class='setting-title'>"+esc(r.name)+"</span><span class='setting-subtitle'>"+icon(r.type==="outgoing"?"forward":"reply")+" "+esc(r.time)+"</span></span><span class='end-icon'>"+icon("phone")+"</span></button>").join(""):"<div class='empty-state'>No calls yet. Start an audio or video call from a contact chat.</div>")+"</div></div></section>";
+    const rows = currentUser && currentUser.isSupabase && state && Array.isArray(state.calls) ? state.calls : [];
+    const description = currentUser && currentUser.isSupabase
+      ? "Call history from your account. Voice and video calls require the other contact to accept."
+      : "Your call history will appear here when you sign in to your account.";
+    main.innerHTML = "<section class='section-screen'>" +
+      screenHeader("Calls","<button class='icon-button' data-action='new-call' aria-label='New call'>" + icon("phone") + "</button>") +
+      "<div class='screen-content'><p class='screen-description'>" + description + "</p><div class='section-card'>" +
+      (rows.length ? rows.map((row,index) => "<button class='setting-row' data-action='call-entry' data-call-name='" +
+        esc(row.name) + "' data-chat-id='" + esc(row.contactId || "") + "' data-media-type='" + esc(row.mediaType || "audio") + "'>" +
+        avatarHTML({name:row.name,avatar:row.avatar || index+1}) +
+        "<span class='setting-copy'><span class='setting-title'>" + esc(row.name) + "</span><span class='setting-subtitle'>" +
+        icon(row.type === "outgoing" ? "forward" : "reply") + " " + esc(row.time) +
+        "</span></span><span class='end-icon'>" + icon("phone") + "</span></button>").join("") :
+        "<div class='empty-state'>No calls yet. Start a call from an accepted contact's chat.</div>") +
+      "</div></div></section>";
   }
+
   function renderCommunities() {
     if(currentUser&&currentUser.isSupabase){
       const communities=state.backendCommunities||[];
@@ -647,10 +695,10 @@
     openDialog("Edit group",body,"<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='save-group' data-chat-id='"+esc(chat.id)+"'>Save</button>");
   }
   function chooseWallpaperDialog() {
-    openDialog("Chat wallpaper","<p class='screen-description'>Choose the wallpaper for your demo conversations.</p><div class='wallpaper-options'><button class='wallpaper-swatch' data-wallpaper='default'><span class='wallpaper-preview default-wallpaper'></span><span>Default doodles</span></button><button class='wallpaper-swatch' data-wallpaper='plain'><span class='wallpaper-preview plain-wallpaper'></span><span>Plain</span></button><button class='wallpaper-swatch' data-wallpaper='green'><span class='wallpaper-preview green-wallpaper'></span><span>Soft green</span></button></div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");
+    openDialog("Chat wallpaper","<p class='screen-description'>Choose the wallpaper for your conversations.</p><div class='wallpaper-options'><button class='wallpaper-swatch' data-wallpaper='default'><span class='wallpaper-preview default-wallpaper'></span><span>Default doodles</span></button><button class='wallpaper-swatch' data-wallpaper='plain'><span class='wallpaper-preview plain-wallpaper'></span><span>Plain</span></button><button class='wallpaper-swatch' data-wallpaper='green'><span class='wallpaper-preview green-wallpaper'></span><span>Soft green</span></button></div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");
   }
   function selectChatsDialog() {
-    const body="<p class='screen-description'>Select chats for a demo bulk action.</p>"+state.chats.filter(c=>!c.archived).map(c=>"<div class='pick-row'>"+avatarHTML(c)+"<label for='pick-"+esc(c.id)+"'>"+esc(c.name)+"</label><input type='checkbox' id='pick-"+esc(c.id)+"' value='"+esc(c.id)+"'></div>").join("");
+    const body="<p class='screen-description'>Select conversations for this action.</p>"+state.chats.filter(c=>!c.archived).map(c=>"<div class='pick-row'>"+avatarHTML(c)+"<label for='pick-"+esc(c.id)+"'>"+esc(c.name)+"</label><input type='checkbox' id='pick-"+esc(c.id)+"' value='"+esc(c.id)+"'></div>").join("");
     openDialog("Select chats",body,"<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='bulk-selection'>Continue</button>");
   }
   function actionMenu(anchor, action) { const chat=findChat(anchor.dataset.chatId)||currentChat();openPopup(anchor,menuItems(action,chat),chat?chat.id:null); }
@@ -757,7 +805,7 @@
     if(action==="go-archived"){setView("archived");return;}
     if(action==="select-chats"){selectChatsDialog();return;}
     if(action==="help"){settingsTab="help";setView("settings");return;}
-    if(action==="logout"){openDialog("Log out","<p class='screen-description'>Log out of this local demo? Your local account and demo data will remain saved in this browser.</p>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='logout'>Log out</button>");return;}
+    if(action==="logout"){openDialog("Log out","<p class='screen-description'>Log out of your account on this device?</p>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='logout'>Log out</button>");return;}
     if(action==="accounts-center"){toast("Accounts Center is a visual demo only.");return;}
     if(action==="filter-all"){filter="all";searchQuery="";$("#chat-search").value="";renderSidebar();closePopup();return;}
     if(action==="search-media"){toast("Media search UI preview.");return;}
