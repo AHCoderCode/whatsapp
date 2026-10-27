@@ -688,7 +688,14 @@
     if(action==="disappearing"){openDialog("Disappearing messages","<p class='screen-description'>Choose when new messages disappear from this local preview.</p><div class='section-card'><button class='setting-row' data-dialog-action='set-disappearing' data-days='0'>Off</button><button class='setting-row' data-dialog-action='set-disappearing' data-days='1'>24 hours</button><button class='setting-row' data-dialog-action='set-disappearing' data-days='7'>7 days</button><button class='setting-row' data-dialog-action='set-disappearing' data-days='90'>90 days</button></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button>");return;}
     if(action==="block-chat"||action==="report-chat"){openDialog(action==="block-chat"?"Block "+chat.name:"Report "+chat.name,"<p class='screen-description'>This control is part of the frontend preview. It does not contact or report anyone to a server.</p>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='danger-button' data-dialog-action='confirm-local-action' data-kind='"+action+"' data-chat-id='"+esc(chat.id)+"'>Confirm demo action</button>");return;}
     if(action==="select-messages"){toast("Tip: click a message and use its menu to star, copy, or delete it.");return;}
-    if(action==="star-message"){return;}
+    if(action==="star-message"){
+      const ref=state.lastContextMessage;
+      if(ref && chat) {
+        if(!state.starredMessages.some(m=>m.id===ref.id)) state.starredMessages.unshift({id:ref.id,chatId:chat.id,chatName:chat.name,text:ref.text,avatar:chat.avatar,time:ref.time});
+        saveState();toast("Message starred.");renderSidebar();
+      } else toast("Right-click a message to star it.");
+      return;
+    }
     if(action==="pinned-preview"){toast(chat&&chat.pinnedMessage?"Pinned message: "+chat.pinnedMessage.text:"No pinned message.");return;}
     if(action==="unpin-message"){if(chat)chat.pinnedMessage=null;save();renderMain();toast("Pinned message removed.");return;}
     if(action==="reply-message"){const input=$("#message-input");if(input){input.value="Replying: ";input.focus();}return;}
@@ -834,6 +841,12 @@
         const c=findChat(t.dataset.chatId);if(!c)return;const name=$("#edit-group-name").value.trim();if(!name){toast("Group subject cannot be empty.");return;}
         c.name=name;c.about=$("#edit-group-about").value.trim();saveState();closeDialog();renderSidebar();renderMain();toast("Group information updated.");return;
       }
+      if(action==="save-participants"){
+        const c=findChat(t.dataset.chatId);if(!c)return;
+        const selected=$("#dialog-backdrop input[type=checkbox]:checked").map(input=>input.value);
+        c.participants=Array.from(new Set((c.participants||[]).concat(selected)));
+        saveState();closeDialog();renderMain();toast(selected.length+" participant(s) added to this local group.");return;
+      }
       if(action==="save-contact-about"){
         const c=findChat(t.dataset.chatId);if(c){c.about=$("#contact-about").value.trim();saveState();closeDialog();renderMain();toast("Contact details updated in demo.");}return;
       }
@@ -958,6 +971,18 @@
   document.addEventListener("click",event=>{
     const menu=$("#popup-menu");
     if(menu&&!menu.contains(event.target)&&!event.target.closest("[data-action]"))closePopup();
+  });
+  main.addEventListener("contextmenu",event=>{
+    const row=event.target.closest(".message-row");
+    if(!row)return;
+    const chat=currentChat();
+    if(!chat)return;
+    const message=chat.messages.find(m=>String(m.id)===String(row.dataset.messageId));
+    if(!message)return;
+    event.preventDefault();
+    state.lastContextMessage={id:message.id,text:message.text,chatId:chat.id,chatName:chat.name,avatar:chat.avatar,time:message.time};
+    const anchor=row;
+    openPopup(anchor,menuItems("message-menu",chat),chat.id);
   });
   window.addEventListener("resize",updateMobile);
 
