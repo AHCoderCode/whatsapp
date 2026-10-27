@@ -16,18 +16,18 @@
   <meta property="og:title" content="WhatsApp">
   <meta property="og:description" content="An installable messaging web app with account-based chats, contact requests, and voice/video calls.">
   <meta property="og:url" content="https://whatsapp-for.vercel.app/">
-  <meta property="og:image" content="https://whatsapp-for.vercel.app/icon-512.svg?v=whatsapp-final-20261027l">
+  <meta property="og:image" content="https://whatsapp-for.vercel.app/icon-512.svg?v=whatsapp-final-20261027m">
   <meta property="og:image:alt" content="WhatsApp app icon">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="WhatsApp Web">
   <meta name="twitter:description" content="An installable messaging web app with account-based chats and voice/video calls.">
   <meta name="twitter:image" content="https://whatsapp-for.vercel.app/icon-512.svg">
   <title>WhatsApp</title>
-  <link rel="icon" href="/whatsapp-favicon.svg?v=whatsapp-final-20261027l" type="image/svg+xml" sizes="any">
-  <link rel="shortcut icon" href="/whatsapp-favicon.svg?v=whatsapp-final-20261027l" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="/icon-192.svg?v=whatsapp-final-20261027l">
-  <link rel="manifest" href="/manifest.webmanifest?v=whatsapp-final-20261027l">
-  <link rel="stylesheet" href="/styles.css?v=whatsapp-final-20261027l">
+  <link rel="icon" href="/whatsapp-favicon.svg?v=whatsapp-final-20261027m" type="image/svg+xml" sizes="any">
+  <link rel="shortcut icon" href="/whatsapp-favicon.svg?v=whatsapp-final-20261027m" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon-192.svg?v=whatsapp-final-20261027m">
+  <link rel="manifest" href="/manifest.webmanifest?v=whatsapp-final-20261027m">
+  <link rel="stylesheet" href="/styles.css?v=whatsapp-final-20261027m">
   <style>
     body.wa-booting > :not(#boot-screen) { visibility: hidden !important; }
     .boot-screen { position: fixed; inset: 0; z-index: 999999; display: grid; place-items: center; background: #f7fcf9; color: #111b21; font-family: "Segoe UI", Arial, sans-serif; }
@@ -44,7 +44,7 @@
 <body class="wa-booting">
 <div id="boot-screen" class="boot-screen" role="status" aria-live="polite">
   <div class="boot-card">
-    <img src="/whatsapp-favicon.svg?v=whatsapp-final-20261027l" alt="" width="64" height="64">
+    <img src="/whatsapp-favicon.svg?v=whatsapp-final-20261027m" alt="" width="64" height="64">
     <strong>WhatsApp</strong>
     <span>Checking your session…</span>
     <span class="boot-spinner" aria-hidden="true"></span>
@@ -139,7 +139,7 @@
   <div class="app-workspace">
     <aside class="app-rail" aria-label="Main navigation">
       <nav class="rail-group">
-        <div class="rail-brand" title="WhatsApp" aria-label="WhatsApp"><img src="/icon.svg?v=whatsapp-final-20261027l" alt="WhatsApp"></div>
+        <div class="rail-brand" title="WhatsApp" aria-label="WhatsApp"><img src="/icon.svg?v=whatsapp-final-20261027m" alt="WhatsApp"></div>
         <button class="rail-button active" data-view="chats" title="Chats" aria-label="Chats"><svg><use href="#i-chat"/></svg><span class="nav-count" id="rail-chat-count"></span></button>
         <button class="rail-button" data-view="updates" title="Updates" aria-label="Updates"><svg><use href="#i-status"/></svg></button>
         <button class="rail-button" data-view="communities" title="Communities" aria-label="Communities"><svg><use href="#i-communities"/></svg></button>
@@ -210,13 +210,13 @@
 </div>
 <div id="overlay-root"></div>
 <div id="toast-root" aria-live="polite"></div>
-<script src="/app.js?v=whatsapp-final-20261027l" defer></script>
+<script src="/app.js?v=whatsapp-final-20261027m" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-<script src="/backend.js?v=whatsapp-final-20261027l" defer></script>
-<script src="/calls.js?v=whatsapp-final-20261027l" defer></script>
+<script src="/backend.js?v=whatsapp-final-20261027m" defer></script>
+<script src="/calls.js?v=whatsapp-final-20261027m" defer></script>
 <script>
 if("serviceWorker" in navigator){
-  const releaseKey="whatsapp_release_20261027l";
+  const releaseKey="whatsapp_release_20261027m";
   navigator.serviceWorker.addEventListener("controllerchange",()=>{
     try{
       if(sessionStorage.getItem(releaseKey)!=="1"){
@@ -226,7 +226,7 @@ if("serviceWorker" in navigator){
     }catch(_){}
   });
   window.addEventListener("load",()=>{
-    navigator.serviceWorker.register("/sw.js?v=whatsapp-final-20261027l",{updateViaCache:"none"})
+    navigator.serviceWorker.register("/sw.js?v=whatsapp-final-20261027m",{updateViaCache:"none"})
       .then(registration=>registration.update().catch(()=>{}))
       .catch(()=>{});
   });
