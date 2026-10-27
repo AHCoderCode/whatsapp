@@ -676,6 +676,90 @@
       : "<p class='screen-description'><strong>Not connected to a shared account.</strong> Log in to find people registered on other devices.</p>";
     const body = intro + "<div id='friend-search-form' class='friend-search-form' role='search'><div class='dialog-field'><label for='friend-search'>Display name, username, or in-app ID</label><input id='friend-search' type='search' placeholder='Name, @username, or app ID' autocomplete='off' enterkeyhint='search' aria-label='Search registered people'></div><button id='friend-search-submit' class='primary-button friend-search-submit' type='button'>Search people</button></div><div id='friend-lookup-result' role='status' aria-live='polite'><div class='empty-state'>Type a name or username, then tap Search people or press Enter.</div></div>";
     openDialog("Find people",body,"<button class='secondary-button' data-action='close-dialog'>Close</button>");
+
+    // Bind directly to this dialog's controls: one shared lookup, no competing local-only handler.
+    const input = $("#friend-search");
+    const button = $("#friend-search-submit");
+    const initialBox = $("#friend-lookup-result");
+    let searchSequence = 0;
+    let searching = false;
+    const status = message => {
+      const result = $("#friend-lookup-result");
+      if (result) result.innerHTML = "<div class='empty-state' role='status'>" + esc(message) + "</div>";
+    };
+    const runSearch = async () => {
+      if (searching) return;
+      const query = String(input && input.value || "").trim().replace(/^@+/, "").replace(/\s+/g, " ").trim();
+      const bridge = window.waAppBridge;
+      if (!query) { status("Enter a name, username, or in-app ID to search."); return; }
+      if (query.length < 2) { status("Enter at least 2 characters or digits."); return; }
+      if (query.length > 80) { status("Search text must be 80 characters or fewer."); return; }
+      if (!currentUser || !currentUser.isSupabase) {
+        status("You are not signed in to the shared account service. Log in again, then search.");
+        return;
+      }
+      const search = bridge && bridge.searchBackendPeople;
+      if (typeof search !== "function") {
+        status("The account search service did not initialize. Reload the app, then open Find people again.");
+        return;
+      }
+      const thisSearch = ++searchSequence;
+      searching = true;
+      if (button) { button.disabled = true; button.setAttribute("aria-busy","true"); button.textContent = "Searching…"; }
+      if (initialBox) initialBox.innerHTML = "<div class='empty-state' role='status'>Searching registered accounts…</div>";
+      try {
+        const found = await search(query);
+        if (thisSearch !== searchSequence || !$("#friend-lookup-result")) return;
+        const resultBox = $("#friend-lookup-result");
+        if (!Array.isArray(found) || found.length === 0) {
+          status("No matching accounts found. Try the exact username without @, and confirm the other account finished signing up.");
+          return;
+        }
+        const s = state || {chats:[],requests:[],sentRequests:[]};
+        const chats = Array.isArray(s.chats) ? s.chats : [];
+        const requests = Array.isArray(s.requests) ? s.requests : [];
+        const sentRequests = Array.isArray(s.sentRequests) ? s.sentRequests : [];
+        const cards = found.map(person => {
+          const friend = chats.find(chat => String(chat.id) === String(person.id));
+          const incoming = requests.find(request =>
+            (String(request.requestUserId) === String(person.id) || normalizeUsername(request.username) === normalizeUsername(person.username)) &&
+            (!request.status || request.status === "received" || request.status === "pending"));
+          const sent = sentRequests.some(request =>
+            String(request.requestUserId) === String(person.id) || normalizeUsername(request.username) === normalizeUsername(person.username));
+          const self = String(person.id) === String(currentUser.id);
+          let action;
+          if (self) action = "<button class='secondary-button' disabled>Your account</button>";
+          else if (friend) action = "<button class='primary-button' data-action='open-found-chat' data-chat-id='" + esc(friend.id) + "'>Open chat</button>";
+          else if (incoming) action = "<button class='primary-button' data-action='accept-found-request' data-request-id='" + esc(incoming.id) + "'>Accept request</button>";
+          else if (sent) action = "<button class='secondary-button' disabled>Request sent</button>";
+          else action = "<button class='primary-button' data-action='send-contact-request' data-contact-username='" + esc(person.username) + "'>Send contact request</button>";
+          const name = esc(person.name || person.username || "User");
+          const username = esc("@" + String(person.username || ""));
+          const number = person.phone ? "<span>" + esc(person.phone) + "</span>" : "";
+          return "<div class='request-card'>" + bridge.avatarHTML(person) + "<div class='request-info'><strong>" + name + "</strong><span>" + username + "</span>" + number + "</div>" + action + "</div>";
+        }).join("");
+        resultBox.innerHTML = "<div class='search-result-summary' role='status'>Found " + found.length + " matching account" + (found.length === 1 ? "" : "s") + ".</div>" + cards;
+      } catch (error) {
+        if (thisSearch !== searchSequence) return;
+        status("Search failed: " + String(error && error.message || "Unknown directory error") + ". Check your connection and sign-in, then try again.");
+      } finally {
+        if (thisSearch === searchSequence) {
+          searching = false;
+          const currentButton = $("#friend-search-submit");
+          if (currentButton) { currentButton.disabled = false; currentButton.removeAttribute("aria-busy"); currentButton.textContent = "Search people"; }
+        }
+      }
+    };
+    if (button) button.addEventListener("click", event => {
+      event.preventDefault(); event.stopPropagation(); void runSearch();
+    });
+    if (input) {
+      input.addEventListener("keydown", event => {
+        if (event.key !== "Enter" || event.isComposing) return;
+        event.preventDefault(); event.stopPropagation(); void runSearch();
+      });
+      input.addEventListener("input", event => event.stopPropagation());
+    }
   }
   function createGroupDialog() {
     const contacts=state.chats.filter(c=>c.type==="person"&&!c.archived);
