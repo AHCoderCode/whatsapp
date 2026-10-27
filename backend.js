@@ -67,18 +67,13 @@
   async function searchPeople(value) {
     const me=getUser();
     if(!db||!me||!me.isSupabase)return [];
-    let query=String(value||"").trim().replace(/^@+/,"").toLowerCase();
-    if(canonicalNumber(query)){query=await usernameFromNumber(query);if(!query)return [];}
-    query=query.replace(/[^a-z0-9_]/g,"");
-    if(query.length<3||query.length>20)return [];
+    const query=String(value||"").trim().replace(/^@+/,"");
+    if(query.length<2||query.length>80)return [];
     const {data,error}=await db.rpc("aeroshell_search_profiles",{search_query:query});
     if(error)throw error;
-    return (data||[]).filter(p=>p.id!==me.id).map(row=>{
-      const p=mapProfile(row);
-      if(p){p.name=p.username;p.phone="";p.about=""; }
-      return p;
-    }).filter(Boolean).slice(0,8);
+    return (data||[]).filter(row=>row.id!==me.id).map(row=>mapProfile(row)).filter(Boolean).slice(0,8);
   }
+
   function localMessage(row, me, chat) {
     const stamp=new Date(row.created_at);
     const body=row.message_type==="voice"?"🎤 Voice message":(row.body||(row.attachment_name?"📎 "+row.attachment_name:""));
@@ -586,20 +581,34 @@
       if(error)throw error;bridge.closeDialog();await loadData(true);bridge.setView("updates");say("Status shared. It expires after 24 hours.");
     }catch(error){say(safeError(error,"Could not share the status."));}
   }
+  async function updateStatus(statusId){
+    const me=getUser();
+    if(!me||!me.isSupabase)return;
+    const statusIdValue=String(statusId||"");
+    const text=String($("#edit-status-text")?.value||"").trim().slice(0,700);
+    if(!statusIdValue)return say("Choose a status to edit.");
+    if(!text)return say("Write a status before saving changes.");
+    try{
+      const {data,error}=await db.from("whatsapp_statuses").update({text}).eq("id",statusIdValue).eq("user_id",me.id).select("id").maybeSingle();
+      if(error)throw error;
+      if(!data)throw new Error("This status has expired or is no longer editable.");
+      bridge.closeDialog();await loadData(true);bridge.setView("updates");say("Status updated.");
+    }catch(error){say(safeError(error,"Could not edit this status."));}
+  }
   async function deleteStatus(statusId){
     const me=getUser();if(!me||!me.isSupabase)return;
     try{const {error}=await db.from("whatsapp_statuses").delete().eq("id",statusId).eq("user_id",me.id);if(error)throw error;bridge.closeDialog();await loadData(true);say("Status deleted.");}
     catch(error){say(safeError(error,"Could not delete this status."));}
   }
   function openStatus(statusId){
-    const s=appState(),status=(s&&s.backendStatuses||[]).find(row=>String(row.id)===String(statusId));
+    const me=getUser(),s=appState(),status=(s&&s.backendStatuses||[]).find(row=>String(row.id)===String(statusId));
     if(!status)return say("This status has expired or is no longer available.");
-    const date=new Date(status.createdAt);
-    const body="<div class='wa-status-view'><strong>"+esc(status.name)+" <span>@"+esc(status.username)+"</span></strong><small>"+esc(Number.isNaN(date.getTime())?"Recently":date.toLocaleString())+"</small><p>"+esc(status.text)+"</p></div>";
-    const footer=status.userId===getUser().id
-      ?"<button class='secondary-button' data-action='close-dialog'>Close</button><button class='danger-button' data-dialog-action='delete-status' data-status-id='"+esc(status.id)+"'>Delete status</button>"
+    const date=new Date(status.createdAt),isMine=Boolean(me&&me.isSupabase&&status.userId===me.id);
+    const body="<div class='wa-status-view'><strong>"+esc(status.name)+" <span>@"+esc(status.username)+"</span></strong><small>"+esc(Number.isNaN(date.getTime())?"Recently":date.toLocaleString())+"</small>"+(isMine?"<div class='dialog-field'><label for='edit-status-text'>Edit your status</label><textarea id='edit-status-text' rows='4' maxlength='700'>"+esc(status.text)+"</textarea></div>":"<p>"+esc(status.text)+"</p>")+"</div>";
+    const footer=isMine
+      ?"<button class='secondary-button' data-action='close-dialog'>Close</button><button class='danger-button' data-dialog-action='delete-status' data-status-id='"+esc(status.id)+"'>Delete</button><button class='primary-button' data-dialog-action='edit-status' data-status-id='"+esc(status.id)+"'>Save changes</button>"
       :"<button class='secondary-button' data-action='close-dialog'>Close</button>";
-    bridge.openDialog("Status update",body,footer);
+    bridge.openDialog(isMine?"Edit status":"Status update",body,footer);
   }
   async function createCommunity(){
     const me=getUser();if(!me||!me.isSupabase)return;
@@ -806,6 +815,9 @@
     if(me&&me.isSupabase&&dialogAction==="publish-status"){
       event.preventDefault();event.stopImmediatePropagation();void publishStatus();return;
     }
+    if(me&&me.isSupabase&&dialogAction==="edit-status"){
+      event.preventDefault();event.stopImmediatePropagation();void updateStatus(target.dataset.statusId);return;
+    }
     if(me&&me.isSupabase&&dialogAction==="delete-status"){
       event.preventDefault();event.stopImmediatePropagation();void deleteStatus(target.dataset.statusId);return;
     }
@@ -930,21 +942,19 @@
     clearTimeout(searchTimer);
     const seq=++searchCounter;
     const value=String(target.value||"");
-    const trimmed=value.trim().replace(/^@+/,"");
+    const trimmed=value.trim();
     const result=$("#friend-lookup-result");
     if(!result)return;
-    if(!trimmed){result.innerHTML="";return;}
-    if(trimmed.length<3){result.innerHTML="<div class='empty-state'>Enter at least 3 username characters to search.</div>";return;}
-    result.innerHTML="<div class='empty-state' role='status' aria-live='polite'>Searching people…</div>";
+    if(!trimmed){result.innerHTML="<div class='empty-state'>Search by display name, username, or in-app number.</div>";return;}
+    if(trimmed.length<2){result.innerHTML="<div class='empty-state'>Enter at least 2 characters or digits.</div>";return;}
+    result.innerHTML="";
     searchTimer=setTimeout(async()=>{
       if(seq!==searchCounter)return;
-      const box=$("#friend-lookup-result");
-      if(!box)return;
       try{
-        const found=await withTimeout(searchPeople(value),10000,"People search timed out. Check your connection and try again.");
+        const found=await withTimeout(searchPeople(value),8000,"Search took too long. Check your connection and try again.");
         const liveBox=$("#friend-lookup-result");
         if(seq!==searchCounter||!liveBox)return;
-        if(!found.length){liveBox.innerHTML="<div class='empty-state'>No account matched that username or in-app ID. Check the spelling and try again.</div>";return;}
+        if(!found.length){liveBox.innerHTML="<div class='empty-state'>No matching account found. Check the display name, username, or number and try again.</div>";return;}
         liveBox.innerHTML=found.map(p=>{
           const s=appState(),friend=s.chats.some(c=>String(c.id)===String(p.id));
           const incoming=(s.requests||[]).find(r=>r.requestUserId===p.id||r.username===p.username);
@@ -953,13 +963,16 @@
             incoming?"<button class='primary-button' data-action='accept-found-request' data-request-id='"+esc(incoming.id)+"'>Accept request</button>":
             sent?"<button class='secondary-button' disabled>Request sent</button>":
             "<button class='primary-button' data-action='send-contact-request' data-contact-username='"+esc(p.username)+"'>Send contact request</button>";
-          return "<div class='request-card'>"+bridge.avatarHTML(p)+"<div class='request-info'><strong>@"+esc(p.username)+"</strong><span>Registered Vexel Chat account</span></div>"+action+"</div>";
+          const displayName=esc(p.name||p.username);
+          const username=esc("@"+p.username);
+          const number=p.phone?"<span>"+esc(p.phone)+"</span>":"";
+          return "<div class='request-card'>"+bridge.avatarHTML(p)+"<div class='request-info'><strong>"+displayName+"</strong><span>"+username+"</span>"+number+"</div>"+action+"</div>";
         }).join("");
       }catch(error){
         const liveBox=$("#friend-lookup-result");
-        if(seq===searchCounter&&liveBox)liveBox.innerHTML="<div class='empty-state' role='status'>"+esc(safeError(error,"Search failed. Check your connection and try again."))+"</div>";
+        if(seq===searchCounter&&liveBox)liveBox.innerHTML="<div class='empty-state' role='status'>"+esc(safeError(error,"Could not search people. Check your connection and try again."))+"</div>";
       }
-    },220);
+    },100);
   },true);
   document.addEventListener("change",event=>{const target=event.target;if(target&&target.id==="profile-photo-input"&&target.files&&target.files[0]&&getUser()&&getUser().isSupabase)void updateAvatar(target.files[0]);},true);
   document.addEventListener("click",event=>{

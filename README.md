@@ -10,11 +10,11 @@ Vexel Chat is a responsive, installable messaging app built on Supabase Auth, Po
 
 - Username/password accounts using Supabase Auth. Usernames and custom IDs are unique. The `+990 xxx xxx xxx` value is an **in-app ID**, not a real telephone number.
 - Profile display name, about text and compressed profile photo.
-- User search, real contact requests (send/accept/decline/cancel), accepted contacts, and persistent direct conversations.
+- People search by display name, username, or custom in-app number (with or without the `+990` prefix), with profile photos and direct contact-request actions. Real contact requests (send/accept/decline/cancel), accepted contacts, and persistent direct conversations.
 - Persistent group text conversations, group descriptions, and adding accepted contacts to groups.
 - Realtime text messages, read receipts, and message removal (own messages can be deleted for everyone; messages from others can be hidden from the local account).
 - Private storage attachments and recorded voice notes. The current storage policy accepts files up to 15 MB except video files; voice notes are limited to two minutes.
-- Database-backed polls and voting, event invitations and RSVPs, text status updates expiring after 24 hours, channel directory/follows/text posts, and community creation/membership.
+- Database-backed polls and voting, event invitations and RSVPs, editable/deletable text status updates expiring after 24 hours, channel directory/follows/text posts, and community creation/membership.
 - One-to-one audio/video WebRTC calls, including incoming-call controls, mute, camera toggle, hang-up, and relay-only networking. Actual calling requires valid Metered TURN settings and the receiving user to accept the call.
 - Installable PWA shell with service worker, manifest icons, install button and browser menu fallback.
 

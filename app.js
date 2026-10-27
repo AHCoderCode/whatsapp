@@ -707,7 +707,7 @@
     return[];
   }
   function createNewChatDialog() {
-    const body="<p class='screen-description'>Search for a registered username or custom in-app ID. The +990 number is not a real phone number.</p><div class='dialog-field'><label for='friend-search'>Username or custom number</label><input id='friend-search' placeholder='@username or +990 700 100 101' autocomplete='off'></div><div id='friend-lookup-result'></div>";
+    const body="<p class='screen-description'>Find people by display name, username, or custom in-app number. Enter the number with or without the +990 prefix. Results show the profile photo and contact-request options.</p><div class='dialog-field'><label for='friend-search'>Display name, username, or number</label><input id='friend-search' placeholder='Name, @username, or 700100101' autocomplete='off' aria-label='Search by display name, username, or number'></div><div id='friend-lookup-result'><div class='empty-state'>Search by display name, username, or in-app number.</div></div>";
     openDialog("Find people",body,"<button class='secondary-button' data-action='close-dialog'>Close</button>");
   }
   function createGroupDialog() {
