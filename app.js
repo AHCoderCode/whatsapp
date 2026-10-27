@@ -1050,6 +1050,10 @@ function openSharedItemsDialog(chat,kind) {
     if(action==="new-chat"){createNewChatDialog();return;}
     if(action==="new-group"){createGroupDialog();return;}
     if(action==="new-community"){createCommunityDialog();return;}
+    if(action==="broadcast-list"||action==="linked-devices"||action==="mark-all-read"||action==="install-app"||action==="go-archived"||action==="go-channels"||action==="go-calls"||action==="new-voice-call"||action==="new-video-call"){
+      handleAction(action,{dataset:{}});
+      return;
+    }
     if(action==="broadcast-list"){createBroadcastDialog();return;}
     if(action==="linked-devices"){
       openDialog("Linked devices","<div class='linked-device-card'>"+icon("monitor")+"<div><strong>This device</strong><span>Current browser session</span><small>Devices are managed independently in this app. No other linked sessions are available to display.</small></div><span class='linked-device-current'>Active</span></div><p class='screen-description'>This panel shows this app's current frontend device; it does not link this account to the official WhatsApp service.</p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
@@ -1079,7 +1083,7 @@ function openSharedItemsDialog(chat,kind) {
     if(action==="copy-phone"){copyText(state.profile.phone);return;}
     if(action==="copy-username"){copyText("@"+state.profile.username);return;}
     if(action==="change-profile-photo"){const input=$("#profile-photo-input");if(input)input.click();return;}
-    if(action==="camera"){toast("Camera preview only. No camera stream is opened.");return;}
+    if(action==="camera"){handleAction("new-status",el);return;}
     if(action==="new-status"){openDialog("New status","<div class='dialog-field'><label for='status-text'>Type a status update</label><textarea id='status-text' rows='3' maxlength='700' placeholder='What’s on your mind?'></textarea></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='publish-status'>Share status</button>");return;}
     if(action==="status-preview"){toast("Status viewer preview.");return;}
     if(action==="new-call"){openPopup(el,[{icon:"phone",label:"New voice call",action:"new-voice-call"},{icon:"video",label:"New video call",action:"new-video-call"}],null);return;}
@@ -1097,7 +1101,7 @@ function openSharedItemsDialog(chat,kind) {
     if(action==="search-media"){toast("Media search UI preview.");return;}
     if(action==="new-list"){openDialog("Create chat list","<div class='dialog-field'><label for='list-name'>List name</label><input id='list-name' maxlength='30' placeholder='Create a list'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='create-list'>Create</button>");return;}
     if(action==="manage-lists"){openDialog("Manage lists",state.customLists.length?state.customLists.map(l=>"<div class='setting-row'>"+icon("chat")+"<span class='setting-copy'><span class='setting-title'>"+esc(l.name)+"</span></span><button class='secondary-button' data-action='remove-list' data-list-id='"+esc(l.id)+"'>Remove</button></div>").join(""):"<div class='empty-state'>No custom lists yet.</div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;}
-    if(action==="toggle-favorite"||action==="toggle-unread"||action==="toggle-pin"||action==="toggle-mute"||action==="toggle-archive"||action==="lock-chat"||action==="toggle-lock"||action==="delete-chat"||action==="clear-chat"||action==="chat-info"||action==="chat-search"||action==="search-in-chat"||action==="disappearing"||action==="block-chat"||action==="report-chat"||action==="select-messages"||action==="star-message"||action==="pinned-preview"||action==="unpin-message"||action==="reply-message"||action==="forward-message"||action==="copy-message"||action==="delete-message"||action==="voice-call"||action==="video-call"||action==="shared-media"||action==="edit-group"||action==="edit-group-description"||action==="edit-contact-about"||action==="copy-chat-phone"||action==="copy-chat-username"){useAction(action,chat);return;}
+    if(action==="toggle-favorite"||action==="toggle-unread"||action==="toggle-pin"||action==="toggle-mute"||action==="toggle-archive"||action==="lock-chat"||action==="toggle-lock"||action==="delete-chat"||action==="clear-chat"||action==="chat-info"||action==="chat-search"||action==="search-in-chat"||action==="disappearing"||action==="block-chat"||action==="report-chat"||action==="select-messages"||action==="star-message"||action==="pinned-preview"||action==="unpin-message"||action==="reply-message"||action==="forward-message"||action==="copy-message"||action==="delete-message"||action==="voice-call"||action==="video-call"||action==="shared-media"||action==="shared-links"||action==="shared-documents"||action==="edit-group"||action==="edit-group-description"||action==="edit-contact-about"||action==="copy-chat-phone"||action==="copy-chat-username"){useAction(action,chat);return;}
     if(action==="attachment-preview"||action==="share-contact"){toast("This item is a local frontend preview.");return;}
     if(action==="pick-file"){const input=$("#attachment-input");if(input){input.accept="*/*";input.click();}return;}
     if(action==="pick-image"){const input=$("#attachment-input");if(input){input.accept="image/*";input.click();}return;}
@@ -1118,7 +1122,7 @@ function openSharedItemsDialog(chat,kind) {
   }
   function runMenuAction(action,chat) {
     closePopup();
-    const mapped=["open-chat","toggle-unread","toggle-favorite","toggle-pin","toggle-mute","toggle-archive","lock-chat","toggle-lock","delete-chat","clear-chat","chat-info","chat-search","search-in-chat","disappearing","block-chat","report-chat","select-messages","star-message","pinned-preview","unpin-message","reply-message","forward-message","copy-message","delete-message","voice-call","video-call","shared-media","edit-group","edit-group-description","edit-contact-about","copy-chat-phone","copy-chat-username"];
+    const mapped=["open-chat","toggle-unread","toggle-favorite","toggle-pin","toggle-mute","toggle-archive","lock-chat","toggle-lock","delete-chat","clear-chat","chat-info","chat-search","search-in-chat","disappearing","block-chat","report-chat","select-messages","star-message","pinned-preview","unpin-message","reply-message","forward-message","copy-message","delete-message","voice-call","video-call","shared-media","shared-links","shared-documents","rename-contact","remove-contact","edit-group","edit-group-description","edit-contact-about","copy-chat-phone","copy-chat-username"];
     if(mapped.includes(action)){useAction(action,chat||currentChat());return;}
     if(action==="new-group"){createGroupDialog();return;}
     if(action==="new-community"){createCommunityDialog();return;}
