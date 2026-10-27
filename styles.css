@@ -248,3 +248,12 @@ button,input,textarea,select{max-width:100%}
 .friend-search-form .dialog-field input{min-width:0}
 .friend-search-submit{min-height:42px;white-space:nowrap}
 @media(max-width:420px){.friend-search-form{grid-template-columns:minmax(0,1fr)}.friend-search-submit{width:100%}}
+
+/* Explicit account directory controls: visible state and usable touch target on mobile. */
+.friend-search-form{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:10px;margin-bottom:12px}
+.friend-search-form .dialog-field{min-width:0;margin-bottom:0}
+.friend-search-form .dialog-field input{min-width:0}
+.friend-search-submit{min-height:44px;white-space:nowrap;touch-action:manipulation}
+.friend-search-submit:disabled{opacity:.72;cursor:progress}
+.search-result-summary{padding:8px 0;color:#667781;font-size:13px}
+@media(max-width:420px){.friend-search-form{grid-template-columns:minmax(0,1fr)}.friend-search-submit{width:100%}}
