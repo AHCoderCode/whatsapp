@@ -2,7 +2,7 @@
 
 Responsive installable messaging app built on Supabase Auth, Postgres, Storage and Realtime. It also includes one-to-one WebRTC voice/video calling through the Supabase TURN-credential function and Metered TURN service.
 
-**Live app:** https://whatsapp-vexel-ai.vercel.app  
+**Live app:** https://whatsapp-for.vercel.app  
 **Source:** https://github.com/AHCoderCode/whatsapp  
 **Supabase project:** `windows-12-beta-chat` (`qoyqfmovzvtyvxutakym`)
 
@@ -48,7 +48,7 @@ The custom-ID lookup, lookup-rate-limit, group description, polls/events, status
 1. Open the [Supabase project dashboard](https://supabase.com/dashboard/project/qoyqfmovzvtyvxutakym).
 2. Go to **Authentication → Sign In / Providers → Email** and turn **Confirm email OFF** for this username-only prototype. The app uses internal aliases like `username@aeroshell.invalid`, not actual mailboxes. This is a prototype shortcut; a public production app should add genuine email/phone verification and recovery before signup is opened to everyone.
 3. Under **Database → Publications / Realtime**, the connected project already publishes the message, request, call, call-signal, read-receipt, poll/event, status/channel and community tables used here. Do not change existing policies just to silence a failed request.
-4. Under **Authentication → URL Configuration**, set Site URL to `https://whatsapp-vexel-ai.vercel.app`. Add these Redirect URLs if you use those hostnames: `https://whatsapp-vexel-ai.vercel.app/**`, `https://whatsapp-for.vercel.app/**`, `https://whatsapp-git-main-vexel-ai.vercel.app/**`. Recovery/OAuth flows may need the localhost redirect `http://localhost:8080/**` for local testing.
+4. Under **Authentication → URL Configuration**, set Site URL to `https://whatsapp-for.vercel.app`. Add `https://whatsapp-for.vercel.app/**` as a Redirect URL. Only add another Vercel URL if you explicitly plan to use that hostname. Recovery/OAuth flows may need the localhost redirect `http://localhost:8080/**` for local testing.
 5. Under **Authentication → Security and Protection**, enable leaked-password protection if available on your project plan. The Supabase Advisor previously reported this as disabled.
 6. Review **Database → Advisors**. The lookup rate-limit tables intentionally have RLS enabled and no browser policies; don't make them publicly readable. Keep all RLS enabled.
 
