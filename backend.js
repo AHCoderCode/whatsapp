@@ -11,7 +11,7 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
   const usernamePattern = /^[a-z0-9_]{3,20}$/;
-  let signedProfile = null, liveChannel = null, liveUserId = "", people = new Map();
+  let signedProfile = null, liveChannel = null, liveUserId = "", people = new Map(), activeChannelId = "";
   let busy = false, loading = false, refreshQueued = false, searchTimer = null, searchCounter = 0;
 
   const getUser = () => bridge.getCurrentUser();
@@ -117,6 +117,7 @@
       .on("postgres_changes",{event:"UPDATE",schema:"public",table:"aeroshell_profiles",filter:"id=eq."+userId},()=>void loadData(true))
       .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_statuses"},()=>void loadData(true))
       .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_channels"},()=>void loadData(true))
+      .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_channel_posts"},()=>void loadData(true))
       .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_channel_follows"},()=>void loadData(true))
       .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_communities"},()=>void loadData(true))
       .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_community_members"},()=>void loadData(true))
@@ -128,7 +129,7 @@
     if(loading){refreshQueued=true;return;}
     loading=true;
     try{
-      const [profileResult,requestResult,membershipResult,messageResult,callResult,statusResult,channelResult,followResult,communityResult,communityMembershipResult]=await Promise.all([
+      const [profileResult,requestResult,membershipResult,messageResult,callResult,statusResult,channelResult,channelPostResult,followResult,communityResult,communityMembershipResult]=await Promise.all([
         db.from("aeroshell_profiles").select("id,username,display_name,about,custom_number,avatar_data,created_at").eq("id",me.id).maybeSingle(),
         db.from("aeroshell_friend_requests").select("id,requester_id,recipient_id,status,created_at,responded_at").or("requester_id.eq."+me.id+",recipient_id.eq."+me.id).order("created_at",{ascending:false}).limit(300),
         db.from("aeroshell_group_members").select("group_id,role").eq("user_id",me.id),
@@ -136,11 +137,12 @@
         db.from("aeroshell_calls").select("id,caller_id,callee_id,status,created_at,media_type").or("caller_id.eq."+me.id+",callee_id.eq."+me.id).order("created_at",{ascending:false}).limit(100),
         db.from("whatsapp_statuses").select("id,user_id,text,created_at,expires_at").gt("expires_at",new Date().toISOString()).order("created_at",{ascending:false}).limit(200),
         db.from("whatsapp_channels").select("id,name,description,created_by,created_at").order("created_at",{ascending:false}).limit(100),
+        db.from("whatsapp_channel_posts").select("id,channel_id,author_id,body,created_at").order("created_at",{ascending:false}).limit(500),
         db.from("whatsapp_channel_follows").select("channel_id,user_id").eq("user_id",me.id),
         db.from("whatsapp_communities").select("id,name,description,created_by,created_at").order("created_at",{ascending:false}).limit(100),
         db.from("whatsapp_community_members").select("community_id,user_id,role").eq("user_id",me.id)
       ]);
-      for(const result of [profileResult,requestResult,membershipResult,messageResult,statusResult,channelResult,followResult,communityResult,communityMembershipResult])if(result.error)throw result.error;
+      for(const result of [profileResult,requestResult,membershipResult,messageResult,statusResult,channelResult,channelPostResult,followResult,communityResult,communityMembershipResult])if(result.error)throw result.error;
       if(!profileResult.data)throw new Error("Your profile is missing. Sign out and create a new account after applying the Supabase profile migration.");
       signedProfile=profileResult.data;
       const self=mapProfile(profileResult.data);
@@ -232,9 +234,15 @@
       const statuses=(statusResult.data||[]).map(row=>{const author=profileById.get(row.user_id)||self;return{id:row.id,userId:row.user_id,username:author.username,name:author.name,text:row.text,createdAt:row.created_at,expiresAt:row.expires_at,avatar:author.avatar,avatarColor:author.avatarColor,avatarData:author.avatarData||""};});
       const followed=new Set((followResult.data||[]).map(row=>row.channel_id));
       const channels=(channelResult.data||[]).map(row=>({id:row.id,name:row.name,description:row.description||"",createdBy:row.created_by,following:followed.has(row.id),createdAt:row.created_at}));
+      const channelIds=new Set(channels.map(row=>row.id));
+      const channelPosts=(channelPostResult.data||[]).filter(row=>channelIds.has(row.channel_id)).map(row=>({
+        id:row.id,channelId:row.channel_id,authorId:row.author_id,body:row.body,createdAt:row.created_at,
+        channelName:(channels.find(c=>c.id===row.channel_id)||{}).name||"Channel",
+        isMine:row.author_id===me.id
+      }));
       const joined=new Map((communityMembershipResult.data||[]).map(row=>[row.community_id,row.role]));
       const communities=(communityResult.data||[]).map(row=>({id:row.id,name:row.name,description:row.description||"",createdBy:row.created_by,createdAt:row.created_at,joined:joined.has(row.id),role:joined.get(row.id)||"",groups:[]}));
-      bridge.setBackendData({profile:{username:self.username,name:self.name,phone:self.phone,about:self.about,avatar:self.avatar,avatarColor:self.avatarColor,avatarData:self.avatarData},chats,requests:received,sentRequests:sent,calls,statuses,channels,communities});
+      bridge.setBackendData({profile:{username:self.username,name:self.name,phone:self.phone,about:self.about,avatar:self.avatar,avatarColor:self.avatarColor,avatarData:self.avatarData},chats,requests:received,sentRequests:sent,calls,statuses,channels,channelPosts,communities});
       subscribe(me.id);
       if(window.WhatsAppCalls)window.WhatsAppCalls.subscribe();
     }catch(error){if(!quiet)say(safeError(error,"Could not load messaging data from Supabase."));}
@@ -623,6 +631,49 @@
       bridge.closeDialog();await loadData(true);bridge.setView("communities");say(join?"Joined the community.":"Left the community.");
     }catch(error){say(safeError(error,"Could not update community membership."));}
   }
+
+  function openChannel(channelId){
+    const me=getUser(),s=appState();
+    const channel=(s&&s.backendChannels||[]).find(c=>String(c.id)===String(channelId));
+    if(!channel)return say("This channel is no longer available.");
+    activeChannelId=channel.id;
+    const posts=(s.backendChannelPosts||[]).filter(p=>String(p.channelId)===String(channel.id));
+    const items=posts.map(post=>{
+      const date=new Date(post.createdAt),label=Number.isNaN(date.getTime())?"":date.toLocaleString();
+      return "<article class='wa-channel-post'><header><strong>"+(post.isMine?"You":"Channel owner")+"</strong><small>"+esc(label)+"</small></header><p>"+esc(post.body)+"</p>"+(post.isMine?"<button class='text-danger-button' data-action='delete-channel-post' data-post-id='"+esc(post.id)+"'>Delete post</button>":"")+"</article>";
+    }).join("");
+    const owner=channel.createdBy===me.id;
+    const footer="<button class='secondary-button' data-action='close-dialog'>Close</button>"+(owner?"<button class='primary-button' data-action='new-channel-post' data-channel-id='"+esc(channel.id)+"'>Write post</button>":"");
+    bridge.openDialog(channel.name,"<div class='wa-channel-detail'><p>"+esc(channel.description||"No description")+"</p><div class='wa-channel-feed'>"+(items||"<div class='empty-state'>No posts yet.</div>")+"</div></div>",footer);
+  }
+  function openNewChannelPost(channelId){
+    const channel=(appState().backendChannels||[]).find(c=>String(c.id)===String(channelId||activeChannelId));
+    if(!channel||channel.createdBy!==getUser().id)return say("Only the channel owner can publish posts.");
+    activeChannelId=channel.id;
+    bridge.openDialog("Publish to "+channel.name,"<div class='dialog-field'><label for='channel-post-body'>Post</label><textarea id='channel-post-body' maxlength='2000' rows='5' placeholder='Write a channel update…'></textarea></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='publish-channel-post' data-channel-id='"+esc(channel.id)+"'>Publish post</button>");
+  }
+  async function publishChannelPost(channelId){
+    const me=getUser(),channel=(appState().backendChannels||[]).find(c=>String(c.id)===String(channelId||activeChannelId));
+    const body=String($("#channel-post-body")?.value||"").trim();
+    if(!me||!me.isSupabase||!channel)return;
+    if(!body)return say("Write a post before publishing.");
+    if(body.length>2000)return say("Channel posts are limited to 2,000 characters.");
+    try{
+      const {error}=await db.from("whatsapp_channel_posts").insert({channel_id:channel.id,author_id:me.id,body});
+      if(error)throw error;
+      activeChannelId=channel.id;bridge.closeDialog();await loadData(true);openChannel(channel.id);say("Channel post published.");
+    }catch(error){say(safeError(error,"Could not publish the channel post. Only the channel owner can post."));}
+  }
+  async function deleteChannelPost(postId){
+    const me=getUser(),post=(appState().backendChannelPosts||[]).find(p=>String(p.id)===String(postId));
+    if(!me||!me.isSupabase||!post||post.authorId!==me.id)return say("You can delete only your own posts.");
+    try{
+      const {error}=await db.from("whatsapp_channel_posts").delete().eq("id",postId).eq("author_id",me.id);
+      if(error)throw error;
+      await loadData(true);openChannel(post.channelId);say("Channel post deleted.");
+    }catch(error){say(safeError(error,"Could not delete this post."));}
+  }
+
   async function createChannel(){
     const me=getUser();if(!me||!me.isSupabase)return;
     const name=String($("#channel-name")?.value||"").trim().slice(0,70);
@@ -763,6 +814,18 @@
     }
     if(me&&me.isSupabase&&target.dataset.communityId&&dialogAction==="leave-community"){
       event.preventDefault();event.stopImmediatePropagation();void setCommunityMembership(target.dataset.communityId,false);return;
+    }
+    if(me&&me.isSupabase&&action==="open-channel"){
+      event.preventDefault();event.stopImmediatePropagation();openChannel(target.dataset.channelId);return;
+    }
+    if(me&&me.isSupabase&&action==="new-channel-post"){
+      event.preventDefault();event.stopImmediatePropagation();openNewChannelPost(target.dataset.channelId);return;
+    }
+    if(me&&me.isSupabase&&dialogAction==="publish-channel-post"){
+      event.preventDefault();event.stopImmediatePropagation();void publishChannelPost(target.dataset.channelId);return;
+    }
+    if(me&&me.isSupabase&&action==="delete-channel-post"){
+      event.preventDefault();event.stopImmediatePropagation();void deleteChannelPost(target.dataset.postId);return;
     }
     if(me&&me.isSupabase&&action==="new-channel"){
       event.preventDefault();event.stopImmediatePropagation();bridge.openDialog("Create channel","<div class='dialog-field'><label for='channel-name'>Channel name</label><input id='channel-name' maxlength='70' placeholder='Channel name'></div><div class='dialog-field'><label for='channel-description'>Description</label><textarea id='channel-description' maxlength='500' rows='3' placeholder='What is this channel about?'></textarea></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='create-channel'>Create channel</button>");return;
