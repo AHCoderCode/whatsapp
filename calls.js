@@ -133,7 +133,7 @@
     if(busy||activeCall)return say("Finish the current call before starting another.");
     if(!person||!person.id||person.id===current.id)return say("Choose a valid contact.");
     if(person.type==="group"||person.groupId)return say("Group calls are not included in this one-to-one calling build yet.");
-    busy=true;setPhase("preparing","Requesting "+(mediaType==="video"?"camera and microphone":"microphone")+" permission…");
+    busy=true;activeCall={id:"pending-"+Date.now(),caller_id:current.id,callee_id:person.id,media_type:mediaType,direction:"outgoing",peer:person};setPhase("preparing","Requesting "+(mediaType==="video"?"camera and microphone":"microphone")+" permission…");
     let newId="";
     try{
       localStream=await userMedia(mediaType==="video");
@@ -246,9 +246,9 @@
     })();
   }
   document.addEventListener("click",event=>{
-    const actionEl=event.target.closest("[data-action],[data-dialog-action],[data-wa-call],[data-wa-call-person]");
+    const actionEl=event.target.closest("[data-action],[data-menu-action],[data-dialog-action],[data-wa-call],[data-wa-call-person]");
     if(!actionEl)return;
-    const action=actionEl.dataset.action||"",dialogAction=actionEl.dataset.dialogAction||"",callAction=actionEl.dataset.waCall||"";
+    const action=actionEl.dataset.action||actionEl.dataset.menuAction||"",dialogAction=actionEl.dataset.dialogAction||"",callAction=actionEl.dataset.waCall||"";
     if(["voice-call","video-call","new-voice-call","new-video-call","call-entry"].includes(action)){
       event.preventDefault();event.stopImmediatePropagation();
       const current=me();if(!current||!current.isSupabase){say("Sign in with your Supabase account to call.");return;}
@@ -263,8 +263,8 @@
     }
     if(actionEl.dataset.waCallPerson){
       event.preventDefault();event.stopImmediatePropagation();
-      const id=actionEl.dataset.waCallPerson,s=appState(),person=(s&&s.chats||[]).find(c=>String(c.id)===String(id));
-      bridge.closeDialog();if(person)void startCall(person,$("#dialog-backdrop")?.dataset.callMediaType==="video"?"video":"audio");
+      const id=actionEl.dataset.waCallPerson,s=appState(),person=(s&&s.chats||[]).find(c=>String(c.id)===String(id)),media=$("#dialog-backdrop")?.dataset.callMediaType==="video"?"video":"audio";
+      bridge.closeDialog();if(person)void startCall(person,media);
       return;
     }
     if(dialogAction==="wa-start-call"){
