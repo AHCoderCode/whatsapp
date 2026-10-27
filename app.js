@@ -64,7 +64,13 @@
     filter:"<path d='M4 5h16l-6 7v5l-4 2v-7z'/>",
     sparkles:"<path d='m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 15l1 2.5 2.5 1-2.5 1L19 22l-1-2.5-2.5-1 2.5-1z'/>"
   };
-  function ic(name, cls) { return "<svg" + (cls ? " class='" + cls + "'" : "") + " viewBox='0 0 24 24' aria-hidden='true' stroke-linecap='round' stroke-linejoin='round'>" + (paths[name] || paths.more) + "</svg>"; }
+  function ic(name, cls) { return "<svg" + (cls ? " class='" + cls + "'" : "") + " viewBox='0 0 24 24' aria-hidden='true' stroke='currentColor' fill='none' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'>" + (paths[name] || paths.more) + "</svg>"; }
+  const iconAliases = { "i-chat":"chat", "i-status":"status", "i-communities":"communities", "i-phone":"phone", "i-channels":"channels", "i-star":"star", "i-archive":"archive", "i-lock":"lock", "i-settings":"settings", "i-new":"new", "i-more":"more", "i-camera":"camera", "i-search":"search", "i-sliders":"sliders" };
+  root.querySelectorAll("svg use[href^='#i-']").forEach(use => {
+    const id = (use.getAttribute("href") || "").slice(1);
+    const path = paths[iconAliases[id]];
+    if (path) use.outerHTML = path;
+  });
   function esc(value) { return String(value == null ? "" : value).replace(/[&<>"']/g, ch => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[ch])); }
   function msg(from, text, time, date, sender, reaction) { return { from, text, time, date: date || "TODAY", sender: sender || "", reaction: reaction || "" }; }
   const chats = [
