@@ -1,4 +1,4 @@
-const CACHE_NAME = "whatsapp-frontend-v13";
+const CACHE_NAME = "vexel-chat-shell-v14";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -25,7 +25,7 @@ self.addEventListener("install", event => {
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(key => key.startsWith("whatsapp-frontend-") && key !== CACHE_NAME).map(key => caches.delete(key))))
+      .then(keys => Promise.all(keys.filter(key => (key.startsWith("whatsapp-frontend-") || key.startsWith("vexel-chat-shell-")) && key !== CACHE_NAME).map(key => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
