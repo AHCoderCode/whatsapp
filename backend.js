@@ -938,6 +938,17 @@
       else label.textContent=username?"In-app ID belongs to @"+username+".":"No account uses this ID; try your username instead.";
     }).catch(error=>{if(label.isConnected)label.textContent=safeError(error,"Custom ID lookup is temporarily unavailable.");});
   },true);
+  // Make the Find People action work with both the visible Search button and Enter on mobile keyboards.
+  // Reusing the input handler keeps one shared, debounced path for live search and explicit submission.
+  document.addEventListener("submit",event=>{
+    const form=event.target;
+    if(!form||form.id!=="friend-search-form")return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const input=$("#friend-search");
+    if(input)input.dispatchEvent(new Event("input",{bubbles:true}));
+  },true);
+
   document.addEventListener("input",event=>{
     const target=event.target;
     if(!target||target.id!=="friend-search")return;
