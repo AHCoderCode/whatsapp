@@ -110,6 +110,10 @@
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"aeroshell_messages"},e=>insertMessageIntoUI(e.new))
       .on("postgres_changes",{event:"*",schema:"public",table:"aeroshell_friend_requests"},()=>void loadData(true))
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"aeroshell_message_reads"},()=>void loadData(true))
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"whatsapp_polls"},()=>void loadData(true))
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"whatsapp_events"},()=>void loadData(true))
+      .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_poll_votes"},()=>void loadData(true))
+      .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_event_rsvps"},()=>void loadData(true))
       .on("postgres_changes",{event:"UPDATE",schema:"public",table:"aeroshell_profiles",filter:"id=eq."+userId},()=>void loadData(true))
       .subscribe();
   }
@@ -161,18 +165,53 @@
       for(const g of groups)chats.push({id:g.id,backendId:g.id,groupId:g.id,type:"group",name:g.name,username:"",phone:"",about:"",avatar:initials(g.name),avatarColor:colorFor(g.name),avatarData:g.avatar_data||"",messages:[],attachments:[],unread:0,time:"",preview:"Group conversation",lastMessageType:"text",archived:false,locked:false,participants:roster.filter(m=>m.group_id===g.id).map(m=>profileById.get(m.user_id)).filter(Boolean),memberCount:counts.get(g.id)||1,groupRole:roleByGroup.get(g.id)||"member",createdBy:g.created_by});
       const all=Array.from(new Map((messageResult.data||[]).concat(groupMessages).map(m=>[m.id,m])).values()).sort((a,b)=>Date.parse(a.created_at)-Date.parse(b.created_at));
       const chatMap=new Map(chats.map(c=>[c.id,c]));
+      const readSet=new Set();
       const ownMessageIds=all.filter(row=>row.sender_id===me.id).map(row=>row.id);
       if(ownMessageIds.length){
         const readResult=await db.from("aeroshell_message_reads").select("message_id,user_id").in("message_id",ownMessageIds).neq("user_id",me.id);
-        if(!readResult.error){
-          const readSet=new Set((readResult.data||[]).map(row=>row.message_id));
-          for(const row of all){const chatId=row.group_id||(row.sender_id===me.id?row.recipient_id:row.sender_id);const chat=chatMap.get(chatId);if(chat&&row.sender_id===me.id&&readSet.has(row.id)){const message=chat.messages.find(m=>String(m.id)===String(row.id));if(message)message.status="read";}}
-        }
+        if(!readResult.error)(readResult.data||[]).forEach(row=>readSet.add(row.message_id));
       }
+      const messageIds=all.map(row=>row.id);
+      let pollRows=[],eventRows=[],voteRows=[],rsvpRows=[];
+      if(messageIds.length){
+        const [pollResult,eventResult]=await Promise.all([
+          db.from("whatsapp_polls").select("id,message_id,created_by,question,options,created_at").in("message_id",messageIds),
+          db.from("whatsapp_events").select("id,message_id,created_by,title,starts_at,created_at").in("message_id",messageIds)
+        ]);
+        if(pollResult.error)throw pollResult.error;
+        if(eventResult.error)throw eventResult.error;
+        pollRows=pollResult.data||[];eventRows=eventResult.data||[];
+        const pollIds=pollRows.map(row=>row.id),eventIds=eventRows.map(row=>row.id);
+        const [voteResult,rsvpResult]=await Promise.all([
+          pollIds.length?db.from("whatsapp_poll_votes").select("poll_id,voter_id,option_index").in("poll_id",pollIds):Promise.resolve({data:[],error:null}),
+          eventIds.length?db.from("whatsapp_event_rsvps").select("event_id,user_id,response").in("event_id",eventIds):Promise.resolve({data:[],error:null})
+        ]);
+        if(voteResult.error)throw voteResult.error;
+        if(rsvpResult.error)throw rsvpResult.error;
+        voteRows=voteResult.data||[];rsvpRows=rsvpResult.data||[];
+      }
+      const pollByMessage=new Map(pollRows.map(row=>[row.message_id,row]));
+      const eventByMessage=new Map(eventRows.map(row=>[row.message_id,row]));
+      const votesByPoll=new Map(),rsvpsByEvent=new Map();
+      voteRows.forEach(row=>{const list=votesByPoll.get(row.poll_id)||[];list.push(row);votesByPoll.set(row.poll_id,list);});
+      rsvpRows.forEach(row=>{const list=rsvpsByEvent.get(row.event_id)||[];list.push(row);rsvpsByEvent.set(row.event_id,list);});
       for(const row of all){
         const cid=row.group_id||(row.sender_id===me.id?row.recipient_id:row.sender_id),chat=chatMap.get(cid);
         if(!chat)continue;
-        const msg=localMessage(row,me,chat);chat.messages.push(msg);chat.preview=msg.text;chat.time=msg.time;chat.lastOutgoing=msg.from==="me";chat.lastMessageType=row.message_type||"text";
+        const msg=localMessage(row,me,chat);
+        if(row.sender_id===me.id&&readSet.has(row.id))msg.status="read";
+        const poll=pollByMessage.get(row.id);
+        if(poll){
+          const options=Array.isArray(poll.options)?poll.options:[];
+          const votes=votesByPoll.get(poll.id)||[];
+          msg.poll={id:poll.id,question:poll.question,options,counts:options.map((_,index)=>votes.filter(v=>Number(v.option_index)===index).length),totalVotes:votes.length,myVote:(votes.find(v=>v.voter_id===me.id)||{}).option_index};
+        }
+        const ev=eventByMessage.get(row.id);
+        if(ev){
+          const rsvps=rsvpsByEvent.get(ev.id)||[];
+          msg.event={id:ev.id,title:ev.title,startsAt:ev.starts_at,total:rsvps.filter(v=>v.response==="going").length,myResponse:(rsvps.find(v=>v.user_id===me.id)||{}).response||"",interested:rsvps.filter(v=>v.response==="interested").length};
+        }
+        chat.messages.push(msg);chat.preview=msg.poll?"📊 Poll: "+msg.poll.question:msg.event?"📅 Event: "+msg.event.title:msg.text;chat.time=msg.time;chat.lastOutgoing=msg.from==="me";chat.lastMessageType=row.message_type||"text";
       }
       chats.sort((a,b)=>(Date.parse(b.messages.at(-1)?.createdAt||0)-Date.parse(a.messages.at(-1)?.createdAt||0))||String(a.name).localeCompare(String(b.name)));
       void markReadForChat(bridge.getCurrentChat());
