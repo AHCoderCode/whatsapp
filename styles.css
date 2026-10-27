@@ -153,3 +153,20 @@ button,input,textarea,select{max-width:100%}
 .message-read-status{display:inline-flex;vertical-align:middle;margin-left:2px;color:#7a8b91}
 .message-read-status.is-read{color:#34b7f1}
 @media(max-width:700px){.mobile-only .icon-button[aria-label="Install app"]{display:grid}}
+
+
+/* Interactive shared poll/event message cards. */
+.wa-poll-card,.wa-event-card{display:flex;flex-direction:column;gap:9px;min-width:0;max-width:min(390px,100%);margin:8px 0 3px;padding:11px;border:1px solid #cbded8;border-radius:12px;background:#f7fbf9;color:#142f2b}
+.wa-poll-card>strong,.wa-event-card>strong{font-size:14px;line-height:1.4;overflow-wrap:anywhere}
+.wa-poll-options{display:flex;flex-direction:column;gap:6px}
+.wa-poll-option{position:relative;isolation:isolate;display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:38px;width:100%;min-width:0;overflow:hidden;padding:8px 10px 11px;border:1px solid #c8ddd5;border-radius:9px;background:#fff;color:#163e34;text-align:left;cursor:pointer;font:inherit}
+.wa-poll-option span{min-width:0;overflow-wrap:anywhere;font-size:12px;font-weight:600}
+.wa-poll-option strong{flex:0 0 auto;font-size:12px}
+.wa-poll-option i{position:absolute;z-index:-1;left:0;bottom:0;height:4px;max-width:100%;background:#00a884;opacity:.72;pointer-events:none}
+.wa-poll-option.selected{border-color:#00a884;background:#ecf8f3}
+.wa-poll-card small,.wa-event-card small{font-size:11px;line-height:1.45;color:#5b7770}
+.wa-event-kicker{font-size:10px;letter-spacing:.08em;font-weight:750;color:#087f67}
+.wa-event-date{font-size:12px;line-height:1.5;color:#496760;overflow-wrap:anywhere}
+.wa-event-rsvp{align-self:flex-start;min-height:34px;padding:7px 12px;border-radius:9px}
+.wa-event-rsvp.going{background:#e3f4ee;color:#087f67;border:1px solid #b3ded0}
+@media(max-width:700px){.wa-poll-card,.wa-event-card{max-width:100%}.wa-poll-option{min-height:42px}}
