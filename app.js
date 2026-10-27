@@ -303,7 +303,7 @@
     if (!/^[a-z0-9._]{3,20}$/.test(username)) return fail("Username must be 3–20 characters using letters, numbers, dots or underscores.");
     if (db.accounts.some(a=>normalizeUsername(a.username)===username)) return fail("That username is already taken on this browser.");
     if (normalizePhone(phone).length < 9) return fail("Enter a custom number with at least 9 digits after the demo prefix.");
-    if (db.accounts.some(a=>normalizePhone(a.phone)===normalizePhone(phone))) return fail("That custom number is already in use. Choose another.");
+    if (db.accounts.concat(db.directory).some(a=>normalizePhone(a.phone)===normalizePhone(phone))) return fail("That custom number is already in use. Choose another.");
     if (password.length < 6) return fail("Use a password with at least 6 characters.");
     if (password !== confirm) return fail("The passwords do not match.");
     const user = {id:uid("account"),username:username,name:name,phone:phone,about:"Available",password:password,avatar:initials(name),avatarColor:Math.floor(Math.random()*12)+1,createdAt:new Date().toISOString()};
@@ -346,7 +346,8 @@
   }
   function avatarHTML(obj,sizeClass) {
     const avatar = Number(obj && (obj.avatarColor || obj.avatar)) || 1;
-    const initialsText = esc((obj && (obj.avatar || obj.initials)) && String(obj.avatar || obj.initials).length <= 3 ? (obj.avatar || obj.initials) : initials(obj && obj.name));
+    const label = obj && typeof obj.avatar === "string" ? obj.avatar : (obj && obj.initials ? obj.initials : initials(obj && obj.name));
+    const initialsText = esc(label);
     return "<span class='avatar av" + avatar + (sizeClass ? " " + sizeClass : "") + "' aria-hidden='true'>" + initialsText + "</span>";
   }
   function save() { saveState(); renderSidebar(); updateCounts(); }
@@ -384,7 +385,6 @@
     $("#chat-filter-row").style.display = isChatList && !archivedMode && view==="chats" ? "flex" : "none";
     $("#requests-strip").style.display = isChatList && !archivedMode && view==="chats" ? "flex" : "none";
     $$(".filter-chip").forEach(b=>{b.classList.toggle("active",b.dataset.filter===filter&&!archivedMode);b.setAttribute("aria-pressed",b.dataset.filter===filter&&!archivedMode?"true":"false");});
-    $("#list-scroll").style.display = isChatList ? "block" : "none";
     $("#sidebar-list-scroll").style.display = isChatList ? "block" : "none";
     $("#chat-list").style.display = isChatList ? "block" : "none";
     if (!isChatList) { updateCounts(); return; }
@@ -410,7 +410,8 @@
   function setView(next) {
     view = next;
     archivedMode = next==="archived";
-    if (next!=="chats") selectedChatId = null;
+    selectedChatId = null;
+    if (next==="locked") filter="locked"; else if (next==="chats" && filter==="locked") filter="all";
     closePopup(); closeDialog();
     renderSidebar(); renderMain(); updateNav(); updateMobileMode();
   }
