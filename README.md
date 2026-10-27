@@ -87,3 +87,10 @@ Serve the repository root over HTTP instead of opening `index.html` using `file:
 
 
 This is an independent project and is not affiliated with or connected to the official WhatsApp service.
+
+
+## UI repair release (2026-10-27)
+
+The current source includes the Find People search-event fix; mobile navigation for Updates, Communities, Channels, Chats, and Calls; press-and-hold message selection with reply, forward, quick reactions, copy, and delete actions; database-backed reply/forward metadata and message reactions; read-receipt tick coloring; and full-screen responsive call controls. Row-level security remains enabled for authenticated database operations.
+
+Before deploying, the interaction code was checked for JavaScript syntax errors and for accidental collection operations on single-element DOM selectors. Database verification used rollback-only transactions so test messages, receipts, reactions, and friend requests were not left in the live data.
