@@ -263,3 +263,14 @@ button,input,textarea,select{max-width:100%}
 .friend-search-submit:disabled{opacity:.72;cursor:progress}
 .search-result-summary{padding:8px 0;color:#667781;font-size:13px}
 @media(max-width:420px){.friend-search-form{grid-template-columns:minmax(0,1fr)}.friend-search-submit{width:100%}.mobile-tab{font-size:10px}.mobile-tab-icon{width:52px}}
+
+/* Mobile tabs remain visible across section screens, but a conversation remains immersive. */
+.mobile-nav{display:none}
+@media(max-width:700px){
+  .app-workspace{height:calc(100% - 62px - env(safe-area-inset-bottom))}
+  .app-screen.mobile-conversation-open .app-workspace{height:100%}
+  .mobile-nav{position:absolute;left:0;right:0;bottom:0;height:calc(62px + env(safe-area-inset-bottom));padding:0 4px env(safe-area-inset-bottom);display:grid;grid-template-columns:repeat(5,minmax(0,1fr));align-items:stretch;background:#f7f8fa;border-top:1px solid #edf0f1;z-index:12}
+  .app-screen.mobile-conversation-open .mobile-nav{display:none!important}
+  .app-screen.mobile-section-open .mobile-nav{display:grid}
+}
+@media(min-width:701px){.mobile-nav{display:none!important}}
