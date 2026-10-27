@@ -348,7 +348,8 @@
     const avatar = Number(obj && (obj.avatarColor || obj.avatar)) || 1;
     const label = obj && typeof obj.avatar === "string" ? obj.avatar : (obj && obj.initials ? obj.initials : initials(obj && obj.name));
     const initialsText = esc(label);
-    return "<span class='avatar av" + avatar + (sizeClass ? " " + sizeClass : "") + "' aria-hidden='true'>" + initialsText + "</span>";
+    const photo = obj && obj.avatarData ? "<img class='avatar-image' src='"+esc(obj.avatarData)+"' alt=''>" : initialsText;
+    return "<span class='avatar av" + avatar + (sizeClass ? " " + sizeClass : "") + "' aria-hidden='true'>" + photo + "</span>";
   }
   function save() { saveState(); renderSidebar(); updateCounts(); }
   function updateCounts() {
@@ -459,7 +460,8 @@
   function settingRow(iconName,title,sub,action) { return "<button class='setting-row' data-action='" + esc(action||"not-ready") + "'><span class='row-icon'>" + icon(iconName) + "</span><span class='setting-copy'><span class='setting-title'>" + esc(title) + "</span><span class='setting-subtitle'>" + esc(sub) + "</span></span><span class='end-icon'>" + icon("chevron") + "</span></button>"; }
   function renderProfile() {
     const p=state.profile;
-    main.innerHTML="<section class='section-screen'>"+screenHeader("Profile","<button class='icon-button' data-action='edit-profile' aria-label='Edit profile'>"+icon("edit")+"</button>")+"<div class='screen-content'><div class='profile-card'><div class='profile-photo'>"+esc(p.avatar||initials(p.name))+"</div><div><h3>"+esc(p.name)+"</h3><p>@"+esc(p.username)+" · "+esc(p.phone)+"</p><button class='primary-button' data-action='edit-profile'>"+icon("edit")+" Edit profile</button></div></div><div class='section-card'><h3 class='section-card-title'>Profile information</h3><div class='setting-row'><span class='row-icon'>"+icon("edit")+"</span><span class='setting-copy'><span class='setting-subtitle'>Name</span><span class='setting-title'>"+esc(p.name)+"</span></span><button class='icon-button' data-action='edit-profile' aria-label='Edit name'>"+icon("edit")+"</button></div><div class='setting-row'><span class='row-icon'>"+icon("info")+"</span><span class='setting-copy'><span class='setting-subtitle'>About</span><span class='setting-title'>"+esc(p.about)+"</span></span><button class='icon-button' data-action='edit-profile' aria-label='Edit about'>"+icon("edit")+"</button></div><div class='setting-row'><span class='row-icon'>"+icon("phone")+"</span><span class='setting-copy'><span class='setting-subtitle'>Custom in-app number</span><span class='setting-title'>"+esc(p.phone)+"</span></span><button class='icon-button' data-action='copy-phone' aria-label='Copy number'>"+icon("copy")+"</button></div><div class='setting-row'><span class='row-icon'>"+icon("users")+"</span><span class='setting-copy'><span class='setting-subtitle'>Username</span><span class='setting-title'>@"+esc(p.username)+"</span></span><button class='icon-button' data-action='copy-username' aria-label='Copy username'>"+icon("copy")+"</button></div></div><p class='screen-description'>Your number is a custom demo ID. It is not a real phone number and cannot receive SMS or phone calls.</p></div></section>";
+    const photo=p.avatarData?"<img src='"+esc(p.avatarData)+"' alt='Profile photo'>":esc(p.avatar||initials(p.name));
+    main.innerHTML="<section class='section-screen'>"+screenHeader("Profile","<button class='icon-button' data-action='edit-profile' aria-label='Edit profile'>"+icon("edit")+"</button>")+"<div class='screen-content'><div class='profile-card'><button class='profile-photo photo-button' data-action='change-profile-photo' aria-label='Change profile photo'>"+photo+"</button><div><h3>"+esc(p.name)+"</h3><p>@"+esc(p.username)+" · "+esc(p.phone)+"</p><button class='secondary-button' data-action='change-profile-photo'>"+icon("image")+" Change photo</button> <button class='primary-button' data-action='edit-profile'>"+icon("edit")+" Edit profile</button></div></div><div class='section-card'><h3 class='section-card-title'>Profile information</h3><div class='setting-row'><span class='row-icon'>"+icon("edit")+"</span><span class='setting-copy'><span class='setting-subtitle'>Name</span><span class='setting-title'>"+esc(p.name)+"</span></span><button class='icon-button' data-action='edit-profile' aria-label='Edit name'>"+icon("edit")+"</button></div><div class='setting-row'><span class='row-icon'>"+icon("info")+"</span><span class='setting-copy'><span class='setting-subtitle'>About</span><span class='setting-title'>"+esc(p.about)+"</span></span><button class='icon-button' data-action='edit-profile' aria-label='Edit about'>"+icon("edit")+"</button></div><div class='setting-row'><span class='row-icon'>"+icon("phone")+"</span><span class='setting-copy'><span class='setting-subtitle'>Custom in-app number</span><span class='setting-title'>"+esc(p.phone)+"</span></span><button class='icon-button' data-action='copy-phone' aria-label='Copy number'>"+icon("copy")+"</button></div><div class='setting-row'><span class='row-icon'>"+icon("users")+"</span><span class='setting-copy'><span class='setting-subtitle'>Username</span><span class='setting-title'>@"+esc(p.username)+"</span></span><button class='icon-button' data-action='copy-username' aria-label='Copy username'>"+icon("copy")+"</button></div></div><p class='screen-description'>Your number is a custom demo ID. It is not a real phone number and cannot receive SMS or phone calls.</p></div></section>";
   }
   function renderRequests() {
     const received=state.requests.filter(r=>r.status==="received");
@@ -548,7 +550,7 @@
     main.innerHTML="<section class='details-layout'><header class='details-header'><button class='icon-button' data-action='back-to-chat' aria-label='Back'>"+icon("back")+"</button><h2>"+(chat.type==="group"?"Group info":"Contact info")+"</h2><button class='icon-button' data-action='chat-menu' aria-label='More options'>"+icon("more")+"</button></header><div class='details-content'>"+detail+"</div></section>";
   }
   function renderUpdates() {
-    const names=[{name:"My status",label:"Tap to add status update",initials:state.profile.avatar||"ME",avatar:2,action:"new-status"},{name:"Ayesha Khan",label:"Today, 12:24 PM",initials:"AK",avatar:1,action:"status-preview"},{name:"Hassan Raza",label:"Today, 11:58 AM",initials:"HR",avatar:3,action:"status-preview"},{name:"Sara Ahmed",label:"Today, 10:42 AM",initials:"SA",avatar:9,action:"status-preview"},{name:"Noor Fatima",label:"Yesterday, 8:30 PM",initials:"NF",avatar:2,action:"status-preview"}];
+    const names=[{name:"My status",label:state.statusUpdates.length?state.statusUpdates[0].text:"Tap to add status update",initials:state.profile.avatar||"ME",avatar:2,action:"new-status"},{name:"Ayesha Khan",label:"Today, 12:24 PM",initials:"AK",avatar:1,action:"status-preview"},{name:"Hassan Raza",label:"Today, 11:58 AM",initials:"HR",avatar:3,action:"status-preview"},{name:"Sara Ahmed",label:"Today, 10:42 AM",initials:"SA",avatar:9,action:"status-preview"},{name:"Noor Fatima",label:"Yesterday, 8:30 PM",initials:"NF",avatar:2,action:"status-preview"}];
     main.innerHTML="<section class='section-screen'>"+screenHeader("Updates","<button class='icon-button' data-action='camera' aria-label='Camera'>"+icon("camera")+"</button><button class='icon-button' data-action='new-status' aria-label='New status'>"+icon("new")+"</button>")+"<div class='screen-content'><p class='screen-description'>Share everyday moments with status updates that disappear after 24 hours.</p><div class='section-card'><h3 class='section-card-title'>Status</h3>"+names.map((n,i)=>"<div class='status-row' data-action='"+n.action+"' data-status-name='"+esc(n.name)+"'><div class='status-ring'><div class='status-inner'>"+esc(n.initials)+"</div></div><div class='status-copy'><strong>"+esc(n.name)+"</strong><span>"+esc(n.label)+"</span></div></div>").join("")+"</div><div class='section-card'><h3 class='section-card-title'>Channels</h3>"+settingRow("channels","Discover channels","Follow updates from people and organizations","nav-channels")+"</div></div></section>";
   }
   function renderCalls() {
@@ -780,6 +782,7 @@
     if(action==="demo-login"){enterDemo();return;}
     if(action==="copy-phone"){copyText(state.profile.phone);return;}
     if(action==="copy-username"){copyText("@"+state.profile.username);return;}
+    if(action==="change-profile-photo"){const input=$("#profile-photo-input");if(input)input.click();return;}
     if(action==="camera"){toast("Camera preview only. No camera stream is opened.");return;}
     if(action==="new-status"){openDialog("New status","<div class='dialog-field'><label for='status-text'>Type a status update</label><textarea id='status-text' rows='3' maxlength='700' placeholder='What’s on your mind?'></textarea></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='publish-status'>Share status</button>");return;}
     if(action==="status-preview"){toast("Status viewer preview.");return;}
@@ -977,7 +980,10 @@
     if(event.target.id==="login-form"){event.preventDefault();handleLogin();return;}
     if(event.target.id==="message-form"){
       event.preventDefault();const input=$("#message-input");const text=input?input.value.trim():"";
-      if(text){sendMessage(text);}return;
+      if(text){sendMessage(text);return;}
+      const chat=currentChat();
+      if(chat){const voice={id:uid("msg"),from:"me",text:"🎤 Voice message · 0:05",time:nowTime(),date:"TODAY",status:"sent",attachmentType:"voice"};chat.messages.push(voice);chat.preview="🎤 Voice message · 0:05";chat.time="Now";chat.lastOutgoing=true;saveState();renderSidebar();renderMain();toast("Demo voice message added locally.");}
+      return;
     }
   });
   document.addEventListener("input",event=>{
@@ -1019,6 +1025,14 @@
   });
   document.addEventListener("change",event=>{
     const t=event.target;
+    if(t.id==="profile-photo-input" && t.files && t.files[0]){
+      const file=t.files[0];
+      if(!file.type.startsWith("image/")){toast("Choose an image file.");t.value="";return;}
+      if(file.size>2*1024*1024){toast("Choose an image smaller than 2 MB for this local demo.");t.value="";return;}
+      const reader=new FileReader();
+      reader.onload=()=>{state.profile.avatarData=reader.result;saveState();renderMain();toast("Profile photo updated locally.");};
+      reader.readAsDataURL(file);t.value="";return;
+    }
     if(t.id==="attachment-input" && t.files && t.files[0]){
       const file=t.files[0];attachmentFile=file;
       const chat=currentChat();if(chat){
@@ -1089,6 +1103,8 @@
   function init() {
     const addInput=document.createElement("input");
     addInput.type="file";addInput.id="attachment-input";addInput.hidden=true;addInput.accept="*/*";document.body.appendChild(addInput);
+    const photoInput=document.createElement("input");
+    photoInput.type="file";photoInput.id="profile-photo-input";photoInput.hidden=true;photoInput.accept="image/*";document.body.appendChild(photoInput);
     renderAuth("signup");
     let session=null;
     try {session=localStorage.getItem(SESSION_KEY);} catch (_) {}
