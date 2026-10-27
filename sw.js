@@ -1,17 +1,15 @@
-const CACHE_NAME = "vexel-chat-shell-v19";
+const CACHE_NAME = "whatsapp-web-shell-v20";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/app.js?v=desktop-requests-20261027e",
-  "/backend.js?v=desktop-requests-20261027e",
-  "/calls.js?v=desktop-requests-20261027e",
-  "/styles.css?v=desktop-requests-20261027e",
-  "/manifest.webmanifest?v=desktop-requests-20261027e",
+  "/app.js?v=whatsapp-empty-20261027f",
+  "/backend.js?v=whatsapp-empty-20261027f",
+  "/calls.js?v=whatsapp-empty-20261027f",
+  "/styles.css?v=whatsapp-empty-20261027f",
+  "/manifest.webmanifest?v=whatsapp-empty-20261027f",
   "/icon.svg",
   "/icon-192.svg",
   "/icon-512.svg",
-  "/icon-512.png",
-  "/apple-touch-icon.png"
 ];
 
 self.addEventListener("install", event => {
@@ -25,7 +23,7 @@ self.addEventListener("install", event => {
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(key => (key.startsWith("whatsapp-frontend-") || key.startsWith("vexel-chat-shell-")) && key !== CACHE_NAME).map(key => caches.delete(key))))
+      .then(keys => Promise.all(keys.filter(key => (key.startsWith("whatsapp-frontend-") || key.startsWith("vexel-chat-shell-") || key.startsWith("whatsapp-web-shell-")) && key !== CACHE_NAME).map(key => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
