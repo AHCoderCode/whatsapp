@@ -672,9 +672,9 @@
   function createNewChatDialog() {
     const sharedAccount = !!(currentUser && currentUser.isSupabase);
     const intro = sharedAccount
-      ? "<p class='screen-description'>Search the shared WhatsApp account directory by display name, username, or custom in-app number. Type a username with or without @; results update as you type.</p>"
-      : "<p class='screen-description'><strong>Local demo mode:</strong> This only searches sample contacts stored in this browser. It cannot discover accounts on other devices. Log out, then sign in with a shared WhatsApp account to find real usernames and send contact requests.</p>";
-    const body = intro + "<div class='dialog-field'><label for='friend-search'>Display name, username, or number</label><input id='friend-search' placeholder='Name, @username, or 700100101' autocomplete='off' aria-label='Search by display name, username, or number'></div><div id='friend-lookup-result' role='status' aria-live='polite'><div class='empty-state'>Search by display name, username, or in-app number.</div></div>";
+      ? "<p class='screen-description'>Find registered accounts across devices by display name, username, or custom in-app ID. Results also update as you type.</p>"
+      : "<p class='screen-description'><strong>Local demo mode:</strong> This browser is not connected to a shared account. Sign in to a Supabase-backed account to find people on other devices and send requests.</p>";
+    const body = intro + "<form id='friend-search-form' class='friend-search-form' autocomplete='off'><div class='dialog-field'><label for='friend-search'>Display name, username, or in-app ID</label><input id='friend-search' type='search' placeholder='Name, @username, or app ID' autocomplete='off' aria-label='Search registered people'></div><button class='primary-button friend-search-submit' type='submit'>Search people</button></form><div id='friend-lookup-result' role='status' aria-live='polite'><div class='empty-state'>Type a name, username, or in-app ID, then tap Search people or press Enter.</div></div>";
     openDialog("Find people",body,"<button class='secondary-button' data-action='close-dialog'>Close</button>");
   }
   function createGroupDialog() {
