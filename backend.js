@@ -87,7 +87,8 @@
       attachmentType:row.message_type==="voice"?"voice":row.message_type==="file"?"file":null,
       attachmentName:row.attachment_name||"",attachmentPath:row.attachment_path||"",
       attachmentMime:row.attachment_mime||"",attachmentSize:Number(row.attachment_size||0),
-      messageType:row.message_type||"text",voiceDurationMs:Number(row.voice_duration_ms||0)};
+      messageType:row.message_type||"text",voiceDurationMs:Number(row.voice_duration_ms||0),
+      replyToId:row.reply_to_id||"",replyToText:row.reply_to_text||"",replyToSender:row.reply_to_sender||""};
   }
   function insertMessageIntoUI(row) {
     const me=getUser(), s=appState();
@@ -114,6 +115,7 @@
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"aeroshell_messages"},e=>insertMessageIntoUI(e.new))
       .on("postgres_changes",{event:"*",schema:"public",table:"aeroshell_friend_requests"},()=>void loadData(true))
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"aeroshell_message_reads"},()=>void loadData(true))
+      .on("postgres_changes",{event:"*",schema:"public",table:"aeroshell_message_reactions"},()=>void loadData(true))
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"whatsapp_polls"},()=>void loadData(true))
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"whatsapp_events"},()=>void loadData(true))
       .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_poll_votes"},()=>void loadData(true))
@@ -137,7 +139,7 @@
         db.from("aeroshell_profiles").select("id,username,display_name,about,custom_number,avatar_data,created_at").eq("id",me.id).maybeSingle(),
         db.from("aeroshell_friend_requests").select("id,requester_id,recipient_id,status,created_at,responded_at").or("requester_id.eq."+me.id+",recipient_id.eq."+me.id).order("created_at",{ascending:false}).limit(300),
         db.from("aeroshell_group_members").select("group_id,role").eq("user_id",me.id),
-        db.from("aeroshell_messages").select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms").or("sender_id.eq."+me.id+",recipient_id.eq."+me.id).order("created_at",{ascending:true}).limit(800),
+        db.from("aeroshell_messages").select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms,reply_to_id,reply_to_text,reply_to_sender").or("sender_id.eq."+me.id+",recipient_id.eq."+me.id).order("created_at",{ascending:true}).limit(800),
         db.from("aeroshell_calls").select("id,caller_id,callee_id,status,created_at,media_type").or("caller_id.eq."+me.id+",callee_id.eq."+me.id).order("created_at",{ascending:false}).limit(100),
         db.from("whatsapp_statuses").select("id,user_id,text,created_at,expires_at").gt("expires_at",new Date().toISOString()).order("created_at",{ascending:false}).limit(200),
         db.from("whatsapp_channels").select("id,name,description,created_by,created_at").order("created_at",{ascending:false}).limit(100),
@@ -160,7 +162,7 @@
         const [g,m,gm]=await Promise.all([
           db.from("aeroshell_groups").select("id,name,avatar_data,created_by,updated_at,description").in("id",groupIds).order("updated_at",{ascending:false}),
           db.from("aeroshell_group_members").select("group_id,user_id,role").in("group_id",groupIds),
-          db.from("aeroshell_messages").select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms").in("group_id",groupIds).order("created_at",{ascending:true}).limit(800)
+          db.from("aeroshell_messages").select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms,reply_to_id,reply_to_text,reply_to_sender").in("group_id",groupIds).order("created_at",{ascending:true}).limit(800)
         ]);
         if(g.error)throw g.error;if(m.error)throw m.error;if(gm.error)throw gm.error;
         groups=g.data||[];roster=m.data||[];groupMessages=gm.data||[];
@@ -189,15 +191,17 @@
         if(!readResult.error)(readResult.data||[]).forEach(row=>readSet.add(row.message_id));
       }
       const messageIds=all.map(row=>row.id);
-      let pollRows=[],eventRows=[],voteRows=[],rsvpRows=[];
+      let pollRows=[],eventRows=[],voteRows=[],rsvpRows=[],reactionRows=[];
       if(messageIds.length){
-        const [pollResult,eventResult]=await Promise.all([
+        const [pollResult,eventResult,reactionResult]=await Promise.all([
           db.from("whatsapp_polls").select("id,message_id,created_by,question,options,created_at").in("message_id",messageIds),
-          db.from("whatsapp_events").select("id,message_id,created_by,title,starts_at,created_at").in("message_id",messageIds)
+          db.from("whatsapp_events").select("id,message_id,created_by,title,starts_at,created_at").in("message_id",messageIds),
+          db.from("aeroshell_message_reactions").select("message_id,user_id,emoji").in("message_id",messageIds)
         ]);
         if(pollResult.error)throw pollResult.error;
         if(eventResult.error)throw eventResult.error;
-        pollRows=pollResult.data||[];eventRows=eventResult.data||[];
+        if(reactionResult.error)throw reactionResult.error;
+        pollRows=pollResult.data||[];eventRows=eventResult.data||[];reactionRows=reactionResult.data||[];
         const pollIds=pollRows.map(row=>row.id),eventIds=eventRows.map(row=>row.id);
         const [voteResult,rsvpResult]=await Promise.all([
           pollIds.length?db.from("whatsapp_poll_votes").select("poll_id,voter_id,option_index").in("poll_id",pollIds):Promise.resolve({data:[],error:null}),
@@ -209,6 +213,8 @@
       }
       const pollByMessage=new Map(pollRows.map(row=>[row.message_id,row]));
       const eventByMessage=new Map(eventRows.map(row=>[row.message_id,row]));
+      const reactionsByMessage=new Map();
+      reactionRows.forEach(row=>{const list=reactionsByMessage.get(row.message_id)||[];list.push(row);reactionsByMessage.set(row.message_id,list);});
       const votesByPoll=new Map(),rsvpsByEvent=new Map();
       voteRows.forEach(row=>{const list=votesByPoll.get(row.poll_id)||[];list.push(row);votesByPoll.set(row.poll_id,list);});
       rsvpRows.forEach(row=>{const list=rsvpsByEvent.get(row.event_id)||[];list.push(row);rsvpsByEvent.set(row.event_id,list);});
@@ -216,6 +222,7 @@
         const cid=row.group_id||(row.sender_id===me.id?row.recipient_id:row.sender_id),chat=chatMap.get(cid);
         if(!chat)continue;
         const msg=localMessage(row,me,chat);
+        msg.reactions=reactionsByMessage.get(row.id)||[];
         if(row.sender_id===me.id&&readSet.has(row.id))msg.status="read";
         const poll=pollByMessage.get(row.id);
         if(poll){
@@ -302,15 +309,73 @@
     if(!chat||!body)return;if(body.length>2000)return say("Messages are limited to 2,000 characters.");
     const button=$(".send-button");if(button)button.disabled=true;
     try{
+      const reply=typeof bridge.getReplyContext==="function"?bridge.getReplyContext():null;
       const payload={sender_id:me.id,recipient_id:chat.type==="group"?null:chat.id,group_id:chat.type==="group"?chat.id:null,body,message_type:"text"};
-      const {data,error}=await db.from("aeroshell_messages").insert(payload).select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms").single();
+      if(reply&&String(reply.chatId)===String(chat.id)&&String(reply.text||"").trim()){
+        if(/^[0-9a-f-]{36}$/i.test(String(reply.id||"")))payload.reply_to_id=reply.id;
+        payload.reply_to_text=String(reply.text).slice(0,2000);
+        payload.reply_to_sender=String(reply.sender||"").slice(0,120);
+      }
+      const {data,error}=await db.from("aeroshell_messages").insert(payload).select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms,reply_to_id,reply_to_text,reply_to_sender").single();
       if(error)throw error;if(data)insertMessageIntoUI(data);
+      if(reply&&typeof bridge.clearReplyContext==="function")bridge.clearReplyContext();
       const input=$("#message-input");if(input){input.value="";input.style.height="";input.dispatchEvent(new Event("input",{bubbles:true}));}
     }catch(error){say(safeError(error,"Message was not delivered."));}
     finally{if(button)button.disabled=false;}
   }
 
-  const ATTACHMENT_BUCKET = "master-chat-attachments";
+  async function toggleMessageReaction(reference, emoji) {
+    const me=getUser(),messageId=String(reference&&reference.id||"");
+    const allowed=["👍","❤️","😂","😮","🙏"];
+    if(!me||!me.isSupabase)throw new Error("Sign in to react to messages.");
+    if(!/^[0-9a-f-]{36}$/i.test(messageId))throw new Error("This message is not stored in the shared account yet.");
+    if(!allowed.includes(emoji))throw new Error("That reaction is not supported.");
+    const {data:existing,error:readError}=await db.from("aeroshell_message_reactions").select("emoji").eq("message_id",messageId).eq("user_id",me.id).maybeSingle();
+    if(readError)throw readError;
+    if(existing&&existing.emoji===emoji){
+      const {error}=await db.from("aeroshell_message_reactions").delete().eq("message_id",messageId).eq("user_id",me.id);
+      if(error)throw error;
+    }else{
+      const {error}=await db.from("aeroshell_message_reactions").upsert({message_id:messageId,user_id:me.id,emoji},{onConflict:"message_id,user_id"});
+      if(error)throw error;
+    }
+    await loadData(true);
+  }
+
+  async function deleteBackendMessage(reference) {
+    const me=getUser(),messageId=String(reference&&reference.id||"");
+    if(!me||!me.isSupabase)throw new Error("Sign in to manage messages.");
+    if(!/^[0-9a-f-]{36}$/i.test(messageId))throw new Error("This message is not stored in the shared account yet.");
+    if(reference.from==="me"){
+      const {data,error}=await db.from("aeroshell_messages").delete().eq("id",messageId).select("id");
+      if(error)throw error;
+      if(!data||!data.length)throw new Error("The server did not delete this message. Check that you sent it.");
+      say("Message deleted for everyone.");
+    }else{
+      const {error}=await db.from("aeroshell_message_hides").upsert({message_id:messageId,user_id:me.id},{onConflict:"message_id,user_id",ignoreDuplicates:true});
+      if(error)throw error;
+      say("Message deleted from your chat.");
+    }
+    await loadData(true);
+  }
+
+  async function forwardBackendMessage(reference, targetChatId) {
+    const me=getUser(),s=appState();
+    if(!me||!me.isSupabase)throw new Error("Sign in to forward messages.");
+    const chat=(s&&s.chats||[]).find(item=>String(item.id)===String(targetChatId));
+    if(!chat)throw new Error("Choose an existing accepted contact or group.");
+    if(reference&&reference.attachmentPath)throw new Error("Forwarding file attachments is not enabled yet. You can forward text messages.");
+    const body=String(reference&&reference.text||"").trim();
+    if(!body)throw new Error("This message has no text to forward.");
+    if(body.length>2000)throw new Error("Forwarded text exceeds the message limit.");
+    const payload={sender_id:me.id,recipient_id:chat.type==="group"?null:chat.id,group_id:chat.type==="group"?chat.id:null,body,message_type:"text"};
+    const {error}=await db.from("aeroshell_messages").insert(payload);
+    if(error)throw error;
+    await loadData(true);
+    say("Message forwarded to "+(chat.name||chat.username||"chat")+".");
+  }
+
+
   let recorder = null, recorderStream = null, recorderChunks = [], recorderStartedAt = 0, recorderChatId = null, recorderStopReason = "";
   function currentSelectedChat() {
     const selected = bridge.getCurrentChat();
@@ -994,8 +1059,8 @@
     location.reload();
   };
   bridge.supabase=db;bridge.isBackendReady=()=>!!db;bridge.loadBackendData=()=>loadData(false);
-  bridge.sendBackendMessage=sendMessage;bridge.searchBackendPeople=searchPeople;bridge.requestBackend=sendRequest;
-  window.waBackend={client:db,load:()=>loadData(false),safeError,searchPeople};
+  bridge.sendBackendMessage=sendMessage;bridge.searchBackendPeople=searchPeople;bridge.requestBackend=sendRequest;bridge.toggleBackendReaction=toggleMessageReaction;bridge.deleteBackendMessage=deleteBackendMessage;bridge.forwardBackendMessage=forwardBackendMessage;
+  window.waBackend={client:db,load:()=>loadData(false),safeError,searchPeople,toggleMessageReaction,deleteBackendMessage,forwardBackendMessage};
   function finishStartup(showAuth) {
     const root = $("#app-screen");
     const auth = $("#auth-screen");
