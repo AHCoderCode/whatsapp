@@ -755,7 +755,7 @@
     if(me&&me.isSupabase&&dialogAction==="create-community"){
       event.preventDefault();event.stopImmediatePropagation();void createCommunity();return;
     }
-    if(me&&me.isSupabase&&target.dataset.communityId&&action!==""){
+    if(me&&me.isSupabase&&target.dataset.communityId&&!dialogAction){
       event.preventDefault();event.stopImmediatePropagation();openCommunity(target.dataset.communityId);return;
     }
     if(me&&me.isSupabase&&target.dataset.communityId&&dialogAction==="join-community"){
