@@ -54,9 +54,9 @@
   async function usernameFromNumber(value) {
     const number = canonicalNumber(value);
     if (!db || !number) return "";
-    const {data,error} = await db.rpc("aeroshell_username_by_custom_number",{input_number:number});
-    if (error) throw error;
-    return Array.isArray(data)&&data[0] ? String(data[0].username||"").toLowerCase() : "";
+    const {data,error} = await db.functions.invoke("whatsapp-lookup-identity",{body:{customNumber:number}});
+    if (error) throw new Error(error.message || "Custom ID lookup is temporarily unavailable.");
+    return data && typeof data.username === "string" ? data.username.toLowerCase() : "";
   }
   async function searchPeople(value) {
     const me=getUser();
@@ -303,7 +303,7 @@
     if(me&&me.isSupabase&&dialogAction==="create-group"){event.preventDefault();event.stopImmediatePropagation();void createGroup();return;}
     if(me&&me.isSupabase&&action==="find-friends"){event.preventDefault();event.stopImmediatePropagation();bridge.handleAction("new-chat",target);return;}
     if(me&&me.isSupabase&&action==="logout"){event.preventDefault();event.stopImmediatePropagation();bridge.openDialog("Log out","<p class='screen-description'>Sign out of this account on this device?</p>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='backend-logout'>Log out</button>");return;}
-    if(me&&me.isSupabase&&dialogAction==="logout"){event.preventDefault();event.stopImmediatePropagation();void window.waBackendLogout();return;}
+    if(me&&me.isSupabase&&dialogAction==="backend-logout"){event.preventDefault();event.stopImmediatePropagation();void window.waBackendLogout();return;}
   },true);
   document.addEventListener("input",event=>{
     const target=event.target;if(!target||target.id!=="friend-search"||!getUser()||!getUser().isSupabase)return;
