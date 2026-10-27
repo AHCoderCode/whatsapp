@@ -120,6 +120,7 @@
       .on("postgres_changes",{event:"DELETE",schema:"public",table:"aeroshell_messages"},()=>void loadData(true))
       .on("postgres_changes",{event:"*",schema:"public",table:"aeroshell_friend_requests"},()=>void loadData(true))
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"aeroshell_message_reads"},()=>void loadData(true))
+      .on("postgres_changes",{event:"*",schema:"public",table:"aeroshell_message_reactions"},()=>void loadData(true))
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"whatsapp_polls"},()=>void loadData(true))
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"whatsapp_events"},()=>void loadData(true))
       .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_poll_votes"},()=>void loadData(true))
@@ -196,15 +197,17 @@
         if(!readResult.error)(readResult.data||[]).forEach(row=>readSet.add(row.message_id));
       }
       const messageIds=all.map(row=>row.id);
-      let pollRows=[],eventRows=[],voteRows=[],rsvpRows=[];
+      let pollRows=[],eventRows=[],voteRows=[],rsvpRows=[],reactionRows=[];
       if(messageIds.length){
-        const [pollResult,eventResult]=await Promise.all([
+        const [pollResult,eventResult,reactionResult]=await Promise.all([
           db.from("whatsapp_polls").select("id,message_id,created_by,question,options,created_at").in("message_id",messageIds),
-          db.from("whatsapp_events").select("id,message_id,created_by,title,starts_at,created_at").in("message_id",messageIds)
+          db.from("whatsapp_events").select("id,message_id,created_by,title,starts_at,created_at").in("message_id",messageIds),
+          db.from("aeroshell_message_reactions").select("message_id,user_id,emoji,created_at").in("message_id",messageIds)
         ]);
         if(pollResult.error)throw pollResult.error;
         if(eventResult.error)throw eventResult.error;
-        pollRows=pollResult.data||[];eventRows=eventResult.data||[];
+        if(reactionResult.error)throw reactionResult.error;
+        pollRows=pollResult.data||[];eventRows=eventResult.data||[];reactionRows=reactionResult.data||[];
         const pollIds=pollRows.map(row=>row.id),eventIds=eventRows.map(row=>row.id);
         const [voteResult,rsvpResult]=await Promise.all([
           pollIds.length?db.from("whatsapp_poll_votes").select("poll_id,voter_id,option_index").in("poll_id",pollIds):Promise.resolve({data:[],error:null}),
@@ -216,6 +219,8 @@
       }
       const pollByMessage=new Map(pollRows.map(row=>[row.message_id,row]));
       const eventByMessage=new Map(eventRows.map(row=>[row.message_id,row]));
+      const reactionsByMessage=new Map();
+      reactionRows.forEach(row=>{const list=reactionsByMessage.get(row.message_id)||[];list.push(row);reactionsByMessage.set(row.message_id,list);});
       const votesByPoll=new Map(),rsvpsByEvent=new Map();
       voteRows.forEach(row=>{const list=votesByPoll.get(row.poll_id)||[];list.push(row);votesByPoll.set(row.poll_id,list);});
       rsvpRows.forEach(row=>{const list=rsvpsByEvent.get(row.event_id)||[];list.push(row);rsvpsByEvent.set(row.event_id,list);});
@@ -224,6 +229,11 @@
         if(!chat)continue;
         const msg=localMessage(row,me,chat);
         if(row.sender_id===me.id&&readSet.has(row.id))msg.status="read";
+        const ownReactionRows=reactionsByMessage.get(row.id)||[];
+        const reactionCounts=new Map();
+        ownReactionRows.forEach(reaction=>reactionCounts.set(reaction.emoji,(reactionCounts.get(reaction.emoji)||0)+1));
+        msg.reactions=Array.from(reactionCounts.entries()).map(([emoji,count])=>count>1?emoji+" "+count:emoji);
+        msg.myReaction=(ownReactionRows.find(reaction=>reaction.user_id===me.id)||{}).emoji||"";
         const replyTarget=row.reply_to_message_id?messageById.get(row.reply_to_message_id):null;
         if(replyTarget){
           const replyAuthor=profileById.get(replyTarget.sender_id);
@@ -325,6 +335,27 @@
       const input=$("#message-input");if(input){input.value="";input.style.height="";input.dispatchEvent(new Event("input",{bubbles:true}));}
     }catch(error){say(safeError(error,"Message was not delivered."));}
     finally{if(button)button.disabled=false;}
+  }
+
+  async function toggleMessageReaction(messageId,emoji){
+    const me=getUser();
+    const allowed=["👍","❤️","😂","😮","🙏"];
+    if(!me||!me.isSupabase)throw new Error("Sign in to sync message reactions.");
+    if(!allowed.includes(emoji))throw new Error("That reaction is not supported.");
+    if(!/^[0-9a-f-]{36}$/i.test(String(messageId||"")))throw new Error("This message is not synced to the account backend.");
+    const {data:existing,error:readError}=await db.from("aeroshell_message_reactions")
+      .select("emoji").eq("message_id",messageId).eq("user_id",me.id).maybeSingle();
+    if(readError)throw readError;
+    if(existing&&existing.emoji===emoji){
+      const {error}=await db.from("aeroshell_message_reactions").delete().eq("message_id",messageId).eq("user_id",me.id);
+      if(error)throw error;
+    }else{
+      const {error}=await db.from("aeroshell_message_reactions")
+        .upsert({message_id:messageId,user_id:me.id,emoji},{onConflict:"message_id,user_id"});
+      if(error)throw error;
+    }
+    await loadData(true);
+    return true;
   }
 
   async function hideMessageForMe(messageId){
@@ -1044,8 +1075,8 @@
   };
   bridge.supabase=db;bridge.isBackendReady=()=>!!db;bridge.loadBackendData=()=>loadData(false);
   bridge.sendBackendMessage=sendMessage;bridge.searchBackendPeople=searchPeople;bridge.requestBackend=sendRequest;
-  bridge.hideBackendMessage=hideMessageForMe;bridge.deleteBackendMessage=deleteMessageForEveryone;bridge.forwardBackendMessage=forwardMessage;
-  window.waBackend={client:db,load:()=>loadData(false),safeError,searchPeople,sendMessage,hideMessageForMe,deleteMessageForEveryone,forwardMessage};
+  bridge.hideBackendMessage=hideMessageForMe;bridge.deleteBackendMessage=deleteMessageForEveryone;bridge.forwardBackendMessage=forwardMessage;bridge.reactBackendMessage=toggleMessageReaction;
+  window.waBackend={client:db,load:()=>loadData(false),safeError,searchPeople,sendMessage,hideMessageForMe,deleteMessageForEveryone,forwardMessage,toggleMessageReaction};
   function finishStartup(showAuth) {
     const root = $("#app-screen");
     const auth = $("#auth-screen");
