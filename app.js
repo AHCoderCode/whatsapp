@@ -351,8 +351,11 @@
     $$(".rail-button[data-view],.mobile-tab[data-view]").forEach(el=>el.classList.toggle("active",el.dataset.view===view && !(view==="archived" || view==="locked")));
   }
   function updateMobileMode() {
+    const isMobile = window.matchMedia("(max-width:700px)").matches;
     const mainVisible = selectedChatId!==null || view!=="chats";
-    app.classList.toggle("mobile-open",window.matchMedia("(max-width:700px)").matches && mainVisible);
+    app.classList.toggle("mobile-open",isMobile && mainVisible);
+    app.classList.toggle("mobile-section-open",isMobile && selectedChatId===null && view!=="chats");
+    app.classList.toggle("mobile-conversation-open",isMobile && selectedChatId!==null);
   }
   function messageHTML(message, chat) {
     const outgoing = message.from==="me";
@@ -603,7 +606,7 @@
     const conversation=main.querySelector(".conversation");
     if(conversation) conversation.style.background=state.settings.wallpaper==="plain"?"#ffffff":state.settings.wallpaper==="green"?"#dbeee5":"#efeae2";
   }
-  function updateMobile() { app.classList.toggle("mobile-open",window.matchMedia("(max-width:700px)").matches && (selectedChatId!==null || view!=="chats")); }
+  function updateMobile() { updateMobileMode(); }
   function selectChat(id) {
     const chat=findChat(id);if(!chat)return;
     selectedChatId=chat.id;view="chats";archivedMode=false;chat.unread=0;
