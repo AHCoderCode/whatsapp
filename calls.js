@@ -256,8 +256,8 @@
         const person=bridge.getCurrentChat();if(!person||person.type!=="person"){say("Open a person's chat before starting a call.");return;}
         void startCall(person,action==="video-call"?"video":"audio");
       }else if(action==="call-entry"){
-        const id=actionEl.dataset.chatId,s=(appState()&&appState().chats)||[],person=s.find(c=>String(c.id)===String(id)&&c.type==="person");
-        if(person)openPicker("audio");else openPicker("audio");
+        const id=actionEl.dataset.chatId,s=(appState()&&appState().chats)||[],person=s.find(c=>String(c.id)===String(id)&&c.type==="person"),media=actionEl.dataset.mediaType==="video"?"video":"audio";
+        if(person)void startCall(person,media);else openPicker(media);
       }else openPicker(action==="new-video-call"?"video":"audio");
       return;
     }
