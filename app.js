@@ -844,7 +844,7 @@
   function openForwardMessageDialog(reference, sourceChat) {
     const targets=(state&&state.chats||[]).filter(item=>item&&(item.type==="person"||item.type==="group")&&!item.archived&&String(item.id)!==String(sourceChat&&sourceChat.id));
     const body="<p class='screen-description'>Choose a chat to forward this message to.</p><div id='forward-target-list' class='forward-target-list'>"+
-      (targets.length?targets.map((target,index)=>"<label class='forward-target-row'><input type='radio' name='forward-target' value='"+esc(target.id)+"' "+(index===0?"":"")+"><span class='forward-target-avatar'>"+avatarHTML(target)+"</span><span><strong>"+esc(target.name||target.username||"Chat")+"</strong><small>"+(target.type==="group"?"Group":"@"+esc(target.username||""))+"</small></span></label>").join(""):"<div class='empty-state'>No other accepted chats or groups are available to forward to.</div>")+
+      (targets.length?targets.map((target,index)=>"<label class='forward-target-row'><input type='radio' name='forward-target' value='"+esc(target.id)+"' "+(index===0?"checked":"")+"><span class='forward-target-avatar'>"+avatarHTML(target)+"</span><span><strong>"+esc(target.name||target.username||"Chat")+"</strong><small>"+(target.type==="group"?"Group":"@"+esc(target.username||""))+"</small></span></label>").join(""):"<div class='empty-state'>No other accepted chats or groups are available to forward to.</div>")+
       "</div>";
     openDialog("Forward message",body,"<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='confirm-forward-message' "+(targets.length?"":"disabled")+">Forward</button>");
   }
