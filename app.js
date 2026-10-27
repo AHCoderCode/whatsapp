@@ -1160,7 +1160,23 @@
       if (data.sentRequests) state.sentRequests = data.sentRequests;
       if (data.calls) state.calls = data.calls;
       if (selectedChatId && !state.chats.some(c => String(c.id) === String(selectedChatId))) selectedChatId = null;
+      const oldInput = $("#message-input");
+      const draft = oldInput ? oldInput.value : "";
+      const wasTyping = !!oldInput && document.activeElement === oldInput;
+      const selection = oldInput && typeof oldInput.selectionStart === "number" ? [oldInput.selectionStart, oldInput.selectionEnd] : null;
+      const scrollBefore = $("#message-scroll") ? $("#message-scroll").scrollTop : null;
       renderApp();
+      const nextInput = $("#message-input");
+      if (nextInput && draft) {
+        nextInput.value = draft;
+        nextInput.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      if (nextInput && wasTyping) {
+        nextInput.focus({ preventScroll: true });
+        if (selection) try { nextInput.setSelectionRange(selection[0], selection[1]); } catch (_) {}
+      }
+      const nextScroll = $("#message-scroll");
+      if (nextScroll && scrollBefore !== null) nextScroll.scrollTop = scrollBefore;
     },
     render: () => renderApp(),
     renderMain: () => renderMain(),
