@@ -197,7 +197,7 @@ button,input,textarea,select{max-width:100%}
 .wa-channel-post p{margin:0;font-size:13px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
 .text-danger-button{align-self:flex-start;border:0;background:transparent;color:#bf3145;font:inherit;font-size:11px;cursor:pointer;padding:4px 0}
 
-/* Vexel Chat release polish: familiar messaging patterns, original visual identity. */
+/* WhatsApp release polish: familiar messaging patterns, original visual identity. */
 :root{--vexel-green:#008069;--vexel-accent:#00a884;--vexel-mint:#d9fdd3;--vexel-text:#111b21;--vexel-muted:#667781;--vexel-border:#e9edef}
 .sidebar-header h1,.screen-header h2{color:var(--vexel-text);letter-spacing:-.35px}
 .chat-row.selected{background:#f0f2f5}
@@ -235,3 +235,9 @@ button,input,textarea,select{max-width:100%}
 @media (min-width: 701px) {
   .mobile-nav { display: none !important; }
 }
+
+
+/* Desktop branding and layout polish. */
+.rail-brand{height:44px;width:44px;display:grid;place-items:center;margin:0 0 5px;padding:0;flex:0 0 auto}
+.rail-brand img{display:block;height:34px;width:34px;object-fit:contain}
+@media (min-width: 701px){.mobile-nav{display:none!important}.app-workspace{grid-template-columns:64px minmax(300px,400px) minmax(0,1fr)}.main-pane{min-width:0}.chat-sidebar{min-width:0}.rail-brand{margin-bottom:9px}}
