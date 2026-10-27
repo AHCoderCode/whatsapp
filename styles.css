@@ -149,3 +149,7 @@ button,input,textarea,select{max-width:100%}
 @keyframes wa-record-pulse{0%,100%{box-shadow:0 0 0 3px #d7354715}50%{box-shadow:0 0 0 7px #d735472b}}
 @media(prefers-reduced-motion:reduce){.send-button.recording{animation:none}}
 @media(max-width:700px){.message-attachment-open{max-width:100%}.wa-attachment-dialog .primary-button{align-self:stretch;justify-content:center}}
+
+.message-read-status{display:inline-flex;vertical-align:middle;margin-left:2px;color:#7a8b91}
+.message-read-status.is-read{color:#34b7f1}
+@media(max-width:700px){.mobile-only .icon-button[aria-label="Install app"]{display:grid}}
