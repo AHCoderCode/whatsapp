@@ -115,6 +115,11 @@
       .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_poll_votes"},()=>void loadData(true))
       .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_event_rsvps"},()=>void loadData(true))
       .on("postgres_changes",{event:"UPDATE",schema:"public",table:"aeroshell_profiles",filter:"id=eq."+userId},()=>void loadData(true))
+      .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_statuses"},()=>void loadData(true))
+      .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_channels"},()=>void loadData(true))
+      .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_channel_follows"},()=>void loadData(true))
+      .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_communities"},()=>void loadData(true))
+      .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_community_members"},()=>void loadData(true))
       .subscribe();
   }
   async function loadData(quiet) {
@@ -123,14 +128,19 @@
     if(loading){refreshQueued=true;return;}
     loading=true;
     try{
-      const [profileResult,requestResult,membershipResult,messageResult,callResult]=await Promise.all([
+      const [profileResult,requestResult,membershipResult,messageResult,callResult,statusResult,channelResult,followResult,communityResult,communityMembershipResult]=await Promise.all([
         db.from("aeroshell_profiles").select("id,username,display_name,about,custom_number,avatar_data,created_at").eq("id",me.id).maybeSingle(),
         db.from("aeroshell_friend_requests").select("id,requester_id,recipient_id,status,created_at,responded_at").or("requester_id.eq."+me.id+",recipient_id.eq."+me.id).order("created_at",{ascending:false}).limit(300),
         db.from("aeroshell_group_members").select("group_id,role").eq("user_id",me.id),
         db.from("aeroshell_messages").select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms").or("sender_id.eq."+me.id+",recipient_id.eq."+me.id).order("created_at",{ascending:true}).limit(800),
-        db.from("aeroshell_calls").select("id,caller_id,callee_id,status,created_at,media_type").or("caller_id.eq."+me.id+",callee_id.eq."+me.id).order("created_at",{ascending:false}).limit(100)
+        db.from("aeroshell_calls").select("id,caller_id,callee_id,status,created_at,media_type").or("caller_id.eq."+me.id+",callee_id.eq."+me.id).order("created_at",{ascending:false}).limit(100),
+        db.from("whatsapp_statuses").select("id,user_id,text,created_at,expires_at").gt("expires_at",new Date().toISOString()).order("created_at",{ascending:false}).limit(200),
+        db.from("whatsapp_channels").select("id,name,description,created_by,created_at").order("created_at",{ascending:false}).limit(100),
+        db.from("whatsapp_channel_follows").select("channel_id,user_id").eq("user_id",me.id),
+        db.from("whatsapp_communities").select("id,name,description,created_by,created_at").order("created_at",{ascending:false}).limit(100),
+        db.from("whatsapp_community_members").select("community_id,user_id,role").eq("user_id",me.id)
       ]);
-      for(const result of [profileResult,requestResult,membershipResult,messageResult])if(result.error)throw result.error;
+      for(const result of [profileResult,requestResult,membershipResult,messageResult,statusResult,channelResult,followResult,communityResult,communityMembershipResult])if(result.error)throw result.error;
       if(!profileResult.data)throw new Error("Your profile is missing. Sign out and create a new account after applying the Supabase profile migration.");
       signedProfile=profileResult.data;
       const self=mapProfile(profileResult.data);
@@ -219,7 +229,12 @@
       const received=relations.filter(r=>r.status==="pending"&&r.recipient_id===me.id).map(r=>Object.assign({},profileById.get(r.requester_id)||{id:r.requester_id,username:"user",name:"User",phone:"",avatar:"U",avatarColor:1},{id:r.id,requestUserId:r.requester_id,recipientId:r.recipient_id,status:"received",note:"Would like to connect",time:new Date(r.created_at).toLocaleString()}));
       const sent=relations.filter(r=>r.status==="pending"&&r.requester_id===me.id).map(r=>Object.assign({},profileById.get(r.recipient_id)||{id:r.recipient_id,username:"user",name:"User",phone:"",avatar:"U",avatarColor:1},{id:r.id,requestUserId:r.recipient_id,recipientId:r.recipient_id,status:"sent",time:new Date(r.created_at).toLocaleString()}));
       const calls=(callResult.data||[]).map(r=>{const peer=profileById.get(r.caller_id===me.id?r.callee_id:r.caller_id);return{id:r.id,contactId:peer?peer.id:"",name:peer?peer.name:"Contact",username:peer?peer.username:"",time:new Date(r.created_at).toLocaleString(),type:r.caller_id===me.id?"outgoing":"incoming",avatar:peer?peer.avatar:1,mediaType:r.media_type,status:r.status};});
-      bridge.setBackendData({profile:{username:self.username,name:self.name,phone:self.phone,about:self.about,avatar:self.avatar,avatarColor:self.avatarColor,avatarData:self.avatarData},chats,requests:received,sentRequests:sent,calls});
+      const statuses=(statusResult.data||[]).map(row=>{const author=profileById.get(row.user_id)||self;return{id:row.id,userId:row.user_id,username:author.username,name:author.name,text:row.text,createdAt:row.created_at,expiresAt:row.expires_at,avatar:author.avatar,avatarColor:author.avatarColor,avatarData:author.avatarData||""};});
+      const followed=new Set((followResult.data||[]).map(row=>row.channel_id));
+      const channels=(channelResult.data||[]).map(row=>({id:row.id,name:row.name,description:row.description||"",createdBy:row.created_by,following:followed.has(row.id),createdAt:row.created_at}));
+      const joined=new Map((communityMembershipResult.data||[]).map(row=>[row.community_id,row.role]));
+      const communities=(communityResult.data||[]).map(row=>({id:row.id,name:row.name,description:row.description||"",createdBy:row.created_by,createdAt:row.created_at,joined:joined.has(row.id),role:joined.get(row.id)||"",groups:[]}));
+      bridge.setBackendData({profile:{username:self.username,name:self.name,phone:self.phone,about:self.about,avatar:self.avatar,avatarColor:self.avatarColor,avatarData:self.avatarData},chats,requests:received,sentRequests:sent,calls,statuses,channels,communities});
       subscribe(me.id);
       if(window.WhatsAppCalls)window.WhatsAppCalls.subscribe();
     }catch(error){if(!quiet)say(safeError(error,"Could not load messaging data from Supabase."));}
