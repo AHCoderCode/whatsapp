@@ -1,12 +1,12 @@
-const CACHE_NAME = "vexel-chat-shell-v15";
+const CACHE_NAME = "vexel-chat-shell-v16";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/app.js",
-  "/backend.js",
-  "/calls.js",
-  "/styles.css",
-  "/manifest.webmanifest",
+  "/app.js?v=people-search-20261027b",
+  "/backend.js?v=people-search-20261027b",
+  "/calls.js?v=people-search-20261027b",
+  "/styles.css?v=people-search-20261027b",
+  "/manifest.webmanifest?v=people-search-20261027b",
   "/icon.svg",
   "/icon-192.svg",
   "/icon-512.svg",

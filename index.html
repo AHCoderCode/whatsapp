@@ -24,8 +24,8 @@
   <title>Vexel Chat</title>
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="manifest" href="/manifest.webmanifest?v=people-search-20261027b">
+  <link rel="stylesheet" href="/styles.css?v=people-search-20261027b">
 </head>
 <body>
 <svg id="wa-icons" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="position:absolute;overflow:hidden">
@@ -186,10 +186,26 @@
 </div>
 <div id="overlay-root"></div>
 <div id="toast-root" aria-live="polite"></div>
-<script src="/app.js" defer></script>
+<script src="/app.js?v=people-search-20261027b" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-<script src="/backend.js" defer></script>
-<script src="/calls.js" defer></script>
-<script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
+<script src="/backend.js?v=people-search-20261027b" defer></script>
+<script src="/calls.js?v=people-search-20261027b" defer></script>
+<script>
+if("serviceWorker" in navigator){
+  const releaseKey="vexel_people_search_reload_20261027b";
+  navigator.serviceWorker.addEventListener("controllerchange",()=>{
+    try{
+      if(sessionStorage.getItem(releaseKey)!=="1"){
+        sessionStorage.setItem(releaseKey,"1");
+        location.reload();
+      }
+    }catch(_){}
+  });
+  window.addEventListener("load",()=>{
+    navigator.serviceWorker.register("/sw.js?v=people-search-20261027b",{updateViaCache:"none"})
+      .then(registration=>registration.update().catch(()=>{}))
+      .catch(()=>{});
+  });
+}</script>
 </body>
 </html>

@@ -69,7 +69,7 @@
     if(!db||!me||!me.isSupabase)return [];
     const query=String(value||"").trim().replace(/^@+/,"");
     if(query.length<2||query.length>80)return [];
-    const {data,error}=await db.rpc("aeroshell_search_profiles",{search_query:query});
+    const {data,error}=await db.rpc("whatsapp_find_people",{search_query:query});
     if(error)throw error;
     return (data||[]).filter(row=>row.id!==me.id).map(row=>mapProfile(row)).filter(Boolean).slice(0,8);
   }
