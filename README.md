@@ -1,6 +1,5 @@
-# Vexel Chat
-
-Vexel Chat is a responsive, installable messaging app built on Supabase Auth, Postgres, Storage and Realtime. It also includes one-to-one WebRTC voice/video calling through the Supabase TURN-credential function and Metered TURN service.
+# WhatsApp (independent web app)
+This independent WhatsApp-inspired web app is a responsive, installable messaging app built on Supabase Auth, Postgres, Storage and Realtime. It also includes one-to-one WebRTC voice/video calling through the Supabase TURN-credential function and Metered TURN service.
 
 **Live app:** https://whatsapp-for.vercel.app  
 **Source:** https://github.com/AHCoderCode/whatsapp  
@@ -83,5 +82,8 @@ Serve the repository root over HTTP instead of opening `index.html` using `file:
 - `+990` is a custom app identifier only; it cannot receive SMS or use the telephone network.
 - A valid Metered TURN plan/domain/API key is required before calls can actually connect.
 - Video file attachments, group calls, channel media posts, photo/video status capture and community subgroup binding are not implemented.
-- Vexel Chat is independent, cannot message accounts on other messaging services, and does not provide end-to-end encryption. Supabase stores message text/metadata under its existing RLS policies.
+- WhatsApp is independent, cannot message accounts on other messaging services, and does not provide end-to-end encryption. Supabase stores message text/metadata under its existing RLS policies.
 - Static syntax/build checks are not a substitute for the two-account/two-device test above. Verify actual audio/video on supported browsers before advertising the service as production-ready.
+
+
+This is an independent project and is not affiliated with or connected to the official WhatsApp service.
