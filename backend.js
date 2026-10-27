@@ -87,7 +87,8 @@
       attachmentType:row.message_type==="voice"?"voice":row.message_type==="file"?"file":null,
       attachmentName:row.attachment_name||"",attachmentPath:row.attachment_path||"",
       attachmentMime:row.attachment_mime||"",attachmentSize:Number(row.attachment_size||0),
-      messageType:row.message_type||"text",voiceDurationMs:Number(row.voice_duration_ms||0)};
+      messageType:row.message_type||"text",voiceDurationMs:Number(row.voice_duration_ms||0),
+      replyToId:row.reply_to_message_id||null,forwardedFromId:row.forwarded_from_message_id||null,forwarded:!!row.forwarded_from_message_id};
   }
   function insertMessageIntoUI(row) {
     const me=getUser(), s=appState();
@@ -97,6 +98,10 @@
     if(!chat){void loadData(true);return;}
     if(chat.messages.some(m=>String(m.id)===String(row.id)))return;
     const msg=localMessage(row,me,chat);
+    if(msg.replyToId){
+      const quoted=chat.messages.find(m=>String(m.id)===String(msg.replyToId));
+      if(quoted)msg.replyTo={id:quoted.id,text:quoted.text||quoted.attachmentName||"Attachment",sender:quoted.from==="me"?"You":(quoted.sender||chat.name)};
+    }
     chat.messages.push(msg);chat.preview=msg.text;chat.time=msg.time;
     chat.lastOutgoing=msg.from==="me";chat.lastMessageType=row.message_type||"text";
     if(msg.from==="them"&&String(bridge.getSelectedChatId?bridge.getSelectedChatId():"")!==String(chat.id))chat.unread=(chat.unread||0)+1;
@@ -112,6 +117,7 @@
     liveUserId=userId;
     liveChannel=db.channel("whatsapp-main-"+userId)
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"aeroshell_messages"},e=>insertMessageIntoUI(e.new))
+      .on("postgres_changes",{event:"DELETE",schema:"public",table:"aeroshell_messages"},()=>void loadData(true))
       .on("postgres_changes",{event:"*",schema:"public",table:"aeroshell_friend_requests"},()=>void loadData(true))
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"aeroshell_message_reads"},()=>void loadData(true))
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"whatsapp_polls"},()=>void loadData(true))
@@ -137,7 +143,7 @@
         db.from("aeroshell_profiles").select("id,username,display_name,about,custom_number,avatar_data,created_at").eq("id",me.id).maybeSingle(),
         db.from("aeroshell_friend_requests").select("id,requester_id,recipient_id,status,created_at,responded_at").or("requester_id.eq."+me.id+",recipient_id.eq."+me.id).order("created_at",{ascending:false}).limit(300),
         db.from("aeroshell_group_members").select("group_id,role").eq("user_id",me.id),
-        db.from("aeroshell_messages").select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms").or("sender_id.eq."+me.id+",recipient_id.eq."+me.id).order("created_at",{ascending:true}).limit(800),
+        db.from("aeroshell_messages").select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms,reply_to_message_id,forwarded_from_message_id").or("sender_id.eq."+me.id+",recipient_id.eq."+me.id).order("created_at",{ascending:true}).limit(800),
         db.from("aeroshell_calls").select("id,caller_id,callee_id,status,created_at,media_type").or("caller_id.eq."+me.id+",callee_id.eq."+me.id).order("created_at",{ascending:false}).limit(100),
         db.from("whatsapp_statuses").select("id,user_id,text,created_at,expires_at").gt("expires_at",new Date().toISOString()).order("created_at",{ascending:false}).limit(200),
         db.from("whatsapp_channels").select("id,name,description,created_by,created_at").order("created_at",{ascending:false}).limit(100),
@@ -160,7 +166,7 @@
         const [g,m,gm]=await Promise.all([
           db.from("aeroshell_groups").select("id,name,avatar_data,created_by,updated_at,description").in("id",groupIds).order("updated_at",{ascending:false}),
           db.from("aeroshell_group_members").select("group_id,user_id,role").in("group_id",groupIds),
-          db.from("aeroshell_messages").select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms").in("group_id",groupIds).order("created_at",{ascending:true}).limit(800)
+          db.from("aeroshell_messages").select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms,reply_to_message_id,forwarded_from_message_id").in("group_id",groupIds).order("created_at",{ascending:true}).limit(800)
         ]);
         if(g.error)throw g.error;if(m.error)throw m.error;if(gm.error)throw gm.error;
         groups=g.data||[];roster=m.data||[];groupMessages=gm.data||[];
@@ -181,6 +187,7 @@
       roster.forEach(r=>counts.set(r.group_id,(counts.get(r.group_id)||0)+1));
       for(const g of groups)chats.push({id:g.id,backendId:g.id,groupId:g.id,type:"group",name:g.name,username:"",phone:"",about:"",avatar:initials(g.name),avatarColor:colorFor(g.name),avatarData:g.avatar_data||"",messages:[],attachments:[],unread:0,time:"",preview:"Group conversation",lastMessageType:"text",archived:false,locked:false,participants:roster.filter(m=>m.group_id===g.id).map(m=>profileById.get(m.user_id)).filter(Boolean),memberCount:counts.get(g.id)||1,groupRole:roleByGroup.get(g.id)||"member",createdBy:g.created_by});
       const all=Array.from(new Map((messageResult.data||[]).concat(groupMessages).map(m=>[m.id,m])).values()).sort((a,b)=>Date.parse(a.created_at)-Date.parse(b.created_at));
+      const messageById=new Map(all.map(row=>[row.id,row]));
       const chatMap=new Map(chats.map(c=>[c.id,c]));
       const readSet=new Set();
       const ownMessageIds=all.filter(row=>row.sender_id===me.id).map(row=>row.id);
@@ -217,6 +224,12 @@
         if(!chat)continue;
         const msg=localMessage(row,me,chat);
         if(row.sender_id===me.id&&readSet.has(row.id))msg.status="read";
+        const replyTarget=row.reply_to_message_id?messageById.get(row.reply_to_message_id):null;
+        if(replyTarget){
+          const replyAuthor=profileById.get(replyTarget.sender_id);
+          msg.replyTo={id:replyTarget.id,text:replyTarget.body||replyTarget.attachment_name||"Attachment",sender:replyTarget.sender_id===me.id?"You":(replyAuthor&&replyAuthor.name)||chat.name};
+        }
+        msg.forwarded=!!row.forwarded_from_message_id;
         const poll=pollByMessage.get(row.id);
         if(poll){
           const options=Array.isArray(poll.options)?poll.options:[];
@@ -231,7 +244,6 @@
         chat.messages.push(msg);chat.preview=msg.poll?"📊 Poll: "+msg.poll.question:msg.event?"📅 Event: "+msg.event.title:msg.text;chat.time=msg.time;chat.lastOutgoing=msg.from==="me";chat.lastMessageType=row.message_type||"text";
       }
       chats.sort((a,b)=>(Date.parse(b.messages.at(-1)?.createdAt||0)-Date.parse(a.messages.at(-1)?.createdAt||0))||String(a.name).localeCompare(String(b.name)));
-      void markReadForChat(bridge.getCurrentChat());
       const received=relations.filter(r=>r.status==="pending"&&r.recipient_id===me.id).map(r=>Object.assign({},profileById.get(r.requester_id)||{id:r.requester_id,username:"user",name:"User",phone:"",avatar:"U",avatarColor:1},{id:r.id,requestUserId:r.requester_id,recipientId:r.recipient_id,status:"received",note:"Would like to connect",time:new Date(r.created_at).toLocaleString()}));
       const sent=relations.filter(r=>r.status==="pending"&&r.requester_id===me.id).map(r=>Object.assign({},profileById.get(r.recipient_id)||{id:r.recipient_id,username:"user",name:"User",phone:"",avatar:"U",avatarColor:1},{id:r.id,requestUserId:r.recipient_id,recipientId:r.recipient_id,status:"sent",time:new Date(r.created_at).toLocaleString()}));
       const calls=(callResult.data||[]).map(r=>{const peer=profileById.get(r.caller_id===me.id?r.callee_id:r.caller_id);return{id:r.id,contactId:peer?peer.id:"",name:peer?peer.name:"Contact",username:peer?peer.username:"",time:new Date(r.created_at).toLocaleString(),type:r.caller_id===me.id?"outgoing":"incoming",avatar:peer?peer.avatar:1,mediaType:r.media_type,status:r.status};});
@@ -247,6 +259,8 @@
       const joined=new Map((communityMembershipResult.data||[]).map(row=>[row.community_id,row.role]));
       const communities=(communityResult.data||[]).map(row=>({id:row.id,name:row.name,description:row.description||"",createdBy:row.created_by,createdAt:row.created_at,joined:joined.has(row.id),role:joined.get(row.id)||"",groups:[]}));
       bridge.setBackendData({profile:{username:self.username,name:self.name,phone:self.phone,about:self.about,avatar:self.avatar,avatarColor:self.avatarColor,avatarData:self.avatarData},chats,requests:received,sentRequests:sent,calls,statuses,channels,channelPosts,communities});
+      // Mark incoming messages read only after the new messages have been placed in the UI state.
+      void markReadForChat(bridge.getCurrentChat());
       subscribe(me.id);
       if(window.WhatsAppCalls)window.WhatsAppCalls.subscribe();
     }catch(error){if(!quiet)say(safeError(error,"Could not load messaging data from Supabase."));}
@@ -296,18 +310,53 @@
     }catch(error){showError("login",safeError(error,"Sign-in failed."));}
     finally{busy=false;const b=$("#login-form button[type=submit]");if(b){b.disabled=false;b.innerHTML="Log in "+bridge.icon("chevron");}}
   }
-  async function sendMessage(value){
+  async function sendMessage(value, replyToMessageId){
     const me=getUser(),chat=bridge.getCurrentChat(),body=String(value||"").trim();
     if(!me||!me.isSupabase){say("Sign in with a Supabase account to send real messages.");return;}
     if(!chat||!body)return;if(body.length>2000)return say("Messages are limited to 2,000 characters.");
+    const quote=replyToMessageId?chat.messages.find(m=>String(m.id)===String(replyToMessageId)):null;
+    if(replyToMessageId&&!quote)return say("That message is no longer in this conversation. Select it again to reply.");
     const button=$(".send-button");if(button)button.disabled=true;
     try{
-      const payload={sender_id:me.id,recipient_id:chat.type==="group"?null:chat.id,group_id:chat.type==="group"?chat.id:null,body,message_type:"text"};
-      const {data,error}=await db.from("aeroshell_messages").insert(payload).select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms").single();
+      const payload={sender_id:me.id,recipient_id:chat.type==="group"?null:chat.id,group_id:chat.type==="group"?chat.id:null,body,message_type:"text",reply_to_message_id:quote?quote.id:null,forwarded_from_message_id:null};
+      const {data,error}=await db.from("aeroshell_messages").insert(payload).select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms,reply_to_message_id,forwarded_from_message_id").single();
       if(error)throw error;if(data)insertMessageIntoUI(data);
+      if(quote&&bridge.clearReplyToMessage)bridge.clearReplyToMessage(quote.id);
       const input=$("#message-input");if(input){input.value="";input.style.height="";input.dispatchEvent(new Event("input",{bubbles:true}));}
     }catch(error){say(safeError(error,"Message was not delivered."));}
     finally{if(button)button.disabled=false;}
+  }
+
+  async function hideMessageForMe(messageId){
+    const me=getUser();
+    if(!me||!me.isSupabase)throw new Error("Sign in to remove a synced message.");
+    if(!/^[0-9a-f-]{36}$/i.test(String(messageId||"")))throw new Error("This message is only in the local preview.");
+    const {error}=await db.from("aeroshell_message_hides").insert({message_id:messageId,user_id:me.id});
+    if(error&&error.code!=="23505")throw error;
+    await loadData(true);
+  }
+  async function deleteMessageForEveryone(messageId){
+    const me=getUser();
+    if(!me||!me.isSupabase)throw new Error("Sign in to delete a synced message.");
+    const {data,error}=await db.from("aeroshell_messages").delete().eq("id",messageId).eq("sender_id",me.id).select("id").maybeSingle();
+    if(error)throw error;
+    if(!data)throw new Error("Only the person who sent a message can delete it for everyone.");
+    await loadData(true);
+  }
+  async function forwardMessage(targetChatId,sourceMessageId,sourceText){
+    const me=getUser(),s=appState(),body=String(sourceText||"").trim();
+    if(!me||!me.isSupabase)throw new Error("Sign in to forward synced messages.");
+    if(!s||!body)throw new Error("This message has no text content to forward.");
+    const target=(s.chats||[]).find(chat=>String(chat.id)===String(targetChatId)&&!chat.archived);
+    if(!target)throw new Error("The selected conversation is not available.");
+    if(body.length>2000)throw new Error("This message is too long to forward.");
+    const sourceId=/^[0-9a-f-]{36}$/i.test(String(sourceMessageId||""))?sourceMessageId:null;
+    if(!sourceId)throw new Error("Only messages synced to your account can be forwarded across devices.");
+    const payload={sender_id:me.id,recipient_id:target.type==="group"?null:target.id,group_id:target.type==="group"?target.id:null,body,message_type:"text",reply_to_message_id:null,forwarded_from_message_id:sourceId};
+    const {data,error}=await db.from("aeroshell_messages").insert(payload).select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms,reply_to_message_id,forwarded_from_message_id").single();
+    if(error)throw error;
+    if(data)insertMessageIntoUI(data);
+    return data;
   }
 
   const ATTACHMENT_BUCKET = "master-chat-attachments";
@@ -369,7 +418,7 @@
       };
       if(isVoice)row.voice_duration_ms=Math.max(1,Math.min(120000,Math.round(options.durationMs||1000)));
       const {data,error}=await db.from("aeroshell_messages").insert(row)
-        .select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms").single();
+        .select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms,reply_to_message_id,forwarded_from_message_id").single();
       if(error)throw error;
       if(data)insertMessageIntoUI(data);
       if(!isVoice)say("Attachment sent.");
@@ -807,7 +856,7 @@
   document.addEventListener("submit",event=>{
     const form=event.target;if(!form||!form.matches("#signup-form,#login-form,#message-form"))return;
     if(form.id===""||form.id==="signup-form"||form.id==="login-form"){event.preventDefault();event.stopImmediatePropagation();form.id==="signup-form"?void signUp(form):void signIn(form);}
-    else if(getUser()&&getUser().isSupabase){event.preventDefault();event.stopImmediatePropagation();void sendMessage($("#message-input")?.value||"");}
+    else if(getUser()&&getUser().isSupabase){event.preventDefault();event.stopImmediatePropagation();void sendMessage($("#message-input")?.value||"",bridge.getReplyToMessageId?bridge.getReplyToMessageId():null);}
   },true);
   document.addEventListener("click",event=>{
     const target=event.target.closest("[data-action],[data-dialog-action],[data-setting-option],[data-menu-action],[data-community-id]");if(!target)return;
@@ -995,7 +1044,8 @@
   };
   bridge.supabase=db;bridge.isBackendReady=()=>!!db;bridge.loadBackendData=()=>loadData(false);
   bridge.sendBackendMessage=sendMessage;bridge.searchBackendPeople=searchPeople;bridge.requestBackend=sendRequest;
-  window.waBackend={client:db,load:()=>loadData(false),safeError,searchPeople};
+  bridge.hideBackendMessage=hideMessageForMe;bridge.deleteBackendMessage=deleteMessageForEveryone;bridge.forwardBackendMessage=forwardMessage;
+  window.waBackend={client:db,load:()=>loadData(false),safeError,searchPeople,sendMessage,hideMessageForMe,deleteMessageForEveryone,forwardMessage};
   function finishStartup(showAuth) {
     const root = $("#app-screen");
     const auth = $("#auth-screen");
