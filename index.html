@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#00a884">
-  <meta name="description" content="WhatsApp-style messaging frontend demo with local interactions.">
+  <meta name="description" content="Responsive messaging app with Supabase accounts, real-time chats, contacts and voice/video calling.">
   <meta name="color-scheme" content="light">
   <title>WhatsApp</title>
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
@@ -78,14 +78,14 @@
       <img src="/icon.svg" alt="" class="auth-logo">
       <div class="auth-brand">WhatsApp</div>
       <h1>Message privately.<br>Stay connected.</h1>
-      <p>A familiar messaging experience with chats, groups and contact requests — in this frontend demo.</p>
+      <p>A familiar messaging experience with account-based chats, contact requests and secure voice or video calls.</p>
       <div class="auth-art-wrap">
         <div class="auth-art-bubble bubble-one">👋</div>
         <div class="auth-art-bubble bubble-two">💬</div>
         <div class="auth-art-bubble bubble-three">✨</div>
         <svg class="auth-art" viewBox="0 0 400 250" aria-hidden="true"><ellipse cx="200" cy="226" rx="135" ry="10" fill="#d5eee4"/><path d="M63 133c0-54 48-94 110-94s110 40 110 94-48 94-110 94c-14 0-29-2-42-7l-43 20 9-41c-21-17-34-40-34-66Z" fill="#d9fdd3"/><path d="M100 124c0-40 34-72 76-72s76 32 76 72-34 72-76 72c-11 0-22-2-31-6l-28 15 5-29c-14-13-22-31-22-52Z" fill="#25d366"/><path d="M159 91c-5-5-8-5-12-2-6 4-9 13-6 21 7 20 30 43 51 49 9 3 17-1 20-8l2-5c1-2 0-4-2-5l-15-8c-2-1-4 0-5 2l-6 7c-1 2-3 2-5 1-9-4-20-14-24-23-1-2-1-4 1-5l6-6c2-2 2-4 1-6Z" fill="#fff"/><path d="M265 77c0-27 22-49 49-49s49 22 49 49-22 49-49 49c-8 0-15-2-21-5l-24 12 7-24c-7-9-11-20-11-32Z" fill="#e5e9eb"/><path d="M299 56c-3-2-5-1-7 2-2 4-3 9 0 13 4 8 11 13 19 17 6 3 10 3 14 1 3-2 4-4 3-6 0-1-1-2-3-3l-8-4c-2-1-3 0-5 2l-3 3c-1 1-2 1-3 0-4-2-8-6-10-10-1-1-1-2 0-3l3-3c1-1 1-3 0-4l-3-5Z" fill="#fff"/><circle cx="104" cy="43" r="5" fill="#b5dfca"/><circle cx="300" cy="156" r="4" fill="#b5dfca"/><path d="M42 179h31m-15-15v31M306 183h33m-16-16v33" stroke="#add8c6" stroke-width="3" stroke-linecap="round"/></svg>
       </div>
-      <div class="auth-footnote"><svg><use href="#i-lock"/></svg><span>Demo only · No server connection yet</span></div>
+      <div class="auth-footnote"><svg><use href="#i-lock"/></svg><span>Supabase-backed accounts · Secure calls require relay setup</span></div>
     </section>
     <section class="auth-card">
       <div class="auth-tabs" role="tablist" aria-label="Account">
@@ -93,7 +93,7 @@
         <button class="auth-tab" type="button" data-auth-mode="login" role="tab" aria-selected="false">Log in</button>
       </div>
       <div id="auth-form-slot"></div>
-      <div class="auth-card-footer"><svg><use href="#i-lock"/></svg><span>Your demo account stays in this browser only until a backend is connected.</span></div>
+      <button type="button" id="install-app-button" class="install-app-button">Install app</button><div class="auth-card-footer"><svg><use href="#i-lock"/></svg><span>Your account, contacts and messages sync through your secure account.</span></div>
     </section>
   </div>
 </div>
@@ -160,16 +160,19 @@
         <div class="welcome-content">
           <svg class="welcome-art" viewBox="0 0 320 250" aria-hidden="true"><ellipse cx="161" cy="220" rx="112" ry="9" fill="#e0e6e8"/><path d="M61 142c-1-40 39-70 89-70 45 0 79 25 83 60 4 36-31 66-78 69l-30 24 4-26c-40-8-67-29-68-57Z" fill="#d9fdd3"/><path d="M76 139c0-30 31-54 71-54 40 0 72 24 72 54s-32 54-72 54c-10 0-20-1-29-4l-22 14 4-22c-15-10-24-24-24-42Z" fill="#25d366"/><path d="M128 114c-3-5-5-5-8-5s-7 3-8 7c-2 5 2 15 7 23 8 11 18 19 30 25 7 3 13 5 17 4 5-1 8-6 8-10 0-2-1-3-4-5l-10-5c-2-1-3 0-5 2l-4 5c-1 1-2 2-4 1-6-2-12-7-17-12-4-4-7-9-8-12 0-1 0-2 1-3l4-4c1-2 1-3 1-4l-4-7Z" fill="#fff"/><path d="M233 60c0-17 15-31 34-31 18 0 33 14 33 31s-15 31-33 31c-5 0-9-1-13-3l-13 7 4-13c-7-6-12-13-12-22Z" fill="#e3e8eb"/></svg>
           <h2>WhatsApp Web</h2><p>Send and receive messages with ease, right from your computer.</p><div class="welcome-divider"></div>
-          <div class="welcome-caption"><svg><use href="#i-lock"/></svg><span>Private messaging UI preview · Local demo only</span></div>
+          <div class="welcome-caption"><svg><use href="#i-lock"/></svg><span>Your conversations, synced across signed-in devices</span></div>
         </div>
-        <div class="welcome-footer"><svg><use href="#i-lock"/></svg><span>This is a frontend demo; messages are not delivered.</span></div>
+        <div class="welcome-footer"><svg><use href="#i-lock"/></svg><span>Messages are delivered through your account connection; calls require microphone/camera permission.</span></div>
       </div>
     </main>
   </div>
 </div>
 <div id="overlay-root"></div>
 <div id="toast-root" aria-live="polite"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
 <script src="/app.js" defer></script>
+<script src="/backend.js" defer></script>
+<script src="/calls.js" defer></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 </body>
 </html>
