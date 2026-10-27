@@ -24,8 +24,8 @@
   <title>Vexel Chat</title>
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="manifest" href="/manifest.webmanifest?v=people-search-20261027d">
-  <link rel="stylesheet" href="/styles.css?v=people-search-20261027d">
+  <link rel="manifest" href="/manifest.webmanifest?v=desktop-requests-20261027e">
+  <link rel="stylesheet" href="/styles.css?v=desktop-requests-20261027e">
 </head>
 <body>
 <svg id="wa-icons" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="position:absolute;overflow:hidden">
@@ -117,12 +117,12 @@
   <div class="app-workspace">
     <aside class="app-rail" aria-label="Main navigation">
       <nav class="rail-group">
-        <button class="rail-button active" data-view="chats" title="Chats" aria-label="Chats"><svg><use href="#i-chat"/></svg><span class="nav-count" id="rail-chat-count">3</span></button>
+        <button class="rail-button active" data-view="chats" title="Chats" aria-label="Chats"><svg><use href="#i-chat"/></svg><span class="nav-count" id="rail-chat-count"></span></button>
         <button class="rail-button" data-view="updates" title="Updates" aria-label="Updates"><svg><use href="#i-status"/></svg></button>
         <button class="rail-button" data-view="communities" title="Communities" aria-label="Communities"><svg><use href="#i-communities"/></svg></button>
         <button class="rail-button" data-view="channels" title="Channels" aria-label="Channels"><svg><use href="#i-channels"/></svg></button>
         <button class="rail-button" data-view="calls" title="Calls" aria-label="Calls"><svg><use href="#i-phone"/></svg></button>
-        <button class="rail-button" data-view="requests" title="Contact requests" aria-label="Contact requests"><svg><use href="#i-user-plus"/></svg><span class="nav-count request-count" id="rail-request-count">3</span></button>
+        <button class="rail-button" data-view="requests" title="Contact requests" aria-label="Contact requests"><svg><use href="#i-user-plus"/></svg><span class="nav-count request-count" id="rail-request-count"></span></button>
         <div class="rail-divider"></div>
         <button class="rail-button" data-view="starred" title="Starred messages" aria-label="Starred messages"><svg><use href="#i-star"/></svg></button>
         <button class="rail-button" data-view="archived" title="Archived chats" aria-label="Archived chats"><svg><use href="#i-archive"/></svg></button>
@@ -159,16 +159,16 @@
         <button class="filter-chip" data-filter="groups" aria-pressed="false">Groups</button>
         <button class="icon-button more-lists" data-action="more-lists" title="More lists" aria-label="More lists"><svg><use href="#i-more"/></svg></button>
       </div>
-      <button class="requests-strip" data-view="requests" id="requests-strip"><span class="requests-strip-icon"><svg><use href="#i-user-plus"/></svg></span><span class="requests-strip-copy"><strong>Contact requests</strong><small>Review people who want to connect</small></span><span class="requests-strip-count" id="requests-strip-count">3</span><svg class="strip-chevron"><use href="#i-back"/></svg></button>
+      <button class="requests-strip" data-view="requests" id="requests-strip"><span class="requests-strip-icon"><svg><use href="#i-user-plus"/></svg></span><span class="requests-strip-copy"><strong>Contact requests</strong><small>Review people who want to connect</small></span><span class="requests-strip-count" id="requests-strip-count"></span><svg class="strip-chevron"><use href="#i-back"/></svg></button>
       <div class="sidebar-list-scroll" id="sidebar-list-scroll">
-        <button class="archived-row" data-view="archived"><svg><use href="#i-archive"/></svg><span>Archived</span><span class="archived-number" id="archived-count">1</span></button>
+        <button class="archived-row" data-view="archived"><svg><use href="#i-archive"/></svg><span>Archived</span><span class="archived-number" id="archived-count">0</span></button>
         <div id="chat-list" role="list" aria-label="Conversations"></div>
       </div>
       <div class="desktop-download"><img src="/icon.svg" alt=""><div><strong>Get Vexel Chat for desktop</strong><span>Make calls, share your screen and get more done</span></div></div>
       <nav class="mobile-nav" aria-label="Mobile sections">
         <button class="mobile-tab" data-view="updates"><span class="mobile-tab-icon"><svg><use href="#i-status"/></svg></span><span>Updates</span></button>
         <button class="mobile-tab" data-view="communities"><span class="mobile-tab-icon"><svg><use href="#i-communities"/></svg></span><span>Communities</span></button>
-        <button class="mobile-tab active" data-view="chats"><span class="mobile-tab-icon"><svg><use href="#i-chat"/></svg></span><span>Chats</span><span class="mobile-badge" id="mobile-chat-count">3</span></button>
+        <button class="mobile-tab active" data-view="chats"><span class="mobile-tab-icon"><svg><use href="#i-chat"/></svg></span><span>Chats</span><span class="mobile-badge" id="mobile-chat-count"></span></button>
         <button class="mobile-tab" data-view="calls"><span class="mobile-tab-icon"><svg><use href="#i-phone"/></svg></span><span>Calls</span></button>
       </nav>
     </section>
@@ -186,13 +186,13 @@
 </div>
 <div id="overlay-root"></div>
 <div id="toast-root" aria-live="polite"></div>
-<script src="/app.js?v=people-search-20261027d" defer></script>
+<script src="/app.js?v=desktop-requests-20261027e" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-<script src="/backend.js?v=people-search-20261027d" defer></script>
-<script src="/calls.js?v=people-search-20261027d" defer></script>
+<script src="/backend.js?v=desktop-requests-20261027e" defer></script>
+<script src="/calls.js?v=desktop-requests-20261027e" defer></script>
 <script>
 if("serviceWorker" in navigator){
-  const releaseKey="vexel_people_search_reload_20261027d";
+  const releaseKey="vexel_desktop_requests_reload_20261027e";
   navigator.serviceWorker.addEventListener("controllerchange",()=>{
     try{
       if(sessionStorage.getItem(releaseKey)!=="1"){
@@ -202,7 +202,7 @@ if("serviceWorker" in navigator){
     }catch(_){}
   });
   window.addEventListener("load",()=>{
-    navigator.serviceWorker.register("/sw.js?v=people-search-20261027d",{updateViaCache:"none"})
+    navigator.serviceWorker.register("/sw.js?v=desktop-requests-20261027e",{updateViaCache:"none"})
       .then(registration=>registration.update().catch(()=>{}))
       .catch(()=>{});
   });
