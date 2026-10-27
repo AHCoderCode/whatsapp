@@ -229,3 +229,9 @@ button,input,textarea,select{max-width:100%}
   .conversation-header{background:#f0f2f5}
   .composer{padding-left:8px;padding-right:8px}
 }
+
+
+/* Desktop shell guard: mobile bottom tabs belong only on narrow viewports. */
+@media (min-width: 701px) {
+  .mobile-nav { display: none !important; }
+}
