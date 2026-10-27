@@ -1,4 +1,4 @@
-const CACHE_NAME = "whatsapp-frontend-v10";
+const CACHE_NAME = "whatsapp-frontend-v11";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -9,6 +9,7 @@ const APP_SHELL = [
   "/manifest.webmanifest",
   "/icon.svg",
   "/icon-192.svg",
+  "/icon-512.svg",
   "/icon-512.png",
   "/apple-touch-icon.png"
 ];
