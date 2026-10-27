@@ -73,13 +73,13 @@
     const button=root().querySelector("[data-wa-call='mute']");
     if(!button)return;
     button.classList.toggle("active",muted);
-    button.innerHTML=bridge.icon("mic")+"<span>"+(muted?"Unmute":"Mute")+"</span>";
+    button.innerHTML=(muted?bridge.icon("mute"):bridge.icon("mic"))+"<span>"+(muted?"Unmute":"Mute")+"</span>";
   }
   function updateCameraButton(){
     const button=root().querySelector("[data-wa-call='camera']");
     if(!button)return;
     button.classList.toggle("active",cameraOff);
-    button.innerHTML=bridge.icon("video")+"<span>"+(cameraOff?"Camera on":"Camera off")+"</span>";
+    button.innerHTML=(cameraOff?bridge.icon("camera"):bridge.icon("video"))+"<span>"+(cameraOff?"Camera on":"Camera off")+"</span>";
   }
   async function relayServers(callId){
     const client=db();if(!client)throw new Error("Supabase is not connected.");
