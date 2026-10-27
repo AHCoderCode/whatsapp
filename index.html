@@ -24,8 +24,8 @@
   <title>Vexel Chat</title>
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="manifest" href="/manifest.webmanifest?v=people-search-20261027c">
-  <link rel="stylesheet" href="/styles.css?v=people-search-20261027c">
+  <link rel="manifest" href="/manifest.webmanifest?v=people-search-20261027d">
+  <link rel="stylesheet" href="/styles.css?v=people-search-20261027d">
 </head>
 <body>
 <svg id="wa-icons" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="position:absolute;overflow:hidden">
@@ -186,10 +186,10 @@
 </div>
 <div id="overlay-root"></div>
 <div id="toast-root" aria-live="polite"></div>
-<script src="/app.js?v=people-search-20261027c" defer></script>
+<script src="/app.js?v=people-search-20261027d" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-<script src="/backend.js?v=people-search-20261027c" defer></script>
-<script src="/calls.js?v=people-search-20261027c" defer></script>
+<script src="/backend.js?v=people-search-20261027d" defer></script>
+<script src="/calls.js?v=people-search-20261027d" defer></script>
 <script>
 if("serviceWorker" in navigator){
   const releaseKey="vexel_people_search_reload_20261027c";
@@ -202,7 +202,7 @@ if("serviceWorker" in navigator){
     }catch(_){}
   });
   window.addEventListener("load",()=>{
-    navigator.serviceWorker.register("/sw.js?v=people-search-20261027c",{updateViaCache:"none"})
+    navigator.serviceWorker.register("/sw.js?v=people-search-20261027d",{updateViaCache:"none"})
       .then(registration=>registration.update().catch(()=>{}))
       .catch(()=>{});
   });

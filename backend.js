@@ -66,12 +66,15 @@
   }
   async function searchPeople(value) {
     const me=getUser();
-    if(!db||!me||!me.isSupabase)return [];
-    const query=String(value||"").trim().replace(/^@+/,"").trim().toLowerCase();
-    if(query.length<2||query.length>80)return [];
+    if(!db)throw new Error("The account directory connection did not load. Refresh the app and try again.");
+    if(!me||!me.isSupabase)throw new Error("Sign in to a shared Vexel Chat account to find people.");
+    const query=String(value||"").trim().replace(/^@+/,"").replace(/\s+/g," ").trim().toLowerCase();
+    if(query.length<2)return [];
+    if(query.length>80)throw new Error("Search text must be 80 characters or fewer.");
     const {data,error}=await db.rpc("whatsapp_find_people",{search_query:query});
     if(error)throw error;
-    return (data||[]).filter(row=>row.id!==me.id).map(row=>mapProfile(row)).filter(Boolean).slice(0,8);
+    if(!Array.isArray(data))throw new Error("The account directory returned an unexpected response. Refresh and try again.");
+    return data.filter(row=>row&&row.id&&String(row.id)!==String(me.id)).map(row=>mapProfile(row)).filter(Boolean).slice(0,20);
   }
 
   function localMessage(row, me, chat) {
@@ -937,42 +940,74 @@
   },true);
   document.addEventListener("input",event=>{
     const target=event.target;
-    if(!target||target.id!=="friend-search"||!getUser()||!getUser().isSupabase)return;
+    if(!target||target.id!=="friend-search")return;
     event.stopImmediatePropagation();
     clearTimeout(searchTimer);
     const seq=++searchCounter;
     const value=String(target.value||"");
-    const trimmed=value.trim();
-    const result=$("#friend-lookup-result");
-    if(!result)return;
-    if(!trimmed){result.innerHTML="<div class='empty-state'>Search by display name, username, or in-app number.</div>";return;}
-    if(trimmed.length<2){result.innerHTML="<div class='empty-state'>Enter at least 2 characters or digits.</div>";return;}
-    result.innerHTML="<div class='empty-state' role='status'>Searching the account directory…</div>";
-    searchTimer=setTimeout(async()=>{
+    const query=value.trim().replace(/^@+/,"").replace(/\s+/g," ").trim();
+    const initialBox=$("#friend-lookup-result");
+    if(!initialBox)return;
+    const renderStatus=(message,isLoading)=>{
       if(seq!==searchCounter)return;
+      const box=$("#friend-lookup-result");
+      if(!box)return;
+      box.innerHTML=isLoading
+        ? "<div class='empty-state' role='status' data-search-loading='true'>"+esc(message)+"</div>"
+        : "<div class='empty-state' role='status'>"+esc(message)+"</div>";
+    };
+    if(!query){renderStatus("Search by display name, username, or in-app number.",false);return;}
+    if(query.length<2){renderStatus("Enter at least 2 characters or digits.",false);return;}
+    if(query.length>80){renderStatus("Search text must be 80 characters or fewer.",false);return;}
+    if(!db){renderStatus("The account directory connection did not load. Refresh the app and try again.",false);return;}
+    const signedIn=getUser();
+    if(!signedIn||!signedIn.isSupabase){renderStatus("Sign in to your shared Vexel Chat account to find people.",false);return;}
+    renderStatus("Searching the account directory…",true);
+    searchTimer=setTimeout(async()=>{
       try{
-        const found=await withTimeout(searchPeople(value),8000,"Search took too long. Check your connection and try again.");
+        const found=await withTimeout(searchPeople(query),7000,"The account directory did not respond within 7 seconds. Check your connection and tap to search again.");
+        if(seq!==searchCounter)return;
         const liveBox=$("#friend-lookup-result");
-        if(seq!==searchCounter||!liveBox)return;
-        if(!found.length){liveBox.innerHTML="<div class='empty-state'>Nothing matched. Make sure the person has a Vexel Chat account in this same shared directory; local demo accounts and accounts on a different backend cannot be found here.</div>";return;}
+        if(!liveBox)return;
+        if(!Array.isArray(found)||!found.length){
+          liveBox.innerHTML="<div class='empty-state' role='status'>No matching accounts found. Check the spelling and make sure the other person has finished creating their account.</div>";
+          return;
+        }
+        const s=appState()||{};
+        const chats=Array.isArray(s.chats)?s.chats:[];
+        const requests=Array.isArray(s.requests)?s.requests:[];
+        const sentRequests=Array.isArray(s.sentRequests)?s.sentRequests:[];
         liveBox.innerHTML=found.map(p=>{
-          const s=appState(),friend=s.chats.some(c=>String(c.id)===String(p.id));
-          const incoming=(s.requests||[]).find(r=>r.requestUserId===p.id||r.username===p.username);
-          const sent=(s.sentRequests||[]).some(r=>r.requestUserId===p.id||r.username===p.username);
-          const action=friend?"<button class='secondary-button' data-action='open-found-chat' data-chat-id='"+esc(p.id)+"'>Open chat</button>":
-            incoming?"<button class='primary-button' data-action='accept-found-request' data-request-id='"+esc(incoming.id)+"'>Accept request</button>":
-            sent?"<button class='secondary-button' disabled>Request sent</button>":
-            "<button class='primary-button' data-action='send-contact-request' data-contact-username='"+esc(p.username)+"'>Send contact request</button>";
-          const displayName=esc(p.name||p.username);
-          const username=esc("@"+p.username);
+          const friend=chats.find(c=>String(c.id)===String(p.id));
+          const incoming=requests.find(r=>(r.requestUserId===p.id||r.username===p.username)&&(!r.status||r.status==="received"||r.status==="pending"));
+          const sent=sentRequests.some(r=>r.requestUserId===p.id||r.username===p.username);
+          const isSelf=String(p.id)===String(signedIn.id);
+          const action=isSelf
+            ? "<button class='secondary-button' disabled>Your account</button>"
+            : friend
+              ? "<button class='secondary-button' data-action='open-found-chat' data-chat-id='"+esc(friend.id)+"'>Open chat</button>"
+              : incoming
+                ? "<button class='primary-button' data-action='accept-found-request' data-request-id='"+esc(incoming.id)+"'>Accept request</button>"
+                : sent
+                  ? "<button class='secondary-button' disabled>Request sent</button>"
+                  : "<button class='primary-button' data-action='send-contact-request' data-contact-username='"+esc(p.username)+"'>Send contact request</button>";
+          const displayName=esc(p.name||p.username||"User");
+          const username=esc("@"+String(p.username||""));
           const number=p.phone?"<span>"+esc(p.phone)+"</span>":"";
           return "<div class='request-card'>"+bridge.avatarHTML(p)+"<div class='request-info'><strong>"+displayName+"</strong><span>"+username+"</span>"+number+"</div>"+action+"</div>";
         }).join("");
       }catch(error){
-        const liveBox=$("#friend-lookup-result");
-        if(seq===searchCounter&&liveBox)liveBox.innerHTML="<div class='empty-state' role='status'>"+esc(safeError(error,"Could not search people. Check your connection and try again."))+"</div>";
+        if(seq!==searchCounter)return;
+        renderStatus(safeError(error,"Could not search the account directory. Refresh and try again."),false);
+      }finally{
+        if(seq===searchCounter){
+          const liveBox=$("#friend-lookup-result");
+          if(liveBox&&liveBox.querySelector('[data-search-loading="true"]')){
+            liveBox.innerHTML="<div class='empty-state' role='status'>Search stopped before a result arrived. Clear the text and try again; if it repeats, refresh the app.</div>";
+          }
+        }
       }
-    },100);
+    },120);
   },true);
   document.addEventListener("change",event=>{const target=event.target;if(target&&target.id==="profile-photo-input"&&target.files&&target.files[0]&&getUser()&&getUser().isSupabase)void updateAvatar(target.files[0]);},true);
   document.addEventListener("click",event=>{

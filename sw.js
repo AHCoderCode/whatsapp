@@ -1,12 +1,12 @@
-const CACHE_NAME = "vexel-chat-shell-v17";
+const CACHE_NAME = "vexel-chat-shell-v18";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/app.js?v=people-search-20261027c",
-  "/backend.js?v=people-search-20261027c",
-  "/calls.js?v=people-search-20261027c",
-  "/styles.css?v=people-search-20261027c",
-  "/manifest.webmanifest?v=people-search-20261027c",
+  "/app.js?v=people-search-20261027d",
+  "/backend.js?v=people-search-20261027d",
+  "/calls.js?v=people-search-20261027d",
+  "/styles.css?v=people-search-20261027d",
+  "/manifest.webmanifest?v=people-search-20261027d",
   "/icon.svg",
   "/icon-192.svg",
   "/icon-512.svg",
@@ -50,7 +50,17 @@ self.addEventListener("fetch", event => {
     return;
   }
 
+  // Network-first for same-origin assets: installed clients must not pin old
+  // JavaScript forever. Keep an offline fallback in the versioned shell cache.
   event.respondWith(
-    caches.match(event.request).then(cached => cached || fetch(event.request))
+    fetch(event.request, { cache: "no-cache" })
+      .then(response => {
+        if (response && response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy)).catch(() => {});
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request).then(cached => cached || caches.match(url.pathname)))
   );
 });
