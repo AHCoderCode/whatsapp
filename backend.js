@@ -99,6 +99,7 @@
     bridge.renderSidebar();
     if(String(bridge.getSelectedChatId?bridge.getSelectedChatId():"")===String(chat.id)){
       bridge.renderMain();requestAnimationFrame(()=>{const sc=$("#message-scroll");if(sc)sc.scrollTop=sc.scrollHeight;});
+      if(msg.from==="them")void markReadForChat(chat);
     }
   }
   function subscribe(userId) {
@@ -108,6 +109,7 @@
     liveChannel=db.channel("whatsapp-main-"+userId)
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"aeroshell_messages"},e=>insertMessageIntoUI(e.new))
       .on("postgres_changes",{event:"*",schema:"public",table:"aeroshell_friend_requests"},()=>void loadData(true))
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"aeroshell_message_reads"},()=>void loadData(true))
       .on("postgres_changes",{event:"UPDATE",schema:"public",table:"aeroshell_profiles",filter:"id=eq."+userId},()=>void loadData(true))
       .subscribe();
   }
@@ -159,12 +161,21 @@
       for(const g of groups)chats.push({id:g.id,backendId:g.id,groupId:g.id,type:"group",name:g.name,username:"",phone:"",about:"",avatar:initials(g.name),avatarColor:colorFor(g.name),avatarData:g.avatar_data||"",messages:[],attachments:[],unread:0,time:"",preview:"Group conversation",lastMessageType:"text",archived:false,locked:false,participants:roster.filter(m=>m.group_id===g.id).map(m=>profileById.get(m.user_id)).filter(Boolean),memberCount:counts.get(g.id)||1,groupRole:roleByGroup.get(g.id)||"member",createdBy:g.created_by});
       const all=Array.from(new Map((messageResult.data||[]).concat(groupMessages).map(m=>[m.id,m])).values()).sort((a,b)=>Date.parse(a.created_at)-Date.parse(b.created_at));
       const chatMap=new Map(chats.map(c=>[c.id,c]));
+      const ownMessageIds=all.filter(row=>row.sender_id===me.id).map(row=>row.id);
+      if(ownMessageIds.length){
+        const readResult=await db.from("aeroshell_message_reads").select("message_id,user_id").in("message_id",ownMessageIds).neq("user_id",me.id);
+        if(!readResult.error){
+          const readSet=new Set((readResult.data||[]).map(row=>row.message_id));
+          for(const row of all){const chatId=row.group_id||(row.sender_id===me.id?row.recipient_id:row.sender_id);const chat=chatMap.get(chatId);if(chat&&row.sender_id===me.id&&readSet.has(row.id)){const message=chat.messages.find(m=>String(m.id)===String(row.id));if(message)message.status="read";}}
+        }
+      }
       for(const row of all){
         const cid=row.group_id||(row.sender_id===me.id?row.recipient_id:row.sender_id),chat=chatMap.get(cid);
         if(!chat)continue;
         const msg=localMessage(row,me,chat);chat.messages.push(msg);chat.preview=msg.text;chat.time=msg.time;chat.lastOutgoing=msg.from==="me";chat.lastMessageType=row.message_type||"text";
       }
       chats.sort((a,b)=>(Date.parse(b.messages.at(-1)?.createdAt||0)-Date.parse(a.messages.at(-1)?.createdAt||0))||String(a.name).localeCompare(String(b.name)));
+      void markReadForChat(bridge.getCurrentChat());
       const received=relations.filter(r=>r.status==="pending"&&r.recipient_id===me.id).map(r=>Object.assign({},profileById.get(r.requester_id)||{id:r.requester_id,username:"user",name:"User",phone:"",avatar:"U",avatarColor:1},{id:r.id,requestUserId:r.requester_id,recipientId:r.recipient_id,status:"received",note:"Would like to connect",time:new Date(r.created_at).toLocaleString()}));
       const sent=relations.filter(r=>r.status==="pending"&&r.requester_id===me.id).map(r=>Object.assign({},profileById.get(r.recipient_id)||{id:r.recipient_id,username:"user",name:"User",phone:"",avatar:"U",avatarColor:1},{id:r.id,requestUserId:r.recipient_id,recipientId:r.recipient_id,status:"sent",time:new Date(r.created_at).toLocaleString()}));
       const calls=(callResult.data||[]).map(r=>{const peer=profileById.get(r.caller_id===me.id?r.callee_id:r.caller_id);return{id:r.id,contactId:peer?peer.id:"",name:peer?peer.name:"Contact",username:peer?peer.username:"",time:new Date(r.created_at).toLocaleString(),type:r.caller_id===me.id?"outgoing":"incoming",avatar:peer?peer.avatar:1,mediaType:r.media_type,status:r.status};});
@@ -237,6 +248,21 @@
   function currentSelectedChat() {
     const selected = bridge.getCurrentChat();
     return selected && selected.id ? selected : null;
+  }
+  async function markReadForChat(chat) {
+    const me=getUser();
+    if(!me||!me.isSupabase||!chat||!Array.isArray(chat.messages))return;
+    const pending=chat.messages.filter(m=>m.from==="them"&&!m.read&&m.id&&/^[0-9a-f-]{36}$/i.test(String(m.id)));
+    if(!pending.length)return;
+    try{
+      const rows=pending.map(m=>({message_id:m.id,user_id:me.id}));
+      const {error}=await db.from("aeroshell_message_reads").upsert(rows,{onConflict:"message_id,user_id",ignoreDuplicates:true});
+      if(error)return;
+      pending.forEach(m=>{m.read=true;});
+      chat.unread=0;
+      bridge.renderSidebar();
+      if(String(bridge.getSelectedChatId?bridge.getSelectedChatId():"")===String(chat.id))bridge.renderMain();
+    }catch(_){}
   }
   function safeFileName(name) {
     const clean = String(name || "attachment").normalize("NFKC").replace(/[\/\\:*?"<>|\u0000-\u001f]/g,"_").replace(/\s+/g," ").trim().slice(0,120);
@@ -517,6 +543,13 @@
     },220);
   },true);
   document.addEventListener("change",event=>{const target=event.target;if(target&&target.id==="profile-photo-input"&&target.files&&target.files[0]&&getUser()&&getUser().isSupabase)void updateAvatar(target.files[0]);},true);
+  document.addEventListener("click",event=>{
+    const target=event.target;
+    if(!target||!getUser()||!getUser().isSupabase)return;
+    const chatRow=target.closest(".chat-row[data-chat-id]");
+    if(!chatRow||target.closest(".row-menu"))return;
+    setTimeout(()=>void markReadForChat(bridge.getCurrentChat()),80);
+  },true);
   document.addEventListener("change",event=>{
     const target=event.target;
     if(!target||target.id!=="attachment-input"||!target.files||!target.files[0]||!getUser()||!getUser().isSupabase)return;
