@@ -176,7 +176,7 @@
       sentRequests:[],
       contacts:[],
       calls:[],
-      backendStatuses:[],backendChannels:[],backendCommunities:[],
+      backendStatuses:[],backendChannels:[],backendChannelPosts:[],backendCommunities:[],
       communities:[{id:"community-school",name:"School community",description:"Class updates and school friends",groups:["School Friends","Study Group"]},{id:"community-family",name:"Family community",description:"Family updates in one place",groups:["Family Group","Cousins Group"]}],
       channels:[{id:"whatsapp-official",name:"WhatsApp",initials:"W",avatar:2,description:"Official updates from WhatsApp",following:true},{id:"meta-official",name:"Meta",initials:"M",avatar:3,description:"Updates from Meta",following:false},{id:"tech-today",name:"Technology Today",initials:"T",avatar:7,description:"Technology news and updates",following:false}],
       settings:{dark:false,wallpaper:"default",readReceipts:true,keepArchived:true,enterToSend:true,mediaVisibility:true,appLock:false,reduceMotion:false,keyboardNav:true,highContrast:false,spellcheck:true,reactionNotifications:true,securityNotifications:true},
@@ -601,7 +601,7 @@
   function renderChannels() {
     if(currentUser&&currentUser.isSupabase){
       const channels=state.backendChannels||[];
-      const rows=channels.map(c=>"<div class='channel-row'>"+avatarHTML({name:c.name})+"<span class='community-copy'><strong>"+esc(c.name)+"</strong><span>"+esc(c.description||"No description")+"</span></span><button class='"+(c.following?"secondary-button":"primary-button")+"' data-action='toggle-channel' data-channel-id='"+esc(c.id)+"'>"+(c.following?"Following":"Follow")+"</button></div>").join("");
+      const rows=channels.map(c=>"<div class='channel-row'>"+avatarHTML({name:c.name})+"<button class='channel-open-button community-copy' type='button' data-action='open-channel' data-channel-id='"+esc(c.id)+"'><strong>"+esc(c.name)+"</strong><span>"+esc(c.description||"No description")+"</span></button><button class='"+(c.following?"secondary-button":"primary-button")+"' data-action='toggle-channel' data-channel-id='"+esc(c.id)+"'>"+(c.following?"Following":"Follow")+"</button></div>").join("");
       main.innerHTML="<section class='section-screen'>"+screenHeader("Channels","<button class='icon-button' data-action='channel-search' aria-label='Search channels'>"+icon("search")+"</button><button class='icon-button' data-action='new-channel' aria-label='Create channel'>"+icon("new")+"</button>")+"<div class='screen-content'><p class='screen-description'>Follow channels created by users of this app, or create your own channel. Channel posts are not included in this build yet.</p><div class='section-card'><h3 class='section-card-title'>Channels</h3>"+(rows||"<div class='empty-state'>No channels yet. Create one to get started.</div>")+"</div></div></section>";
       return;
     }
@@ -1185,7 +1185,7 @@
       if (saved && saved.customLists) fresh.customLists = saved.customLists;
       fresh.profile = { username: currentUser.username, name: currentUser.name, phone: currentUser.phone,
         about: currentUser.about, avatar: initials(name), avatarColor: 1, avatarData: currentUser.avatarData };
-      fresh.chats = []; fresh.requests = []; fresh.sentRequests = []; fresh.contacts = []; fresh.calls = []; fresh.backendStatuses=[]; fresh.backendChannels=[]; fresh.backendCommunities=[]; fresh.statusUpdates=[]; fresh.channels=[]; fresh.communities=[];
+      fresh.chats = []; fresh.requests = []; fresh.sentRequests = []; fresh.contacts = []; fresh.calls = []; fresh.backendStatuses=[]; fresh.backendChannels=[]; fresh.backendChannelPosts=[]; fresh.backendCommunities=[]; fresh.statusUpdates=[]; fresh.channels=[]; fresh.communities=[];
       state = fresh; selectedChatId = null; view = "chats";
       try { localStorage.setItem(SESSION_KEY, currentUser.username); } catch (_) {}
       auth.classList.add("hidden"); app.classList.remove("hidden"); applySettings(); renderApp();
@@ -1199,6 +1199,7 @@
       if (data.calls) state.calls = data.calls;
       if (data.statuses) state.backendStatuses = data.statuses;
       if (data.channels) state.backendChannels = data.channels;
+      if (data.channelPosts) state.backendChannelPosts = data.channelPosts;
       if (data.communities) state.backendCommunities = data.communities;
       if (selectedChatId && !state.chats.some(c => String(c.id) === String(selectedChatId))) selectedChatId = null;
       const oldInput = $("#message-input");
