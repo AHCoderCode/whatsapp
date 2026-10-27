@@ -100,6 +100,7 @@
   let archivedMode = false;
   let selectionMode = false;
   let lastPopup = null;
+  let popupChatId = null;
   const byId = id => chats.find(c => c.id === Number(id));
   const selectedChat = () => byId(selectedId);
   const isMobile = () => window.matchMedia("(max-width: 700px)").matches;
@@ -299,7 +300,7 @@
     else if (currentView === "channels") renderChannels();
     else if (currentView === "starred") renderBasicList("Starred messages", chats.filter(c => c.pinned || c.favorite), "star");
     else if (currentView === "archived") renderBasicList("Archived", chats.filter(c => c.archived), "archive");
-    else if (currentView === "locked')") renderBasicList("Locked chats", [], "lock");
+    else if (currentView === "locked") renderBasicList("Locked chats", chats.filter(c => c.locked), "lock");
     else renderWelcome();
     updateMobile();
   }
@@ -328,7 +329,7 @@
       if (input && !isMobile()) input.focus({preventScroll:true});
     });
   }
-  function closeMenu() { floatLayer.innerHTML = ""; lastPopup = null; }
+  function closeMenu() { floatLayer.innerHTML = ""; lastPopup = null; popupChatId = null; }
   function openMenu(anchor, items) {
     closeMenu();
     const rect = anchor.getBoundingClientRect();
@@ -464,13 +465,14 @@
   function openActionMenu(button, action) {
     const chat = byId(button.dataset.chatId) || selectedChat();
     openMenu(button, itemsFor(action, chat));
+    popupChatId = chat ? chat.id : null;
   }
 
   root.addEventListener("click", event => {
     const target = event.target.closest("button,[data-view],[data-filter],[data-chat-id],[data-chat-pick],[data-action],[data-dialog-action],[data-setting-tab],[data-setting-toggle],[data-dialog-dismiss],[data-status-name]");
     if (!target || !root.contains(target)) return;
     if (target.dataset.dialogDismiss === "true" && event.target === target) { closeDialog(); return; }
-    if (target.dataset.menuAction) { handleMenuAction(target.dataset.menuAction, selectedChat()); return; }
+    if (target.dataset.menuAction) { const menuChat = byId(popupChatId) || selectedChat(); handleMenuAction(target.dataset.menuAction, menuChat); return; }
     if (target.dataset.dialogAction) {
       if (target.dataset.dialogAction === "create-group") {
         const name = (root.querySelector("#wa-group-name") || {}).value.trim();
