@@ -366,3 +366,10 @@ button,input,textarea,select{max-width:100%}
  .wa-call-stage{height:auto;flex:1;min-height:0}
  .wa-call-local-video{width:100px;right:12px;bottom:12px}
 }
+ 
+.message-reaction-picker{position:relative;z-index:4;display:flex;align-items:center;gap:6px;padding:7px 12px;background:#f0f2f5;border-bottom:1px solid #dfe5e8;overflow-x:auto;overscroll-behavior-x:contain}
+.message-reaction-picker[hidden]{display:none!important}
+.message-reaction-picker-label{flex:0 0 auto;font-size:11px;color:#667781;font-weight:600;margin-right:3px}
+.message-reaction-picker button{height:36px;min-width:36px;flex:0 0 36px;border:0;border-radius:18px;background:#fff;font-size:20px;display:grid;place-items:center;box-shadow:0 1px 2px #00000012}
+.message-reaction-picker button:hover,.message-reaction-picker button:focus-visible{background:#d9fdd3;outline:2px solid #00a884;outline-offset:1px}
+@media(max-width:700px){.message-reaction-picker{padding:6px 8px;gap:5px}.message-reaction-picker button{height:34px;min-width:34px;flex-basis:34px}}
