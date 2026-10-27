@@ -1,13 +1,13 @@
-const CACHE_NAME = "whatsapp-final-shell-v22";
+const CACHE_NAME = "whatsapp-final-shell-v23";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/app.js?v=whatsapp-final-20261027h",
-  "/backend.js?v=whatsapp-final-20261027h",
-  "/calls.js?v=whatsapp-final-20261027h",
-  "/styles.css?v=whatsapp-final-20261027h",
-  "/manifest.webmanifest?v=whatsapp-final-20261027h",
-  "/whatsapp-favicon.svg?v=whatsapp-final-20261027h",
+  "/app.js?v=whatsapp-final-20261027i",
+  "/backend.js?v=whatsapp-final-20261027i",
+  "/calls.js?v=whatsapp-final-20261027i",
+  "/styles.css?v=whatsapp-final-20261027i",
+  "/manifest.webmanifest?v=whatsapp-final-20261027i",
+  "/whatsapp-favicon.svg?v=whatsapp-final-20261027i",
   "/icon.svg",
   "/icon-192.svg",
   "/icon-512.svg",
