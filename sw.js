@@ -11,9 +11,6 @@ const APP_SHELL = [
   "/icon.svg",
   "/icon-192.svg",
   "/icon-512.svg",
-  "/icon.svg?v=whatsapp-final-20261027n",
-  "/icon-192.svg?v=whatsapp-final-20261027n",
-  "/icon-512.svg?v=whatsapp-final-20261027n",
 ];
 
 self.addEventListener("install", event => {

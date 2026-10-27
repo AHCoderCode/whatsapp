@@ -81,8 +81,8 @@
     const stamp=new Date(row.created_at);
     const body=row.message_type==="voice"?"🎤 Voice message":(row.body||(row.attachment_name?"📎 "+row.attachment_name:""));
     return {id:row.id,from:row.sender_id===me.id?"me":"them",text:body,
-      time:stamp.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}),
-      date:stamp.toDateString()===new Date().toDateString()?"TODAY":stamp.toLocaleDateString(),
+      time:stamp.toLocaleTimeString([],{hour:"numeric",minute:"2-digit",hour12:true}),
+      date:stamp.toDateString()===new Date().toDateString()?"TODAY":stamp.toDateString()===new Date(Date.now()-86400000).toDateString()?"YESTERDAY":stamp.toLocaleDateString([],{month:"short",day:"numeric",...(stamp.getFullYear()!==new Date().getFullYear()?{year:"numeric"}:{})}),
       createdAt:row.created_at,status:"sent",reactions:[],sender:row.sender_id===me.id?"You":(chat&&chat.name)||"Member",
       attachmentType:row.message_type==="voice"?"voice":row.message_type==="file"?"file":null,
       attachmentName:row.attachment_name||"",attachmentPath:row.attachment_path||"",
@@ -256,7 +256,7 @@
       chats.sort((a,b)=>(Date.parse(b.messages.at(-1)?.createdAt||0)-Date.parse(a.messages.at(-1)?.createdAt||0))||String(a.name).localeCompare(String(b.name)));
       const received=relations.filter(r=>r.status==="pending"&&r.recipient_id===me.id).map(r=>Object.assign({},profileById.get(r.requester_id)||{id:r.requester_id,username:"user",name:"User",phone:"",avatar:"U",avatarColor:1},{id:r.id,requestUserId:r.requester_id,recipientId:r.recipient_id,status:"received",note:"Would like to connect",time:new Date(r.created_at).toLocaleString()}));
       const sent=relations.filter(r=>r.status==="pending"&&r.requester_id===me.id).map(r=>Object.assign({},profileById.get(r.recipient_id)||{id:r.recipient_id,username:"user",name:"User",phone:"",avatar:"U",avatarColor:1},{id:r.id,requestUserId:r.recipient_id,recipientId:r.recipient_id,status:"sent",time:new Date(r.created_at).toLocaleString()}));
-      const calls=(callResult.data||[]).map(r=>{const peer=profileById.get(r.caller_id===me.id?r.callee_id:r.caller_id);return{id:r.id,contactId:peer?peer.id:"",name:peer?peer.name:"Contact",username:peer?peer.username:"",time:new Date(r.created_at).toLocaleString(),type:r.caller_id===me.id?"outgoing":"incoming",avatar:peer?peer.avatar:1,mediaType:r.media_type,status:r.status};});
+      const calls=(callResult.data||[]).map(r=>{const peer=profileById.get(r.caller_id===me.id?r.callee_id:r.caller_id);return{id:r.id,contactId:peer?peer.id:"",name:peer?peer.name:"Contact",username:peer?peer.username:"",time:new Date(r.created_at).toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit",hour12:true}),type:r.caller_id===me.id?"outgoing":"incoming",avatar:peer?peer.avatar:1,mediaType:r.media_type,status:r.status};});
       const statuses=(statusResult.data||[]).map(row=>{const author=profileById.get(row.user_id)||self;return{id:row.id,userId:row.user_id,username:author.username,name:author.name,text:row.text,createdAt:row.created_at,expiresAt:row.expires_at,avatar:author.avatar,avatarColor:author.avatarColor,avatarData:author.avatarData||""};});
       const followed=new Set((followResult.data||[]).map(row=>row.channel_id));
       const channels=(channelResult.data||[]).map(row=>({id:row.id,name:row.name,description:row.description||"",createdBy:row.created_by,following:followed.has(row.id),createdAt:row.created_at}));
@@ -395,6 +395,22 @@
   function currentSelectedChat() {
     const selected = bridge.getCurrentChat();
     return selected && selected.id ? selected : null;
+  }
+  async function markAllRead() {
+    const me=getUser(),s=appState();
+    if(!db||!me||!me.isSupabase||!s)throw new Error("Sign in to your shared account before marking messages as read.");
+    const messages=(s.chats||[]).flatMap(chat=>(chat.messages||[]).filter(m=>m.from==="them"&&!m.read&&m.id&&/^[0-9a-f-]{36}$/i.test(String(m.id))));
+    const list=Array.from(new Map(messages.map(message=>[String(message.id),message])).values());
+    for(let start=0;start<list.length;start+=100){
+      const chunk=list.slice(start,start+100).map(message=>({message_id:message.id,user_id:me.id}));
+      const {error}=await db.from("aeroshell_message_reads").upsert(chunk,{onConflict:"message_id,user_id",ignoreDuplicates:true});
+      if(error)throw error;
+    }
+    list.forEach(message=>{message.read=true;});
+    (s.chats||[]).forEach(chat=>{chat.unread=0;});
+    bridge.renderSidebar();
+    if(bridge.getSelectedChatId&&bridge.getSelectedChatId()!==null)bridge.renderMain();
+    return list.length;
   }
   async function markReadForChat(chat) {
     const me=getUser();
@@ -1074,9 +1090,9 @@
     location.reload();
   };
   bridge.supabase=db;bridge.isBackendReady=()=>!!db;bridge.loadBackendData=()=>loadData(false);
-  bridge.sendBackendMessage=sendMessage;bridge.searchBackendPeople=searchPeople;bridge.requestBackend=sendRequest;
+  bridge.sendBackendMessage=sendMessage;bridge.searchBackendPeople=searchPeople;bridge.requestBackend=sendRequest;bridge.markAllBackendRead=markAllRead;
   bridge.hideBackendMessage=hideMessageForMe;bridge.deleteBackendMessage=deleteMessageForEveryone;bridge.forwardBackendMessage=forwardMessage;bridge.reactBackendMessage=toggleMessageReaction;
-  window.waBackend={client:db,load:()=>loadData(false),safeError,searchPeople,sendMessage,hideMessageForMe,deleteMessageForEveryone,forwardMessage,toggleMessageReaction};
+  window.waBackend={client:db,load:()=>loadData(false),safeError,searchPeople,sendMessage,hideMessageForMe,deleteMessageForEveryone,forwardMessage,toggleMessageReaction,markAllRead};
   function finishStartup(showAuth) {
     const root = $("#app-screen");
     const auth = $("#auth-screen");

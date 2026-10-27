@@ -117,7 +117,7 @@
   function uid(prefix) { return (prefix || "id") + "_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2,8); }
   function normalizeUsername(value) { return String(value || "").trim().toLowerCase().replace(/^@/, ""); }
   function normalizePhone(value) { return String(value || "").replace(/\D/g, ""); }
-  function nowTime() { return new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}); }
+  function nowTime() { return new Date().toLocaleTimeString([], {hour:"numeric", minute:"2-digit", hour12:true}); }
   function dayLabel() { return "TODAY"; }
   // New accounts start empty; this factory is only for explicit create/accept actions.
   function seedChat(id,name,username,phone,avatar,type,time,preview,unread,favorite,pinned,online,messages,extra) {
@@ -371,8 +371,10 @@
     const sender = !outgoing&&chat.type==="group" ? "<span class='message-sender'>" + esc(message.sender || "Group member") + "</span>" : "";
     const time = esc(message.time || "");
     const reactions = message.reactions && message.reactions.length ? "<span class='reaction'>" + esc(message.reactions.join(" ")) + "</span>" : "";
-    const checks = outgoing ? "<span class='message-read-status " + (message.status==="read"?"is-read":"") + "'>" + icon(message.status==="read"?"checks":"check") + "</span>" : "";
-    const attachmentAction = message.attachmentPath ? "<button type='button' class='message-attachment-open' data-action='open-attachment' data-message-id='" + esc(message.id) + "'>" + icon(message.attachmentType==="voice"?"mic":(message.attachmentMime||"").startsWith("image/")?"image":"file") + "<span>" + esc(message.attachmentName || (message.attachmentType==="voice"?"Play voice message":"Open attachment")) + "</span></button>" : "";
+    const checks = outgoing ? "<span class='message-read-status " + (message.status==="read"?"is-read":"is-delivered") + "' title='" + (message.status==="read"?"Read by recipient":"Sent") + "' aria-label='" + (message.status==="read"?"Read by recipient":"Sent") + "'>" + icon("checks") + "</span>" : "";
+    const isVoiceAttachment = message.attachmentType==="voice" || message.messageType==="voice";
+    const voiceBars = "<span class='voice-waveform' aria-hidden='true'>" + [9,15,11,19,13,22,10,16,7,18,12,21,9,15,6,13].map((height,index)=>"<i style='--wave-height:"+height+"px;--wave-index:"+index+"'></i>").join("") + "</span>";
+    const attachmentAction = message.attachmentPath ? "<button type='button' class='message-attachment-open "+(isVoiceAttachment?"voice-message-open":"")+"' data-action='open-attachment' data-message-id='" + esc(message.id) + "' aria-label='"+(isVoiceAttachment?"Play voice message":"Open attachment")+"'>" + (isVoiceAttachment?"<span class='voice-play-button'>"+icon("play")+"</span>"+voiceBars+"<span class='voice-message-copy'><strong>Voice message</strong><small>Tap to listen</small></span>":icon((message.attachmentMime||"").startsWith("image/")?"image":"file")+"<span>"+esc(message.attachmentName||"Open attachment")+"</span>") + "</button>" : "";
     const pollCard = message.poll ? (function(){
       const p=message.poll, options=Array.isArray(p.options)?p.options:[], counts=Array.isArray(p.counts)?p.counts:[];
       const total=counts.reduce((sum,count)=>sum+Number(count||0),0);
@@ -386,7 +388,7 @@
       const e=message.event,date=new Date(e.startsAt),valid=!Number.isNaN(date.getTime()),going=e.myResponse==="going";
       return "<div class='wa-event-card'><span class='wa-event-kicker'>EVENT</span><strong>"+esc(e.title)+"</strong><span class='wa-event-date'>"+esc(valid?date.toLocaleString():"Date unavailable")+"</span><small>"+Number(e.total||0)+" going"+(Number(e.interested||0)?" · "+Number(e.interested)+" interested":"")+"</small><button type='button' class='primary-button wa-event-rsvp "+(going?"going":"")+"' data-action='event-rsvp' data-event-id='"+esc(e.id)+"'>"+(going?"Going ✓ · Cancel RSVP":"I'm going")+"</button></div>";
     })() : "";
-    const textBody = message.poll || message.event ? "" : esc(message.text);
+    const textBody = message.poll || message.event || isVoiceAttachment ? "" : esc(message.text);
     const replyQuote = message.replyTo ? "<button type='button' class='message-reply-quote' data-action='jump-to-reply' data-reply-target-id='" + esc(message.replyTo.id) + "'><span class='message-reply-quote-icon'>" + icon("reply") + "</span><span class='message-reply-quote-copy'><strong>" + esc(message.replyTo.sender || "Replied message") + "</strong><span>" + esc(message.replyTo.text || "Message") + "</span></span></button>" : "";
     const forwardedLabel = message.forwarded ? "<span class='forwarded-label'>" + icon("forward") + " Forwarded</span>" : "";
     const selected = selectedMessage && String(selectedMessage.id) === String(message.id) && String(selectedMessage.chatId) === String(chat.id) ? " message-selected" : "";
@@ -448,6 +450,16 @@
   function renderWelcome() {
     main.innerHTML = "<div class='welcome-pane'><div class='welcome-content'><svg class='welcome-art' viewBox='0 0 320 250' aria-hidden='true'><ellipse cx='161' cy='220' rx='112' ry='9' fill='#e0e6e8'/><path d='M61 142c-1-40 39-70 89-70 45 0 79 25 83 60 4 36-31 66-78 69l-30 24 4-26c-40-8-67-29-68-57Z' fill='#d9fdd3'/><path d='M76 139c0-30 31-54 71-54 40 0 72 24 72 54s-32 54-72 54c-10 0-20-1-29-4l-22 14 4-22c-15-10-24-24-24-42Z' fill='#25d366'/><path d='M128 114c-3-5-5-5-8-5s-7 3-8 7c-2 5 2 15 7 23 8 11 18 19 30 25 7 3 13 5 17 4 5-1 8-6 8-10 0-2-1-3-4-5l-10-5c-2-1-3 0-5 2l-4 5c-1 1-2 2-4 1-6-2-12-7-17-12-4-4-7-9-8-12 0-1 0-2 1-3l4-4c1-2 1-3 1-4l-4-7Z' fill='#fff'/></svg><h2>Messaging Web</h2><p>Send and receive messages with ease, right from your computer.</p><div class='welcome-divider'></div><div class='welcome-caption'>" + icon("lock") + "<span>Your messages sync through the connected account backend</span></div></div><div class='welcome-footer'>" + icon("lock") + "<span>WhatsApp is an independent messaging app and is not connected to other messaging accounts</span></div></div>";
   }
+  function syncComposerButton(input) {
+    const field = input || $("#message-input");
+    const button = $("#message-form .send-button");
+    if (!button || button.classList.contains("recording")) return;
+    const hasText = !!(field && String(field.value || "").trim());
+    button.innerHTML = icon(hasText ? "send" : "mic");
+    button.classList.toggle("voice-mode", !hasText);
+    button.title = hasText ? "Send message" : "Record voice message";
+    button.setAttribute("aria-label", hasText ? "Send message" : "Record voice message");
+  }
   function renderConversation(chat) {
     if (!chat) { renderWelcome(); return; }
     const subtitle = chat.type==="group" ? ((chat.participants||[]).slice(0,5).map(p=>typeof p==="string"?p:(p.name||p.username||"Member")).join(", ") || "Group") : (chat.online ? "online" : "click here for contact info");
@@ -461,16 +473,18 @@
       }
       messages += messageHTML(m,chat);
     });
-    const callActions = "<button class='call-button desktop-call-button' data-action='call-menu' title='Voice or video call'>" + icon("video") + "<span>Call</span>" + icon("chevron") + "</button><button type='button' class='icon-button mobile-call-button' data-action='call-menu' title='Voice or video call' aria-label='Voice or video call'>" + icon("phone") + "</button>";
+    const callActions = "<button type='button' class='icon-button conversation-call-button' data-action='voice-call' title='Voice call' aria-label='Voice call'>" + icon("phone") + "</button><button type='button' class='icon-button conversation-call-button' data-action='video-call' title='Video call' aria-label='Video call'>" + icon("video") + "</button>";
     main.innerHTML = "<section class='conversation'>" +
       "<header class='message-selection-toolbar' id='message-selection-toolbar' hidden><button class='icon-button' type='button' data-message-toolbar-action='cancel' aria-label='Cancel selection'>" + icon("x") + "</button><span class='message-selection-count' id='message-selection-count'>1</span><div class='message-selection-actions'><button class='icon-button' type='button' data-message-toolbar-action='react' title='React' aria-label='React to message'>" + icon("smile") + "</button><button class='icon-button' type='button' data-message-toolbar-action='reply' title='Reply' aria-label='Reply'>" + icon("reply") + "</button><button class='icon-button' type='button' data-message-toolbar-action='forward' title='Forward' aria-label='Forward'>" + icon("forward") + "</button><button class='icon-button' type='button' data-message-toolbar-action='star' title='Star' aria-label='Star'>" + icon("star") + "</button><button class='icon-button' type='button' data-message-toolbar-action='copy' title='Copy' aria-label='Copy'>" + icon("copy") + "</button><button class='icon-button' type='button' data-message-toolbar-action='delete' title='Delete' aria-label='Delete'>" + icon("trash") + "</button><button class='icon-button' type='button' data-message-toolbar-action='more' title='More options' aria-label='More message options'>" + icon("more") + "</button></div></header><div class='message-reaction-picker' id='message-reaction-picker' hidden><span class='message-reaction-picker-label'>React</span><button type='button' data-message-reaction-emoji='👍' aria-label='Like'>👍</button><button type='button' data-message-reaction-emoji='❤️' aria-label='Love'>❤️</button><button type='button' data-message-reaction-emoji='😂' aria-label='Laugh'>😂</button><button type='button' data-message-reaction-emoji='😮' aria-label='Wow'>😮</button><button type='button' data-message-reaction-emoji='🙏' aria-label='Thanks'>🙏</button></div>" +
       "<header class='conversation-header'><button class='back-button' data-action='back-to-list' aria-label='Back to chats'>" + icon("back") + "</button><button class='conversation-person' data-action='chat-info' aria-label='Open contact information'>" +
       avatarHTML(chat) + "<span class='person-copy'><span class='person-name'>" + esc(chat.name) + "</span><span class='person-subtitle'>" + esc(subtitle) + "</span></span></button><div class='conversation-actions'>" + callActions +
-      "<button class='icon-button' data-action='chat-search' title='Search in chat' aria-label='Search in chat'>" + icon("search") + "</button><button class='icon-button' data-action='chat-menu' title='More options' aria-label='More options'>" + icon("more") + "</button></div></header>" +
+      "<button class='icon-button conversation-menu-button' data-action='chat-menu' title='More options' aria-label='More options'>" + icon("more") + "</button></div></header>" +
       pinned + "<div class='message-scroll' id='message-scroll'><div class='encryption-notice'>" + icon("lock") + " Messages sync through your account backend. This app does not provide end-to-end encryption.</div>" + messages + "</div>" +
       "<form class='composer' id='message-form'><div class='reply-preview' id='reply-preview' hidden></div><button class='composer-tool' type='button' data-action='attachment' aria-label='Attach' title='Attach'>" + icon("paperclip") + "</button><button class='composer-tool' type='button' data-action='emoji' aria-label='Emoji' title='Emoji'>" + icon("smile") + "</button><div class='composer-box'><textarea id='message-input' rows='1' placeholder='Type a message' aria-label='Type a message'></textarea></div><button class='send-button' type='submit' aria-label='Send message' title='Send message'>" + icon("send") + "</button></form></section>";
     updateReplyPreview();
     syncMessageSelectionUI();
+    const composerInput = $("#message-input", main);
+    if (composerInput) { composerInput.addEventListener("input", () => syncComposerButton(composerInput)); syncComposerButton(composerInput); }
     requestAnimationFrame(()=>{const sc=$("#message-scroll");if(sc)sc.scrollTop=sc.scrollHeight;});
   }
   function screenHeader(title,extra) { return "<header class='screen-header'><button class='icon-button mobile-only' data-action='back-to-list' aria-label='Back'>" + icon("back") + "</button><h2>" + esc(title) + "</h2>" + (extra||"") + "</header>"; }
@@ -556,14 +570,20 @@
   }
   function renderInfo(chat) {
     if(!chat){renderWelcome();return;}
+    const history=Array.isArray(chat.messages)?chat.messages:[];
+    const attachments=history.filter(m=>m&&m.attachmentPath);
+    const mediaCount=attachments.filter(m=>/^image\//i.test(m.attachmentMime||"")||/^video\//i.test(m.attachmentMime||"")||/^audio\//i.test(m.attachmentMime||"")||m.attachmentType==="voice").length;
+    const documentCount=attachments.length-mediaCount;
+    const linkCount=history.reduce((total,m)=>total+((String(m.text||"").match(/https?:\/\/[^\s<>"']+/gi)||[]).length),0);
     const actions="<div class='hero-actions'><button class='hero-action' data-action='voice-call'>"+icon("phone")+"<span>Audio</span></button><button class='hero-action' data-action='video-call'>"+icon("video")+"<span>Video</span></button><button class='hero-action' data-action='search-in-chat'>"+icon("search")+"<span>Search</span></button></div>";
-    let detail="<div class='contact-hero'>"+avatarHTML(chat)+"<h3>"+esc(chat.name)+"</h3><p>"+(chat.type==="group"?(chat.participants||[]).length+" participants":esc(chat.phone||"Custom in-app number"))+"</p>"+actions+"</div>";
+    let detail="<div class='contact-hero contact-hero-modern'>"+avatarHTML(chat)+"<h3>"+esc(chat.name)+"</h3><p>"+(chat.type==="group"?(chat.participants||[]).length+" participants":esc(chat.phone||"Custom in-app number"))+"</p>"+(chat.type==="person"?"<span class='contact-username'>@"+esc(chat.username||"user")+"</span>":"")+"<div class='contact-info-actions'>"+actions+"</div></div>";
     if(chat.type==="group"){
       detail+="<div class='description-card'><h4>Group description</h4><p>"+esc(chat.about||"No description added")+"</p></div><div class='section-card'><h3 class='section-card-title'>Participants · "+(chat.participants||[]).length+"</h3><button class='setting-row' data-action='add-participants'>"+icon("user-plus")+"<span class='setting-copy'><span class='setting-title'>Add participants</span></span>"+icon("chevron")+"</button>"+(chat.participants||[]).map((person,i)=>{const name=typeof person==="string"?person:(person.name||person.username||"Member");return "<div class='member-row'>"+avatarHTML({name:name,avatar:(i%12)+1,avatarData:typeof person==="object"?person.avatarData:""})+"<span class='member-name'>"+esc(name)+"</span>"+(i===0?"<span class='member-role'>Admin</span>":"")+"</div>";}).join("")+"</div><div class='section-card'>"+settingRow("edit","Edit group subject",chat.name,"edit-group")+"<button class='setting-row' data-action='edit-group-description'>"+icon("info")+"<span class='setting-copy'><span class='setting-title'>Edit group description</span><span class='setting-subtitle'>"+esc(chat.about||"Add a description")+"</span></span>"+icon("chevron")+"</button></div>";
-    }else{
-      detail+="<div class='section-card'><h3 class='section-card-title'>About and custom number</h3><div class='setting-row'><span class='setting-copy'><span class='setting-subtitle'>About</span><span class='setting-title'>"+esc(chat.about||"Available")+"</span></span><button class='icon-button' data-action='edit-contact-about'>"+icon("edit")+"</button></div><div class='setting-row'><span class='setting-copy'><span class='setting-subtitle'>Username</span><span class='setting-title'>@"+esc(chat.username||"user")+"</span></span><button class='icon-button' data-action='copy-chat-username'>"+icon("copy")+"</button></div><div class='setting-row'><span class='setting-copy'><span class='setting-subtitle'>Custom in-app number</span><span class='setting-title'>"+esc(chat.phone||"Not set")+"</span></span><button class='icon-button' data-action='copy-chat-phone'>"+icon("copy")+"</button></div></div><div class='section-card'><h3 class='section-card-title'>Shared media, links and documents</h3><button class='setting-row' data-action='shared-media'>"+icon("image")+"<span class='setting-copy'><span class='setting-title'>Media, links and documents</span><span class='setting-subtitle'>"+(chat.attachments||[]).length+" local attachments</span></span>"+icon("chevron")+"</button></div>";
+    } else {
+      detail+="<div class='section-card contact-details-card'><h3 class='section-card-title'>Contact details</h3>"+settingRow("edit","Rename contact","Change how this contact appears on your device","rename-contact")+"<div class='setting-row'><span class='row-icon'>"+icon("info")+"</span><span class='setting-copy'><span class='setting-subtitle'>About</span><span class='setting-title'>"+esc(chat.about||"Available")+"</span></span><button class='icon-button' data-action='edit-contact-about' data-chat-id='"+esc(chat.id)+"' aria-label='Edit About'>"+icon("edit")+"</button></div><div class='setting-row'><span class='row-icon'>"+icon("user")+"</span><span class='setting-copy'><span class='setting-subtitle'>Username</span><span class='setting-title'>@"+esc(chat.username||"user")+"</span></span><button class='icon-button' data-action='copy-chat-username' data-chat-id='"+esc(chat.id)+"' aria-label='Copy username'>"+icon("copy")+"</button></div><div class='setting-row'><span class='row-icon'>"+icon("phone")+"</span><span class='setting-copy'><span class='setting-subtitle'>Custom in-app number</span><span class='setting-title'>"+esc(chat.phone||"Not set")+"</span></span><button class='icon-button' data-action='copy-chat-phone' data-chat-id='"+esc(chat.id)+"' aria-label='Copy number'>"+icon("copy")+"</button></div></div>";
+      detail+="<div class='section-card shared-content-card'><h3 class='section-card-title'>Media, links and documents</h3><div class='shared-content-grid'><button type='button' data-action='shared-media' class='shared-content-tile'>"+icon("image")+"<strong>Media</strong><span>"+mediaCount+"</span></button><button type='button' data-action='shared-links' class='shared-content-tile'>"+icon("link")+"<strong>Links</strong><span>"+linkCount+"</span></button><button type='button' data-action='shared-documents' class='shared-content-tile'>"+icon("file")+"<strong>Docs</strong><span>"+documentCount+"</span></button></div></div>";
     }
-    detail+="<div class='section-card'>"+settingRow("star",chat.favorite?"Remove from favorites":"Add to favorites","Keep this chat in your favorite list","toggle-favorite")+"<button class='setting-row' data-action='toggle-mute'>"+icon("mute")+"<span class='setting-copy'><span class='setting-title'>"+(chat.muted?"Unmute notifications":"Mute notifications")+"</span></span>"+icon("chevron")+"</button><button class='setting-row' data-action='disappearing'>"+icon("clock")+"<span class='setting-copy'><span class='setting-title'>Disappearing messages</span><span class='setting-subtitle'>Off</span></span>"+icon("chevron")+"</button><button class='setting-row' data-action='block-chat'>"+icon("slash")+"<span class='setting-copy'><span class='setting-title'>Block "+esc(chat.name)+"</span></span>"+icon("chevron")+"</button></div>";
+    detail+="<div class='section-card contact-actions-card'>"+settingRow("star",chat.favorite?"Remove from favorites":"Add to favorites","Keep this chat in your favorite list","toggle-favorite")+"<button class='setting-row' data-action='toggle-mute' data-chat-id='"+esc(chat.id)+"'>"+icon("mute")+"<span class='setting-copy'><span class='setting-title'>"+(chat.muted?"Unmute notifications":"Mute notifications")+"</span><span class='setting-subtitle'>Change notifications for this chat</span></span>"+icon("chevron")+"</button><button class='setting-row' data-action='disappearing' data-chat-id='"+esc(chat.id)+"'>"+icon("clock")+"<span class='setting-copy'><span class='setting-title'>Disappearing messages</span><span class='setting-subtitle'>Off</span></span>"+icon("chevron")+"</button><button class='setting-row' data-action='report-chat' data-chat-id='"+esc(chat.id)+"'>"+icon("flag")+"<span class='setting-copy'><span class='setting-title'>Report "+esc(chat.type==="group"?"group":"contact")+"</span><span class='setting-subtitle'>Report this conversation</span></span>"+icon("chevron")+"</button><button class='setting-row' data-action='block-chat' data-chat-id='"+esc(chat.id)+"'>"+icon("slash")+"<span class='setting-copy'><span class='setting-title'>Block "+esc(chat.name)+"</span><span class='setting-subtitle'>Prevent contact from reaching you on this device</span></span>"+icon("chevron")+"</button><button class='setting-row' data-action='clear-chat' data-chat-id='"+esc(chat.id)+"'>"+icon("trash")+"<span class='setting-copy'><span class='setting-title'>Clear chat</span><span class='setting-subtitle'>Clear messages from your view</span></span>"+icon("chevron")+"</button>"+(chat.type==="person"?"<button class='setting-row danger-setting-row' data-action='remove-contact' data-chat-id='"+esc(chat.id)+"'>"+icon("user-minus")+"<span class='setting-copy'><span class='setting-title'>Remove contact</span><span class='setting-subtitle'>Remove from this device</span></span>"+icon("chevron")+"</button>":"")+"</div>";
     main.innerHTML="<section class='details-layout'><header class='details-header'><button class='icon-button' data-action='back-to-chat' aria-label='Back'>"+icon("back")+"</button><h2>"+(chat.type==="group"?"Group info":"Contact info")+"</h2><button class='icon-button' data-action='chat-menu' aria-label='More options'>"+icon("more")+"</button></header><div class='details-content'>"+detail+"</div></section>";
   }
   function renderUpdates() {
@@ -707,10 +727,21 @@
   }
   function menuItems(action,chat) {
     if(action==="sidebar-menu") return [
-      {icon:"new",label:"New group",action:"new-group"},{icon:"communities",label:"New community",action:"new-community"},
-      {icon:"star",label:"Starred messages",action:"go-starred"},{icon:"user-plus",label:"Contact requests",action:"go-requests"},
-      {icon:"users",label:"Select chats",action:"select-chats"},{sep:true},{icon:"settings",label:"Settings",action:"settings"},
-      {icon:"help",label:"Help",action:"help"},{sep:true},{icon:"log-out",label:"Log out",action:"logout"}
+      {icon:"users",label:"New group",action:"new-group"},
+      {icon:"communities",label:"New community",action:"new-community"},
+      {icon:"broadcast",label:"New broadcast list",action:"broadcast-list"},
+      {icon:"monitor",label:"Linked devices",action:"linked-devices"},
+      {sep:true},
+      {icon:"channels",label:"Channels",action:"go-channels"},
+      {icon:"archive",label:"Archived chats",action:"go-archived"},
+      {icon:"star",label:"Starred messages",action:"go-starred"},
+      {icon:"check",label:"Mark all as read",action:"mark-all-read"},
+      {icon:"user-plus",label:"Contact requests",action:"go-requests"},
+      {sep:true},
+      {icon:"download",label:"Install app",action:"install-app"},
+      {icon:"settings",label:"Settings",action:"settings"},
+      {icon:"help",label:"Help",action:"help"},
+      {sep:true},{icon:"log-out",label:"Log out",action:"logout"}
     ];
     if(action==="row-menu")return[
       {icon:"chat",label:"Open chat",action:"open-chat"},{icon:"checks",label:chat&&chat.unread?"Mark as read":"Mark as unread",action:"toggle-unread"},
@@ -854,6 +885,34 @@
   function chooseWallpaperDialog() {
     openDialog("Chat wallpaper","<p class='screen-description'>Choose the wallpaper for your conversations.</p><div class='wallpaper-options'><button class='wallpaper-swatch' data-wallpaper='default'><span class='wallpaper-preview default-wallpaper'></span><span>Default doodles</span></button><button class='wallpaper-swatch' data-wallpaper='plain'><span class='wallpaper-preview plain-wallpaper'></span><span>Plain</span></button><button class='wallpaper-swatch' data-wallpaper='green'><span class='wallpaper-preview green-wallpaper'></span><span>Soft green</span></button></div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");
   }
+  function createBroadcastDialog() {
+    const contacts=(state.chats||[]).filter(c=>c.type==="person"&&!c.archived);
+    const choices=contacts.map(c=>"<label class='broadcast-recipient'>"+avatarHTML(c)+"<span><strong>"+esc(c.name)+"</strong><small>@"+esc(c.username||"")+"</small></span><input type='checkbox' value='"+esc(c.id)+"'></label>").join("");
+    const body="<p class='screen-description'>Choose individual contacts and write one message to send separately to each recipient.</p><div id='broadcast-contact-list' class='broadcast-recipient-list'>"+(choices||"<div class='empty-state'>Connect with at least one person before creating a broadcast.</div>")+"</div><div class='dialog-field'><label for='broadcast-message'>Message</label><textarea id='broadcast-message' rows='3' maxlength='2000' placeholder='Write a broadcast message'></textarea></div>";
+    openDialog("New broadcast list",body,"<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='send-broadcast' "+(contacts.length?"":"disabled")+">Send broadcast</button>");
+  }
+  async function sendBroadcastNow() {
+    const recipients=$$("#broadcast-contact-list input:checked").map(input=>String(input.value));
+    const body=String($("#broadcast-message")?.value||"").trim();
+    if(!recipients.length){toast("Select at least one recipient.");return;}
+    if(!body){toast("Write a message before sending.");return;}
+    if(body.length>2000){toast("Messages are limited to 2,000 characters.");return;}
+    if(currentUser&&currentUser.isSupabase&&window.waAppBridge&&window.waAppBridge.supabase){
+      const client=window.waAppBridge.supabase,rows=recipients.map(id=>({sender_id:currentUser.id,recipient_id:id,body,message_type:"text"}));
+      try{
+        const {error}=await client.from("aeroshell_messages").insert(rows);
+        if(error)throw error;
+        closeDialog();toast("Broadcast sent to "+recipients.length+" contact"+(recipients.length===1?"":"s")+".");
+        if(typeof window.waAppBridge.loadBackendData==="function")void window.waAppBridge.loadBackendData();
+      }catch(error){toast("Broadcast could not be sent: "+String(error&&error.message||"Check your connection and contact permissions."));}
+      return;
+    }
+    let delivered=0;
+    for(const id of recipients){const chat=state.chats.find(c=>String(c.id)===id);if(!chat)continue;const msg={id:uid("message"),from:"me",text:body,time:nowTime(),date:"TODAY",createdAt:new Date().toISOString(),status:"sent",reactions:[],sender:"You"};chat.messages.push(msg);chat.preview=body;chat.time=msg.time;chat.lastOutgoing=true;delivered++;}
+    if(!delivered){toast("No selected contacts are available.");return;}
+    saveState();closeDialog();renderSidebar();renderMain();toast("Broadcast added to "+delivered+" local conversation"+(delivered===1?"":"s")+".");
+  }
+
   function selectChatsDialog() {
     const body="<p class='screen-description'>Select conversations for this action.</p>"+state.chats.filter(c=>!c.archived).map(c=>"<div class='pick-row'>"+avatarHTML(c)+"<label for='pick-"+esc(c.id)+"'>"+esc(c.name)+"</label><input type='checkbox' id='pick-"+esc(c.id)+"' value='"+esc(c.id)+"'></div>").join("");
     openDialog("Select chats",body,"<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='bulk-selection'>Continue</button>");
@@ -888,6 +947,21 @@
     chat[prop]=value===undefined?!chat[prop]:value;
     saveState();renderSidebar();renderMain();
   }
+function openSharedItemsDialog(chat,kind) {
+    if(!chat){toast("Open a conversation first.");return;}
+    const messages=Array.isArray(chat.messages)?chat.messages:[];
+    const attachments=messages.filter(m=>m&&m.attachmentPath);
+    const media=attachments.filter(m=>/^image\//i.test(m.attachmentMime||"")||/^video\//i.test(m.attachmentMime||"")||/^audio\//i.test(m.attachmentMime||"")||m.attachmentType==="voice");
+    const docs=attachments.filter(m=>!media.includes(m));
+    const links=[];
+    messages.forEach(m=>{const found=String(m.text||"").match(/https?:\/\/[^\s<>"']+/gi)||[];found.forEach(url=>links.push({url,message:m}));});
+    let rows="";
+    if(kind==="media"||kind==="all") rows+=media.map(m=>"<button type='button' class='shared-file-row' data-action='open-attachment' data-message-id='"+esc(m.id)+"'>"+icon(m.attachmentType==="voice"?"play":/^audio\//i.test(m.attachmentMime||"")?"music":"image")+"<span><strong>"+esc(m.attachmentType==="voice"?"Voice message":m.attachmentName||"Photo or audio")+"</strong><small>"+esc(m.time||"Shared attachment")+"</small></span>"+icon("chevron")+"</button>").join("");
+    if(kind==="documents"||kind==="all") rows+=docs.map(m=>"<button type='button' class='shared-file-row' data-action='open-attachment' data-message-id='"+esc(m.id)+"'>"+icon("file")+"<span><strong>"+esc(m.attachmentName||m.text||"Document")+"</strong><small>"+esc(m.time||"Shared document")+"</small></span>"+icon("chevron")+"</button>").join("");
+    if(kind==="links"||kind==="all") rows+=links.map(item=>"<a class='shared-file-row shared-link-row' href='"+esc(item.url)+"' target='_blank' rel='noopener noreferrer'>"+icon("link")+"<span><strong>"+esc(item.url)+"</strong><small>Shared link · "+esc(item.message.time||"")+"</small></span>"+icon("external-link")+"</a>").join("");
+    const title=kind==="links"?"Shared links":kind==="documents"?"Shared documents":kind==="media"?"Shared media":"Media, links and documents";
+    openDialog(title,rows||"<div class='empty-state'>Nothing shared here yet.</div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");
+  }
   function useAction(action,chat) {
     if(["open-chat"].includes(action)){if(chat)selectChat(chat.id);return;}
     if(!chat && ["toggle-unread","toggle-favorite","toggle-pin","toggle-mute","toggle-archive","toggle-lock","toggle-favorite"].includes(action)){toast("Choose a chat first.");return;}
@@ -898,7 +972,15 @@
     if(action==="toggle-archive"){chat.archived=!chat.archived;if(chat.archived&&chat.id===selectedChatId){selectedChatId=null;view="chats";}save();renderSidebar();renderMain();toast(chat.archived?"Chat archived":"Chat unarchived");return;}
     if(action==="lock-chat"||action==="toggle-lock"){chat.locked=!chat.locked;if(chat.locked&&!state.locked.includes(chat.id))state.locked.push(chat.id);else state.locked=state.locked.filter(x=>x!==chat.id);save();renderSidebar();renderMain();toast(chat.locked?"Chat locked in this preview":"Chat unlocked");return;}
     if(action==="delete-chat"){if(!confirm("Delete this local demo chat and its messages?"))return;state.chats=state.chats.filter(c=>c.id!==chat.id);if(selectedChatId===chat.id)selectedChatId=null;save();renderSidebar();renderMain();toast("Local chat deleted.");return;}
-    if(action==="clear-chat"){if(!confirm("Clear messages from this local demo chat?"))return;chat.messages=[];chat.preview="";save();renderMain();toast("Local messages cleared.");return;}
+    if(action==="clear-chat"){
+      if(!confirm("Clear messages from your view? This will not delete messages for the other person."))return;
+      if(currentUser&&currentUser.isSupabase&&window.waAppBridge&&typeof window.waAppBridge.hideBackendMessage==="function"){
+        const rows=(chat.messages||[]).filter(m=>m.id);
+        void (async()=>{try{for(const message of rows)await window.waAppBridge.hideBackendMessage(message.id);chat.messages=[];chat.preview="";save();renderSidebar();renderMain();toast("Messages cleared from your view.");}catch(error){toast("Could not clear this chat: "+String(error&&error.message||"Unknown error"));}})();
+        return;
+      }
+      chat.messages=[];chat.preview="";save();renderMain();toast("Messages cleared from this device.");return;
+    }
     if(action==="chat-info"){view="info";closePopup();renderSidebar();renderMain();updateMobile();return;}
     if(action==="chat-search"||action==="search-in-chat"){openDialog("Search in chat","<div class='dialog-field'><label for='chat-message-search'>Search messages in "+esc(chat?chat.name:"this chat")+"</label><input id='chat-message-search' placeholder='Search this conversation'></div><div id='chat-message-search-results'></div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;}
     if(action==="disappearing"){openDialog("Disappearing messages","<p class='screen-description'>Choose when new messages disappear from this local preview.</p><div class='section-card'><button class='setting-row' data-dialog-action='set-disappearing' data-days='0'>Off</button><button class='setting-row' data-dialog-action='set-disappearing' data-days='1'>24 hours</button><button class='setting-row' data-dialog-action='set-disappearing' data-days='7'>7 days</button><button class='setting-row' data-dialog-action='set-disappearing' data-days='90'>90 days</button></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button>");return;}
@@ -942,11 +1024,11 @@
     if(action==="voice-call"||action==="video-call"){
       if(!chat||chat.type!=="person"){toast("Open a person's conversation before calling.");return;}
       const calls=window.WhatsAppCalls;
-      if(!calls||typeof calls.start!=="function"){toast("The calling service did not finish loading. Refresh the app and try again.");return;}
-      void calls.start(chat,action==="video-call"?"video":"audio").catch(error=>toast("Could not start call: "+String(error&&error.message||"Check permissions and relay setup.")));
+      if(!calls||typeof calls.start!=="function"){toast("The calling service has not finished loading. Refresh and try again.");return;}
+      void calls.start(chat,action==="video-call"?"video":"audio").catch(error=>toast("Could not start call: "+String(error&&error.message||"Check microphone/camera permission and relay setup.")));
       return;
     }
-    if(action==="shared-media"){const attachments=(chat.attachments||[]);openDialog("Media, links and documents",attachments.length?attachments.map(a=>"<div class='setting-row'>"+icon(a.type==="image"?"image":"file")+"<span class='setting-copy'><span class='setting-title'>"+esc(a.name)+"</span><span class='setting-subtitle'>"+esc(a.type||"file")+"</span></span></div>").join(""):"<div class='empty-state'>No local attachments in this chat.</div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;}
+    if(action==="shared-media"||action==="shared-links"||action==="shared-documents"){openSharedItemsDialog(chat,action==="shared-links"?"links":action==="shared-documents"?"documents":"media");return;}
     if(action==="edit-group"){editGroupDialog(chat);return;}
     if(action==="edit-group-description"){editGroupDialog(chat);return;}
     if(action==="edit-contact-about"){openDialog("Edit About","<div class='dialog-field'><label for='contact-about'>About</label><input id='contact-about' value='"+esc(chat.about||"")+"' maxlength='140'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='save-contact-about' data-chat-id='"+esc(chat.id)+"'>Save</button>");return;}
@@ -965,9 +1047,37 @@
   }
   function handleAction(action,el) {
     const chat=findChat(el.dataset.chatId)||currentChat();
+    if(action==="rename-contact" && chat && chat.type==="person"){
+      openDialog("Rename contact","<p class='screen-description'>This name is saved on this device only.</p><div class='dialog-field'><label for='contact-alias-name'>Contact name</label><input id='contact-alias-name' maxlength='60' value='"+esc(chat.name)+"' autocomplete='off'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='save-contact-name' data-chat-id='"+esc(chat.id)+"'>Save name</button>");return;
+    }
+    if(action==="remove-contact" && chat && chat.type==="person"){
+      openDialog("Remove contact?","<p class='screen-description'>This front-end-only action removes the conversation from this device. It does not delete the server-side friend relationship or hide this account on another device.</p>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='danger-button' data-dialog-action='remove-contact-local' data-chat-id='"+esc(chat.id)+"'>Remove from this device</button>");return;
+    }
     if(action==="new-chat"){createNewChatDialog();return;}
     if(action==="new-group"){createGroupDialog();return;}
     if(action==="new-community"){createCommunityDialog();return;}
+    if(action==="broadcast-list"||action==="linked-devices"||action==="mark-all-read"||action==="install-app"||action==="go-archived"||action==="go-channels"||action==="go-calls"||action==="new-voice-call"||action==="new-video-call"){
+      handleAction(action,{dataset:{}});
+      return;
+    }
+    if(action==="broadcast-list"){createBroadcastDialog();return;}
+    if(action==="linked-devices"){
+      openDialog("Linked devices","<div class='linked-device-card'>"+icon("monitor")+"<div><strong>This device</strong><span>Current browser session</span><small>Devices are managed independently in this app. No other linked sessions are available to display.</small></div><span class='linked-device-current'>Active</span></div><p class='screen-description'>This panel shows this app's current frontend device; it does not link this account to the official WhatsApp service.</p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
+    }
+    if(action==="mark-all-read"){
+      if(currentUser&&currentUser.isSupabase&&window.waAppBridge&&typeof window.waAppBridge.markAllBackendRead==="function"){
+        void window.waAppBridge.markAllBackendRead().then(count=>toast("Marked "+count+" message"+(count===1?"":"s")+" as read.")).catch(error=>toast("Could not mark all as read: "+String(error&&error.message||"Unknown error")));
+      }else{(state.chats||[]).forEach(c=>{c.unread=0;(c.messages||[]).forEach(m=>{if(m.from==="them")m.read=true;});});saveState();renderSidebar();renderMain();toast("All chats marked as read on this device.");}
+      return;
+    }
+    if(action==="install-app"){
+      const prompt=window.__waInstallPrompt;
+      if(prompt){prompt.prompt();prompt.userChoice.finally(()=>{window.__waInstallPrompt=null;});}
+      else toast("Open your browser menu and choose Install app or Add to Home screen.");return;
+    }
+    if(action==="go-archived"){setView("archived");return;}
+    if(action==="go-channels"){setView("channels");return;}
+    if(action==="go-calls"){setView("calls");return;}
     if(action==="profile"){setView("profile");return;}
     if(action==="settings"){settingsTab="account";settingsQuery="";setView("settings");return;}
     if(action==="sidebar-menu"||action==="row-menu"||action==="chat-menu"||action==="call-menu"||action==="attachment"||action==="emoji"||action==="more-lists"||action==="search-filters"||action==="pinned-menu"||action==="message-menu"){actionMenu(el,action);return;}
@@ -979,16 +1089,11 @@
     if(action==="copy-phone"){copyText(state.profile.phone);return;}
     if(action==="copy-username"){copyText("@"+state.profile.username);return;}
     if(action==="change-profile-photo"){const input=$("#profile-photo-input");if(input)input.click();return;}
-    if(action==="camera"){toast("Camera preview only. No camera stream is opened.");return;}
+    if(action==="camera"){handleAction("new-status",el);return;}
     if(action==="new-status"){openDialog("New status","<div class='dialog-field'><label for='status-text'>Type a status update</label><textarea id='status-text' rows='3' maxlength='700' placeholder='What’s on your mind?'></textarea></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='publish-status'>Share status</button>");return;}
     if(action==="status-preview"){toast("Status viewer preview.");return;}
     if(action==="new-call"){openPopup(el,[{icon:"phone",label:"New voice call",action:"new-voice-call"},{icon:"video",label:"New video call",action:"new-video-call"}],null);return;}
-    if(action==="new-voice-call"||action==="new-video-call"||action==="call-entry"){
-      const calls=window.WhatsAppCalls;
-      if(!calls||typeof calls.openPicker!=="function"){toast("The calling service did not finish loading. Refresh the app and try again.");return;}
-      calls.openPicker(action==="new-video-call"||el.dataset.mediaType==="video"?"video":"audio");
-      return;
-    }
+    if(action==="new-voice-call"||action==="new-video-call"||action==="call-entry"){if(window.WhatsAppCalls){if(action==="call-entry"){const person=state.chats.find(c=>String(c.id)===String(el.dataset.chatId)&&c.type==="person");if(person)window.WhatsAppCalls.start(person,el.dataset.mediaType==="video"?"video":"audio");else window.WhatsAppCalls.openPicker("audio");}else window.WhatsAppCalls.openPicker(action==="new-video-call"?"video":"audio");}else toast("The calling interface has not loaded. Refresh and try again.");return;}
     if(action==="channel-search"){openDialog("Discover channels","<div class='dialog-field'><label for='channel-search-input'>Search channels</label><input id='channel-search-input' placeholder='Search channels'></div><div id='channel-search-results'></div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");renderChannelSearchResults();return;}
     if(action==="toggle-channel"){const ch=state.channels.find(c=>c.id===el.dataset.channelId);if(ch){ch.following=!ch.following;saveState();renderMain();toast(ch.following?"Channel followed in preview":"Channel unfollowed");}return;}
     if(action==="go-starred"){setView("starred");return;}
@@ -1002,7 +1107,7 @@
     if(action==="search-media"){toast("Media search UI preview.");return;}
     if(action==="new-list"){openDialog("Create chat list","<div class='dialog-field'><label for='list-name'>List name</label><input id='list-name' maxlength='30' placeholder='Create a list'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='create-list'>Create</button>");return;}
     if(action==="manage-lists"){openDialog("Manage lists",state.customLists.length?state.customLists.map(l=>"<div class='setting-row'>"+icon("chat")+"<span class='setting-copy'><span class='setting-title'>"+esc(l.name)+"</span></span><button class='secondary-button' data-action='remove-list' data-list-id='"+esc(l.id)+"'>Remove</button></div>").join(""):"<div class='empty-state'>No custom lists yet.</div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;}
-    if(action==="toggle-favorite"||action==="toggle-unread"||action==="toggle-pin"||action==="toggle-mute"||action==="toggle-archive"||action==="lock-chat"||action==="toggle-lock"||action==="delete-chat"||action==="clear-chat"||action==="chat-info"||action==="chat-search"||action==="search-in-chat"||action==="disappearing"||action==="block-chat"||action==="report-chat"||action==="select-messages"||action==="star-message"||action==="pinned-preview"||action==="unpin-message"||action==="reply-message"||action==="forward-message"||action==="copy-message"||action==="delete-message"||action==="voice-call"||action==="video-call"||action==="shared-media"||action==="edit-group"||action==="edit-group-description"||action==="edit-contact-about"||action==="copy-chat-phone"||action==="copy-chat-username"){useAction(action,chat);return;}
+    if(action==="toggle-favorite"||action==="toggle-unread"||action==="toggle-pin"||action==="toggle-mute"||action==="toggle-archive"||action==="lock-chat"||action==="toggle-lock"||action==="delete-chat"||action==="clear-chat"||action==="chat-info"||action==="chat-search"||action==="search-in-chat"||action==="disappearing"||action==="block-chat"||action==="report-chat"||action==="select-messages"||action==="star-message"||action==="pinned-preview"||action==="unpin-message"||action==="reply-message"||action==="forward-message"||action==="copy-message"||action==="delete-message"||action==="voice-call"||action==="video-call"||action==="shared-media"||action==="shared-links"||action==="shared-documents"||action==="edit-group"||action==="edit-group-description"||action==="edit-contact-about"||action==="copy-chat-phone"||action==="copy-chat-username"){useAction(action,chat);return;}
     if(action==="attachment-preview"||action==="share-contact"){toast("This item is a local frontend preview.");return;}
     if(action==="pick-file"){const input=$("#attachment-input");if(input){input.accept="*/*";input.click();}return;}
     if(action==="pick-image"){const input=$("#attachment-input");if(input){input.accept="image/*";input.click();}return;}
@@ -1023,7 +1128,7 @@
   }
   function runMenuAction(action,chat) {
     closePopup();
-    const mapped=["open-chat","toggle-unread","toggle-favorite","toggle-pin","toggle-mute","toggle-archive","lock-chat","toggle-lock","delete-chat","clear-chat","chat-info","chat-search","search-in-chat","disappearing","block-chat","report-chat","select-messages","star-message","pinned-preview","unpin-message","reply-message","forward-message","copy-message","delete-message","voice-call","video-call","shared-media","edit-group","edit-group-description","edit-contact-about","copy-chat-phone","copy-chat-username"];
+    const mapped=["open-chat","toggle-unread","toggle-favorite","toggle-pin","toggle-mute","toggle-archive","lock-chat","toggle-lock","delete-chat","clear-chat","chat-info","chat-search","search-in-chat","disappearing","block-chat","report-chat","select-messages","star-message","pinned-preview","unpin-message","reply-message","forward-message","copy-message","delete-message","voice-call","video-call","shared-media","shared-links","shared-documents","rename-contact","remove-contact","edit-group","edit-group-description","edit-contact-about","copy-chat-phone","copy-chat-username"];
     if(mapped.includes(action)){useAction(action,chat||currentChat());return;}
     if(action==="new-group"){createGroupDialog();return;}
     if(action==="new-community"){createCommunityDialog();return;}
@@ -1070,7 +1175,26 @@
     }
     if(t.dataset.dialogAction){
       const action=t.dataset.dialogAction;
-      if(action==="create-group"){
+      if(action==="save-contact-name"){
+        const target=findChat(t.dataset.chatId)||currentChat(),alias=String($("#contact-alias-name")?.value||"").trim().replace(/\s+/g," ");
+        if(!target||!alias){toast("Enter a contact name.");return;}
+        const key="wa_contact_aliases_"+normalizeUsername(currentUser&&currentUser.username||state.profile.username);
+        let aliases={};try{aliases=JSON.parse(localStorage.getItem(key)||"{}")||{};}catch(_){}
+        aliases[String(target.id)]=alias;localStorage.setItem(key,JSON.stringify(aliases));
+        target.name=alias;target.localAlias=alias;saveState();closeDialog();renderSidebar();renderMain();toast("Contact renamed on this device.");return;
+      }
+      if(action==="remove-contact-local"){
+        const target=findChat(t.dataset.chatId)||currentChat();if(!target){closeDialog();return;}
+        const key="wa_hidden_contacts_"+normalizeUsername(currentUser&&currentUser.username||state.profile.username);
+        let hidden=[];try{hidden=JSON.parse(localStorage.getItem(key)||"[]")||[];}catch(_){}
+        if(!hidden.includes(String(target.id)))hidden.push(String(target.id));localStorage.setItem(key,JSON.stringify(hidden));
+        state.chats=state.chats.filter(c=>String(c.id)!==String(target.id));
+        state.contacts=(state.contacts||[]).filter(x=>normalizeUsername(x)!==normalizeUsername(target.username));
+        if(String(selectedChatId)===String(target.id)){selectedChatId=null;view="chats";}
+        saveState();closeDialog();renderSidebar();renderMain();updateNav();updateMobile();toast("Removed from this device. The server-side friend link remains unchanged.");return;
+      }
+      if(action==="send-broadcast"){void sendBroadcastNow();return;}
+          if(action==="create-group"){
         const name=$("#group-name").value.trim();const desc=$("#group-description").value.trim();
         const ids=$$("#group-contact-list input:checked").map(i=>i.value);
         if(!name){toast("Enter a group name.");return;}
@@ -1478,7 +1602,13 @@
     setBackendData: (data) => {
       if (!state || !currentUser || !currentUser.isSupabase) return;
       if (data.profile) state.profile = data.profile;
-      if (data.chats) state.chats = data.chats;
+      if (data.chats) {
+        let aliases={},hidden=[];
+        try{aliases=JSON.parse(localStorage.getItem("wa_contact_aliases_"+normalizeUsername(currentUser.username))||"{}")||{};}catch(_){}
+        try{hidden=JSON.parse(localStorage.getItem("wa_hidden_contacts_"+normalizeUsername(currentUser.username))||"[]")||[];}catch(_){}
+        const hiddenSet=new Set(hidden.map(String));
+        state.chats=data.chats.filter(chat=>!hiddenSet.has(String(chat.id))).map(chat=>aliases[String(chat.id)]?Object.assign({},chat,{name:aliases[String(chat.id)],localAlias:aliases[String(chat.id)]}):chat);
+      }
       if (data.requests) state.requests = data.requests;
       if (data.sentRequests) state.sentRequests = data.sentRequests;
       if (data.calls) state.calls = data.calls;
