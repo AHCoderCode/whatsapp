@@ -464,6 +464,87 @@
       await loadData(true);say(decision==="accepted"?"Request accepted. You can now chat and call.":decision==="declined"?"Request declined.":"Request cancelled.");
     }catch(error){say(safeError(error,"Could not update the request."));}
   }
+
+  async function sendPoll(){
+    const me=getUser(),chat=currentSelectedChat();
+    if(!me||!me.isSupabase||!chat)return say("Open a conversation before creating a poll.");
+    const question=String($("#poll-question")?.value||"").trim().slice(0,240);
+    const options=String($("#poll-options")?.value||"").split(/\r?\n/).map(s=>s.trim()).filter(Boolean).slice(0,10);
+    const unique=Array.from(new Set(options));
+    if(!question)return say("Enter a poll question.");
+    if(unique.length<2)return say("Add at least two different poll options.");
+    if(unique.length!==options.length)return say("Poll options must be unique.");
+    if(unique.some(s=>s.length>120))return say("Each poll option must be 120 characters or fewer.");
+    const body="📊 Poll: "+question+"\n"+unique.map((o,i)=>(i+1)+". "+o).join("\n");
+    if(body.length>1950)return say("Shorten the question or options so the poll fits within the message limit.");
+    try{
+      const {data:message,error:messageError}=await db.from("aeroshell_messages").insert({
+        sender_id:me.id,recipient_id:chat.type==="group"?null:chat.id,group_id:chat.type==="group"?chat.id:null,
+        body,message_type:"text"
+      }).select("id").single();
+      if(messageError)throw messageError;
+      const {error:pollError}=await db.from("whatsapp_polls").insert({
+        message_id:message.id,created_by:me.id,question,options:unique
+      });
+      if(pollError){
+        try{await db.from("aeroshell_messages").delete().eq("id",message.id).eq("sender_id",me.id);}catch(_){}
+        throw pollError;
+      }
+      bridge.closeDialog();await loadData(true);say("Poll sent. Votes will sync to the conversation.");
+    }catch(error){say(safeError(error,"Could not send the poll."));}
+  }
+  async function votePoll(pollId,optionIndex){
+    const me=getUser();if(!me||!me.isSupabase)return;
+    const index=Number(optionIndex);
+    if(!Number.isInteger(index)||index<0)return;
+    try{
+      const {error}=await db.from("whatsapp_poll_votes").upsert({
+        poll_id:pollId,voter_id:me.id,option_index:index,updated_at:new Date().toISOString()
+      },{onConflict:"poll_id,voter_id"});
+      if(error)throw error;
+      await loadData(true);
+    }catch(error){say(safeError(error,"Your vote could not be saved."));}
+  }
+  async function sendEvent(){
+    const me=getUser(),chat=currentSelectedChat();
+    if(!me||!me.isSupabase||!chat)return say("Open a conversation before creating an event.");
+    const title=String($("#event-name")?.value||"").trim().slice(0,120);
+    const date=String($("#event-date")?.value||"").trim(),time=String($("#event-time")?.value||"").trim();
+    if(!title)return say("Enter an event name.");
+    if(!date||!time)return say("Choose both a date and a time.");
+    const start=new Date(date+"T"+time);
+    if(Number.isNaN(start.getTime()))return say("Choose a valid date and time.");
+    const startsAt=start.toISOString();
+    const body="📅 Event: "+title+" · "+start.toLocaleString();
+    try{
+      const {data:message,error:messageError}=await db.from("aeroshell_messages").insert({
+        sender_id:me.id,recipient_id:chat.type==="group"?null:chat.id,group_id:chat.type==="group"?chat.id:null,
+        body,message_type:"text"
+      }).select("id").single();
+      if(messageError)throw messageError;
+      const {error:eventError}=await db.from("whatsapp_events").insert({
+        message_id:message.id,created_by:me.id,title,starts_at:startsAt
+      });
+      if(eventError){
+        try{await db.from("aeroshell_messages").delete().eq("id",message.id).eq("sender_id",me.id);}catch(_){}
+        throw eventError;
+      }
+      bridge.closeDialog();await loadData(true);say("Event sent to the conversation.");
+    }catch(error){say(safeError(error,"Could not send the event."));}
+  }
+  async function respondToEvent(eventId){
+    const me=getUser(),s=appState();if(!me||!me.isSupabase||!s)return;
+    const messages=(s.chats||[]).flatMap(c=>c.messages||[]);
+    const event=messages.map(m=>m.event).find(e=>e&&String(e.id)===String(eventId));
+    const response=event&&event.myResponse==="going"?"not_going":"going";
+    try{
+      const {error}=await db.from("whatsapp_event_rsvps").upsert({
+        event_id:eventId,user_id:me.id,response,updated_at:new Date().toISOString()
+      },{onConflict:"event_id,user_id"});
+      if(error)throw error;await loadData(true);say(response==="going"?"You are going to this event.":"Your RSVP was removed.");
+    }catch(error){say(safeError(error,"Could not update your event RSVP."));}
+  }
+
   async function updateProfile(name,about){
     const me=getUser();if(!me||!me.isSupabase)return;
     name=String(name||"").trim().slice(0,48);about=String(about||"Available").trim().slice(0,140)||"Available";
@@ -544,6 +625,18 @@
   document.addEventListener("click",event=>{
     const target=event.target.closest("[data-action],[data-dialog-action],[data-setting-option]");if(!target)return;
     const action=target.dataset.action||"",dialogAction=target.dataset.dialogAction||"",me=getUser();
+    if(me&&me.isSupabase&&dialogAction==="send-poll"){
+      event.preventDefault();event.stopImmediatePropagation();void sendPoll();return;
+    }
+    if(me&&me.isSupabase&&dialogAction==="send-event"){
+      event.preventDefault();event.stopImmediatePropagation();void sendEvent();return;
+    }
+    if(me&&me.isSupabase&&action==="vote-poll"){
+      event.preventDefault();event.stopImmediatePropagation();void votePoll(target.dataset.pollId,target.dataset.optionIndex);return;
+    }
+    if(me&&me.isSupabase&&action==="event-rsvp"){
+      event.preventDefault();event.stopImmediatePropagation();void respondToEvent(target.dataset.eventId);return;
+    }
     if(me&&me.isSupabase&&action==="add-participants"){
       event.preventDefault();event.stopImmediatePropagation();openAddParticipants();return;
     }
