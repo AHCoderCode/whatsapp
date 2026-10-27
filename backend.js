@@ -67,7 +67,7 @@
   async function searchPeople(value) {
     const me=getUser();
     if(!db||!me||!me.isSupabase)return [];
-    const query=String(value||"").trim().replace(/^@+/,"");
+    const query=String(value||"").trim().replace(/^@+/,"").trim().toLowerCase();
     if(query.length<2||query.length>80)return [];
     const {data,error}=await db.rpc("whatsapp_find_people",{search_query:query});
     if(error)throw error;
@@ -947,14 +947,14 @@
     if(!result)return;
     if(!trimmed){result.innerHTML="<div class='empty-state'>Search by display name, username, or in-app number.</div>";return;}
     if(trimmed.length<2){result.innerHTML="<div class='empty-state'>Enter at least 2 characters or digits.</div>";return;}
-    result.innerHTML="";
+    result.innerHTML="<div class='empty-state' role='status'>Searching the account directory…</div>";
     searchTimer=setTimeout(async()=>{
       if(seq!==searchCounter)return;
       try{
         const found=await withTimeout(searchPeople(value),8000,"Search took too long. Check your connection and try again.");
         const liveBox=$("#friend-lookup-result");
         if(seq!==searchCounter||!liveBox)return;
-        if(!found.length){liveBox.innerHTML="<div class='empty-state'>No matching account found. Check the display name, username, or number and try again.</div>";return;}
+        if(!found.length){liveBox.innerHTML="<div class='empty-state'>Nothing matched. Make sure the person has a Vexel Chat account in this same shared directory; local demo accounts and accounts on a different backend cannot be found here.</div>";return;}
         liveBox.innerHTML=found.map(p=>{
           const s=appState(),friend=s.chats.some(c=>String(c.id)===String(p.id));
           const incoming=(s.requests||[]).find(r=>r.requestUserId===p.id||r.username===p.username);
