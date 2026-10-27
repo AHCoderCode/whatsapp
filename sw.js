@@ -1,8 +1,9 @@
-const CACHE_NAME = "whatsapp-frontend-v3";
+const CACHE_NAME = "whatsapp-frontend-v4";
 const APP_SHELL = [
   "/",
   "/index.html",
   "/app.js",
+  "/styles.css",
   "/manifest.webmanifest",
   "/icon.svg",
   "/icon-512.png",
