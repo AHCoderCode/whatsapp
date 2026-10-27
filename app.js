@@ -149,11 +149,8 @@
     ];
   }
   function defaultRequests() {
-    return [
-      {id:"r1",username:"bilal.k",name:"Bilal Khan",phone:"+990 700 100 109",avatar:4,about:"Can't talk, WhatsApp only",note:"Hello! Please add me.",time:"10 min ago",status:"received"},
-      {id:"r2",username:"hira.m",name:"Hira Malik",phone:"+990 700 100 111",avatar:10,about:"Available",note:"Hi! I'd like to connect with you.",time:"35 min ago",status:"received"},
-      {id:"r3",username:"mina.s",name:"Mina Shah",phone:"+990 700 100 110",avatar:8,about:"✨",note:"Let's stay in touch 😊",time:"1 hour ago",status:"received"}
-    ];
+    // Contact requests must come from a real action; never seed fake incoming requests.
+    return [];
   }
   function freshDb() { return {version:2,accounts:[],directory:demoDirectory.map(o=>Object.assign({},o))}; }
   function readDb() {
@@ -193,7 +190,19 @@
       const saved = JSON.parse(localStorage.getItem(stateKey(user.username)) || "null");
       if (saved && Array.isArray(saved.chats) && saved.profile) {
         const defaults = createUserState(user);
-        return Object.assign(defaults, saved, {profile:Object.assign(defaults.profile,saved.profile),settings:Object.assign(defaults.settings,saved.settings || {})});
+        const merged = Object.assign(defaults, saved, {profile:Object.assign(defaults.profile,saved.profile),settings:Object.assign(defaults.settings,saved.settings || {})});
+        // One-time cleanup for requests that were previously shipped as fake demo data.
+        // Genuine locally-created requests use generated IDs, not r1/r2/r3.
+        const demoRequestIds = new Set(["r1","r2","r3"]);
+        const originalRequests = Array.isArray(merged.requests) ? merged.requests : [];
+        merged.requests = originalRequests.filter(request => !(
+          demoRequestIds.has(String(request && request.id)) &&
+          ["bilal.k","hira.m","mina.s"].includes(normalizeUsername(request && request.username))
+        ));
+        if (merged.requests.length !== originalRequests.length) {
+          try { localStorage.setItem(stateKey(user.username), JSON.stringify(merged)); } catch (_) {}
+        }
+        return merged;
       }
     } catch (_) {}
     const created = createUserState(user);
