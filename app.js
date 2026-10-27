@@ -150,9 +150,9 @@
   }
   function defaultRequests() {
     return [
-      {id:"r1",username:"zainab",name:"Zainab Ahmed",phone:"+990 700 100 108",avatar:5,about:"Available",note:"Hi! I'd like to connect with you.",time:"10 min ago",status:"received"},
-      {id:"r2",username:"noor.f",name:"Noor Fatima",phone:"+990 700 100 107",avatar:2,about:"At school",note:"Let's stay in touch 😊",time:"35 min ago",status:"received"},
-      {id:"r3",username:"bilal.k",name:"Bilal Khan",phone:"+990 700 100 109",avatar:4,about:"Can't talk, WhatsApp only",note:"Hello! Please add me.",time:"1 hour ago",status:"received"}
+      {id:"r1",username:"bilal.k",name:"Bilal Khan",phone:"+990 700 100 109",avatar:4,about:"Can't talk, WhatsApp only",note:"Hello! Please add me.",time:"10 min ago",status:"received"},
+      {id:"r2",username:"hira.m",name:"Hira Malik",phone:"+990 700 100 111",avatar:10,about:"Available",note:"Hi! I'd like to connect with you.",time:"35 min ago",status:"received"},
+      {id:"r3",username:"mina.s",name:"Mina Shah",phone:"+990 700 100 110",avatar:8,about:"✨",note:"Let's stay in touch 😊",time:"1 hour ago",status:"received"}
     ];
   }
   function freshDb() { return {version:2,accounts:[],directory:demoDirectory.map(o=>Object.assign({},o))}; }
