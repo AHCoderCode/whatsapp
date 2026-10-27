@@ -134,21 +134,35 @@
     if(!person||!person.id||person.id===current.id)return say("Choose a valid contact.");
     if(person.type==="group"||person.groupId)return say("Group calls are not included in this one-to-one calling build yet.");
     busy=true;activeCall={id:"pending-"+Date.now(),caller_id:current.id,callee_id:person.id,media_type:mediaType,direction:"outgoing",peer:person};setPhase("preparing","Requesting "+(mediaType==="video"?"camera and microphone":"microphone")+" permission…");
+    const pendingId=activeCall.id;
     let newId="";
     try{
-      localStream=await userMedia(mediaType==="video");
+      const grantedStream=await userMedia(mediaType==="video");
+      if(!activeCall||activeCall.id!==pendingId){grantedStream.getTracks().forEach(track=>track.stop());return;}
+      localStream=grantedStream;
       const {data,error}=await client.from("aeroshell_calls").insert({caller_id:current.id,callee_id:person.id,media_type:mediaType}).select("id,caller_id,callee_id,status,created_at,updated_at,media_type,group_call_id").single();
       if(error||!data)throw error||new Error("Could not create the call.");
-      newId=data.id;activeCall=Object.assign({},data,{direction:"outgoing",peer:person});
+      newId=data.id;
+      if(!activeCall||activeCall.id!==pendingId){
+        try{await client.from("aeroshell_calls").update({status:"ended"}).eq("id",newId);}catch(_){}
+        if(localStream){localStream.getTracks().forEach(track=>track.stop());localStream=null;}
+        return;
+      }
+      activeCall=Object.assign({},data,{direction:"outgoing",peer:person});
       renderCallOverlay("Calling @"+(person.username||person.name)+"…");
       ringTimer=setTimeout(()=>{if(activeCall&&activeCall.id===newId&&phase!=="connected")void endCall("No answer. Call ended after 45 seconds.");},45000);
-      const servers=await relayServers(data.id);makePeer(activeCall,servers);
+      const servers=await relayServers(data.id);
+      if(!activeCall||activeCall.id!==newId)return;
+      makePeer(activeCall,servers);
       const offer=await pc.createOffer();await pc.setLocalDescription(offer);
+      if(!activeCall||activeCall.id!==newId)return;
       await sendSignal(activeCall,"offer",{type:"offer",sdp:pc.localDescription.sdp});
-      setPhase("outgoing","Calling @"+(person.username||person.name)+"…");
+      if(activeCall&&activeCall.id===newId)setPhase("outgoing","Calling @"+(person.username||person.name)+"…");
     }catch(error){
+      const wasCancelled=!activeCall||activeCall.id!==pendingId||(newId&&activeCall.id!==newId);
       if(newId)try{await client.from("aeroshell_calls").update({status:"ended"}).eq("id",newId);}catch(_){}
-      cleanupLocal();say(error instanceof Error?error.message:"Call could not start.");
+      cleanupLocal();
+      if(!wasCancelled)say(error instanceof Error?error.message:"Call could not start.");
     }finally{busy=false;}
   }
   async function receiveSignal(signal){
@@ -188,8 +202,12 @@
     const current=me(),client=db(),call=activeCall;busy=true;
     try{
       setPhase("preparing","Requesting permissions…");
-      localStream=await userMedia(call.media_type==="video");
-      const servers=await relayServers(call.id);makePeer(call,servers);
+      const grantedStream=await userMedia(call.media_type==="video");
+      if(!activeCall||activeCall.id!==call.id){grantedStream.getTracks().forEach(track=>track.stop());return;}
+      localStream=grantedStream;
+      const servers=await relayServers(call.id);
+      if(!activeCall||activeCall.id!==call.id){localStream.getTracks().forEach(track=>track.stop());localStream=null;return;}
+      makePeer(call,servers);
       const offer=incomingOffer&&incomingOffer.payload&&incomingOffer.payload.sdp;
       if(!offer)throw new Error("The caller's offer is missing. Decline and ask them to call again.");
       await pc.setRemoteDescription({type:"offer",sdp:offer});await flushCandidates();
