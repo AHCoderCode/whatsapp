@@ -1021,7 +1021,13 @@ function openSharedItemsDialog(chat,kind) {
       openDialog("Delete message",body,actions+"<button class='secondary-button' data-action='close-dialog'>Cancel</button>");
       return;
     }
-    if(action==="voice-call"||action==="video-call"){const call={id:uid("call"),name:chat?chat.name:"New call",time:"Just now",type:"outgoing",avatar:chat?chat.avatar:1};state.calls.unshift(call);saveState();toast("Call UI preview only — no actual call is placed.");return;}
+    if(action==="voice-call"||action==="video-call"){
+      if(!chat||chat.type!=="person"){toast("Open a person's conversation before calling.");return;}
+      const calls=window.WhatsAppCalls;
+      if(!calls||typeof calls.start!=="function"){toast("The calling service has not finished loading. Refresh and try again.");return;}
+      void calls.start(chat,action==="video-call"?"video":"audio").catch(error=>toast("Could not start call: "+String(error&&error.message||"Check microphone/camera permission and relay setup.")));
+      return;
+    }
     if(action==="shared-media"||action==="shared-links"||action==="shared-documents"){openSharedItemsDialog(chat,action==="shared-links"?"links":action==="shared-documents"?"documents":"media");return;}
     if(action==="edit-group"){editGroupDialog(chat);return;}
     if(action==="edit-group-description"){editGroupDialog(chat);return;}
