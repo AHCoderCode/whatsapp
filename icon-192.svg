@@ -1,5 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 512 512" role="img" aria-label="WhatsApp">
-  <rect width="512" height="512" rx="112" fill="#25D366"/>
-  <path d="M256 83c-94.8 0-171.7 75.1-171.7 167.7 0 32.8 9.6 63.4 26.2 89.5L84 426l89.2-23.3c24.8 13.1 52.9 20.5 82.8 20.5 94.8 0 171.7-75.1 171.7-167.7S350.8 83 256 83Z" fill="none" stroke="#fff" stroke-width="21" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M198.2 170.7c-7.1-7.8-15.5-7.1-22.3.9-8.3 9.8-12.7 22.3-9.2 39.6 8.7 42.1 45.1 79.3 87.1 92.9 18.1 5.8 30.2 1.1 39.5-7.8 8.2-7.8 8.1-16.5-.1-22.1l-22.1-15.1c-7.1-4.9-13.1-2.9-18.6 3.8l-7.9 9.6c-19.5-8.9-37.4-26.9-46.4-46.4l9.6-7.9c6.7-5.5 8.7-11.5 3.8-18.6Z" fill="#fff"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 512 512" role="img" aria-label="Messaging app">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22c982"/>
+      <stop offset="1" stop-color="#008f70"/>
+    </linearGradient>
+    <linearGradient id="bubble" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e8fff5"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="13" stdDeviation="13" flood-color="#005947" flood-opacity=".18"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+  <circle cx="91" cy="102" r="34" fill="#ffffff" opacity=".07"/>
+  <circle cx="417" cy="125" r="62" fill="#ffffff" opacity=".06"/>
+  <path d="M109 244c0-79 65-142 147-142h3c81 0 146 62 146 140s-65 140-146 140h-8c-22 0-44-5-63-14l-74 26 19-67c-15-23-24-51-24-83Z" fill="url(#bubble)" filter="url(#shadow)"/>
+  <path d="M125 241c0-68 57-122 129-122h4c71 0 128 54 128 120s-57 121-128 121h-8c-20 0-39-4-56-12l-56 19 14-50c-17-20-27-47-27-76Z" fill="#fff" opacity=".65"/>
+  <g fill="#078b68">
+    <circle cx="195" cy="244" r="14"/>
+    <circle cx="256" cy="244" r="14"/>
+    <circle cx="317" cy="244" r="14"/>
+  </g>
+  <circle cx="348" cy="349" r="76" fill="#d6ffeb" stroke="#008f70" stroke-width="10"/>
+  <path d="M322 313c-5-6-10-6-15 1l-9 13c-4 6-3 13 2 21 14 23 34 43 60 54 10 4 17 2 22-5l10-13c4-6 2-11-4-15l-18-11c-5-3-9-2-13 3l-7 8c-13-6-23-17-29-29l7-7c5-4 6-8 3-13Z" fill="#007d61"/>
+  <path d="M281 388c19 18 44 27 71 27" fill="none" stroke="#007d61" stroke-width="9" stroke-linecap="round" opacity=".9"/>
 </svg>
