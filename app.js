@@ -176,6 +176,7 @@
       sentRequests:[],
       contacts:[],
       calls:[],
+      backendStatuses:[],backendChannels:[],backendCommunities:[],
       communities:[{id:"community-school",name:"School community",description:"Class updates and school friends",groups:["School Friends","Study Group"]},{id:"community-family",name:"Family community",description:"Family updates in one place",groups:["Family Group","Cousins Group"]}],
       channels:[{id:"whatsapp-official",name:"WhatsApp",initials:"W",avatar:2,description:"Official updates from WhatsApp",following:true},{id:"meta-official",name:"Meta",initials:"M",avatar:3,description:"Updates from Meta",following:false},{id:"tech-today",name:"Technology Today",initials:"T",avatar:7,description:"Technology news and updates",following:false}],
       settings:{dark:false,wallpaper:"default",readReceipts:true,keepArchived:true,enterToSend:true,mediaVisibility:true,appLock:false,reduceMotion:false,keyboardNav:true,highContrast:false,spellcheck:true,reactionNotifications:true,securityNotifications:true},
@@ -571,6 +572,16 @@
     main.innerHTML="<section class='details-layout'><header class='details-header'><button class='icon-button' data-action='back-to-chat' aria-label='Back'>"+icon("back")+"</button><h2>"+(chat.type==="group"?"Group info":"Contact info")+"</h2><button class='icon-button' data-action='chat-menu' aria-label='More options'>"+icon("more")+"</button></header><div class='details-content'>"+detail+"</div></section>";
   }
   function renderUpdates() {
+    if(currentUser&&currentUser.isSupabase){
+      const statuses=state.backendStatuses||[],own=statuses.filter(s=>s.userId===currentUser.id);
+      const latestByUser=new Map();
+      statuses.filter(s=>s.userId!==currentUser.id).forEach(s=>{if(!latestByUser.has(s.userId))latestByUser.set(s.userId,s);});
+      const mine=own[0];
+      const myRow="<div class='status-row' data-action='"+(mine?"status-preview":"new-status")+"' "+(mine?"data-status-id='"+esc(mine.id)+"'":"")+"><div class='status-ring'><div class='status-inner'>"+(state.profile.avatarData?"<img class='avatar-image' src='"+esc(state.profile.avatarData)+"' alt=''>":esc(state.profile.avatar||initials(state.profile.name)))+"</div></div><div class='status-copy'><strong>My status</strong><span>"+esc(mine?mine.text:"Tap to add a text status")+"</span></div><button class='icon-button' data-action='new-status' aria-label='Add status'>"+icon("new")+"</button></div>";
+      const recent=Array.from(latestByUser.values()).map(s=>"<div class='status-row' data-action='status-preview' data-status-id='"+esc(s.id)+"'><div class='status-ring'><div class='status-inner'>"+(s.avatarData?"<img class='avatar-image' src='"+esc(s.avatarData)+"' alt=''>":esc(s.avatar||initials(s.name)))+"</div></div><div class='status-copy'><strong>"+esc(s.name)+"</strong><span>"+esc(s.text)+" · "+esc(new Date(s.createdAt).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}))+"</span></div></div>").join("");
+      main.innerHTML="<section class='section-screen'>"+screenHeader("Updates","<button class='icon-button' data-action='new-status' aria-label='New text status'>"+icon("new")+"</button>")+"<div class='screen-content'><p class='screen-description'>Text status updates expire automatically after 24 hours. Statuses are visible to accepted contacts.</p><div class='section-card'><h3 class='section-card-title'>Status</h3>"+myRow+"</div><div class='section-card'><h3 class='section-card-title'>Recent updates</h3>"+(recent||"<div class='empty-state'>No contact status updates yet.</div>")+"</div></div></section>";
+      return;
+    }
     const names=[{name:"My status",label:state.statusUpdates.length?state.statusUpdates[0].text:"Tap to add status update",initials:state.profile.avatar||"ME",avatar:2,action:"new-status"},{name:"Ayesha Khan",label:"Today, 12:24 PM",initials:"AK",avatar:1,action:"status-preview"},{name:"Hassan Raza",label:"Today, 11:58 AM",initials:"HR",avatar:3,action:"status-preview"},{name:"Sara Ahmed",label:"Today, 10:42 AM",initials:"SA",avatar:9,action:"status-preview"},{name:"Noor Fatima",label:"Yesterday, 8:30 PM",initials:"NF",avatar:2,action:"status-preview"}];
     main.innerHTML="<section class='section-screen'>"+screenHeader("Updates","<button class='icon-button' data-action='camera' aria-label='Camera'>"+icon("camera")+"</button><button class='icon-button' data-action='new-status' aria-label='New status'>"+icon("new")+"</button>")+"<div class='screen-content'><p class='screen-description'>Share everyday moments with status updates that disappear after 24 hours.</p><div class='section-card'><h3 class='section-card-title'>Status</h3>"+names.map((n,i)=>"<div class='status-row' data-action='"+n.action+"' data-status-name='"+esc(n.name)+"'><div class='status-ring'><div class='status-inner'>"+esc(n.initials)+"</div></div><div class='status-copy'><strong>"+esc(n.name)+"</strong><span>"+esc(n.label)+"</span></div></div>").join("")+"</div><div class='section-card'><h3 class='section-card-title'>Channels</h3>"+settingRow("channels","Discover channels","Follow updates from people and organizations","nav-channels")+"</div></div></section>";
   }
@@ -579,9 +590,21 @@
     const displayRows=(currentUser&&currentUser.isSupabase)?state.calls:rows; const description=(currentUser&&currentUser.isSupabase)?"Call history from your account. Voice/video calls require the other contact to be online and accept the call.":"Preview call history. Create an account to use real one-to-one calls."; main.innerHTML="<section class='section-screen'>"+screenHeader("Calls","<button class='icon-button' data-action='new-call' aria-label='New call'>"+icon("phone")+"</button>")+"<div class='screen-content'><p class='screen-description'>"+description+"</p><div class='section-card'>"+(displayRows.length?displayRows.map((r,i)=>"<button class='setting-row' data-action='call-entry' data-call-name='"+esc(r.name)+"' data-chat-id='"+esc(r.contactId||"")+"' data-media-type='"+esc(r.mediaType||"audio")+"'>"+avatarHTML({name:r.name,avatar:r.avatar||i+1})+"<span class='setting-copy'><span class='setting-title'>"+esc(r.name)+"</span><span class='setting-subtitle'>"+icon(r.type==="outgoing"?"forward":"reply")+" "+esc(r.time)+"</span></span><span class='end-icon'>"+icon("phone")+"</span></button>").join(""):"<div class='empty-state'>No calls yet. Start an audio or video call from a contact chat.</div>")+"</div></div></section>";
   }
   function renderCommunities() {
+    if(currentUser&&currentUser.isSupabase){
+      const communities=state.backendCommunities||[];
+      const rows=communities.map(c=>"<button class='community-row' data-community-id='"+esc(c.id)+"'>"+avatarHTML({name:c.name})+"<span class='community-copy'><strong>"+esc(c.name)+"</strong><span>"+esc(c.description||"Community")+"</span></span><span class='setting-side-label'>"+(c.joined?"Member":"Join")+"</span>"+icon("chevron")+"</button>").join("");
+      main.innerHTML="<section class='section-screen'>"+screenHeader("Communities","<button class='icon-button' data-action='new-community' aria-label='New community'>"+icon("new")+"</button>")+"<div class='screen-content'><p class='screen-description'>Create a community or join one created by another account. Membership is synced through Supabase.</p><div class='section-card'>"+(rows||"<div class='empty-state'>No communities yet. Create the first one.</div>")+"</div><button class='primary-button' data-action='new-community'>"+icon("new")+" New community</button></div></section>";
+      return;
+    }
     main.innerHTML="<section class='section-screen'>"+screenHeader("Communities","<button class='icon-button' data-action='new-community' aria-label='New community'>"+icon("new")+"</button>")+"<div class='screen-content'><p class='screen-description'>Bring people together in topic-based communities. Organize group chats and announcements in one place.</p><div class='section-card'>"+state.communities.map(c=>"<button class='community-row' data-community-id='"+esc(c.id)+"'><span class='avatar av7'>"+esc(initials(c.name))+"</span><span class='community-copy'><strong>"+esc(c.name)+"</strong><span>"+esc(c.groups.join(" · "))+"</span></span>"+icon("chevron")+"</button>").join("")+"</div><button class='primary-button' data-action='new-community'>"+icon("new")+" New community</button></div></section>";
   }
   function renderChannels() {
+    if(currentUser&&currentUser.isSupabase){
+      const channels=state.backendChannels||[];
+      const rows=channels.map(c=>"<div class='channel-row'>"+avatarHTML({name:c.name})+"<span class='community-copy'><strong>"+esc(c.name)+"</strong><span>"+esc(c.description||"No description")+"</span></span><button class='"+(c.following?"secondary-button":"primary-button")+"' data-action='toggle-channel' data-channel-id='"+esc(c.id)+"'>"+(c.following?"Following":"Follow")+"</button></div>").join("");
+      main.innerHTML="<section class='section-screen'>"+screenHeader("Channels","<button class='icon-button' data-action='channel-search' aria-label='Search channels'>"+icon("search")+"</button><button class='icon-button' data-action='new-channel' aria-label='Create channel'>"+icon("new")+"</button>")+"<div class='screen-content'><p class='screen-description'>Follow channels created by users of this app, or create your own channel. Channel posts are not included in this build yet.</p><div class='section-card'><h3 class='section-card-title'>Channels</h3>"+(rows||"<div class='empty-state'>No channels yet. Create one to get started.</div>")+"</div></div></section>";
+      return;
+    }
     main.innerHTML="<section class='section-screen'>"+screenHeader("Channels","<button class='icon-button' data-action='channel-search' aria-label='Search channels'>"+icon("search")+"</button>")+"<div class='screen-content'><p class='screen-description'>Discover updates from people and organizations. Follow channels to see their updates here.</p><div class='section-card'><h3 class='section-card-title'>Suggested</h3>"+state.channels.map(c=>"<div class='channel-row'>"+avatarHTML(c)+"<span class='community-copy'><strong>"+esc(c.name)+"</strong><span>"+esc(c.description)+"</span></span><button class='"+(c.following?"secondary-button":"primary-button")+"' data-action='toggle-channel' data-channel-id='"+esc(c.id)+"'>"+(c.following?"Following":"Follow")+"</button></div>").join("")+"</div></div></section>";
   }
   function renderBasic(title,rows,desc,kind) {
@@ -1162,7 +1185,7 @@
       if (saved && saved.customLists) fresh.customLists = saved.customLists;
       fresh.profile = { username: currentUser.username, name: currentUser.name, phone: currentUser.phone,
         about: currentUser.about, avatar: initials(name), avatarColor: 1, avatarData: currentUser.avatarData };
-      fresh.chats = []; fresh.requests = []; fresh.sentRequests = []; fresh.contacts = []; fresh.calls = [];
+      fresh.chats = []; fresh.requests = []; fresh.sentRequests = []; fresh.contacts = []; fresh.calls = []; fresh.backendStatuses=[]; fresh.backendChannels=[]; fresh.backendCommunities=[]; fresh.statusUpdates=[]; fresh.channels=[]; fresh.communities=[];
       state = fresh; selectedChatId = null; view = "chats";
       try { localStorage.setItem(SESSION_KEY, currentUser.username); } catch (_) {}
       auth.classList.add("hidden"); app.classList.remove("hidden"); applySettings(); renderApp();
@@ -1174,6 +1197,9 @@
       if (data.requests) state.requests = data.requests;
       if (data.sentRequests) state.sentRequests = data.sentRequests;
       if (data.calls) state.calls = data.calls;
+      if (data.statuses) state.backendStatuses = data.statuses;
+      if (data.channels) state.backendChannels = data.channels;
+      if (data.communities) state.backendCommunities = data.communities;
       if (selectedChatId && !state.chats.some(c => String(c.id) === String(selectedChatId))) selectedChatId = null;
       const oldInput = $("#message-input");
       const draft = oldInput ? oldInput.value : "";
