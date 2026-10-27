@@ -80,7 +80,10 @@
       time:stamp.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}),
       date:stamp.toDateString()===new Date().toDateString()?"TODAY":stamp.toLocaleDateString(),
       createdAt:row.created_at,status:"sent",reactions:[],sender:row.sender_id===me.id?"You":(chat&&chat.name)||"Member",
-      attachmentType:row.message_type==="voice"?"voice":row.message_type==="file"?"file":null};
+      attachmentType:row.message_type==="voice"?"voice":row.message_type==="file"?"file":null,
+      attachmentName:row.attachment_name||"",attachmentPath:row.attachment_path||"",
+      attachmentMime:row.attachment_mime||"",attachmentSize:Number(row.attachment_size||0),
+      messageType:row.message_type||"text",voiceDurationMs:Number(row.voice_duration_ms||0)};
   }
   function insertMessageIntoUI(row) {
     const me=getUser(), s=appState();
@@ -228,6 +231,151 @@
     }catch(error){say(safeError(error,"Message was not delivered."));}
     finally{if(button)button.disabled=false;}
   }
+
+  const ATTACHMENT_BUCKET = "master-chat-attachments";
+  let recorder = null, recorderStream = null, recorderChunks = [], recorderStartedAt = 0, recorderChatId = null, recorderStopReason = "";
+  function currentSelectedChat() {
+    const selected = bridge.getCurrentChat();
+    return selected && selected.id ? selected : null;
+  }
+  function safeFileName(name) {
+    const clean = String(name || "attachment").normalize("NFKC").replace(/[\/\\:*?"<>|\u0000-\u001f]/g,"_").replace(/\s+/g," ").trim().slice(0,120);
+    return clean || "attachment";
+  }
+  function attachmentPath(me, chat, fileName) {
+    const nonce = (crypto.randomUUID ? crypto.randomUUID() : Date.now()+"-"+Math.random().toString(36).slice(2));
+    if (chat.type === "group") return "groups/"+chat.id+"/"+me.id+"/"+nonce+"-"+fileName;
+    return "direct/"+me.id+"/"+chat.id+"/"+nonce+"-"+fileName;
+  }
+  async function uploadStoredAttachment(blobOrFile, options) {
+    const me=getUser(), chat=currentSelectedChat();
+    const isVoice=options.type==="voice";
+    if(!me||!me.isSupabase)return say("Sign in to send an attachment.");
+    if(!chat)return say("Open a conversation first.");
+    if(!blobOrFile||!blobOrFile.size)return say("This attachment is empty.");
+    if(blobOrFile.size>15*1024*1024)return say("Attachments must be 15 MB or smaller.");
+    const mime=String(options.mime||blobOrFile.type||"application/octet-stream").split(";")[0].trim().toLowerCase();
+    if(mime.startsWith("video/"))return say("Video attachments are not enabled by the current secure storage policy. Choose a photo or document instead.");
+    if(isVoice&&!mime.startsWith("audio/"))return say("The browser returned an unsupported audio format. Try a different browser.");
+    const filename=safeFileName(options.name||blobOrFile.name||(isVoice?"voice-note.webm":"attachment"));
+    const path=attachmentPath(me,chat,filename);
+    const uploadFile=blobOrFile instanceof File?blobOrFile:new File([blobOrFile],filename,{type:mime,lastModified:Date.now()});
+    try{
+      const {error:uploadError}=await db.storage.from(ATTACHMENT_BUCKET).upload(path,uploadFile,{contentType:mime,upsert:false,cacheControl:"3600"});
+      if(uploadError)throw uploadError;
+      const row={
+        sender_id:me.id,
+        recipient_id:chat.type==="group"?null:chat.id,
+        group_id:chat.type==="group"?chat.id:null,
+        body:isVoice?"":filename,
+        message_type:isVoice?"voice":"file",
+        attachment_path:path,
+        attachment_name:isVoice?"Voice message":filename,
+        attachment_mime:mime,
+        attachment_size:uploadFile.size
+      };
+      if(isVoice)row.voice_duration_ms=Math.max(1,Math.min(120000,Math.round(options.durationMs||1000)));
+      const {data,error}=await db.from("aeroshell_messages").insert(row)
+        .select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms").single();
+      if(error)throw error;
+      if(data)insertMessageIntoUI(data);
+      if(!isVoice)say("Attachment sent.");
+      else say("Voice message sent.");
+    }catch(error){
+      try{await db.storage.from(ATTACHMENT_BUCKET).remove([path]);}catch(_){}
+      say(safeError(error,"Attachment upload failed. Check your connection and try again."));
+    }
+  }
+  async function openAttachment(messageId) {
+    const me=getUser(), s=appState();
+    if(!me||!me.isSupabase||!s)return;
+    const chat=(s.chats||[]).find(c=>(c.messages||[]).some(m=>String(m.id)===String(messageId)));
+    const message=chat&&(chat.messages||[]).find(m=>String(m.id)===String(messageId));
+    if(!message||!message.attachmentPath)return say("The attachment is not available in this chat.");
+    try{
+      const {data,error}=await db.storage.from(ATTACHMENT_BUCKET).createSignedUrl(message.attachmentPath,120);
+      if(error||!data||!data.signedUrl)throw error||new Error("Could not create a private attachment link.");
+      const url=esc(data.signedUrl),name=esc(message.attachmentName||"Attachment"),mime=String(message.attachmentMime||"");
+      let preview="";
+      if(mime.startsWith("image/"))preview="<img class='wa-attachment-preview' src='"+url+"' alt='"+name+"'>";
+      else if(mime.startsWith("audio/"))preview="<audio class='wa-attachment-audio' controls preload='none' src='"+url+"'></audio>";
+      bridge.openDialog("Shared attachment","<div class='wa-attachment-dialog'>"+preview+"<p>"+name+"</p><a class='primary-button' href='"+url+"' target='_blank' rel='noopener noreferrer'>Open / download attachment</a><small>This private link expires in about two minutes.</small></div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");
+    }catch(error){say(safeError(error,"This private attachment could not be opened."));}
+  }
+  async function startVoiceRecording() {
+    const me=getUser(),chat=currentSelectedChat();
+    if(!me||!me.isSupabase)return say("Sign in to record and send a voice note.");
+    if(!chat)return say("Open a conversation first.");
+    if(recorder)return stopVoiceRecording();
+    if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==="undefined")return say("Voice notes are not supported by this browser. Try the latest Chrome, Edge or Safari over HTTPS.");
+    try{
+      recorderStream=await navigator.mediaDevices.getUserMedia({audio:true});
+      if(!currentSelectedChat()||String(currentSelectedChat().id)!==String(chat.id)){
+        recorderStream.getTracks().forEach(t=>t.stop());recorderStream=null;return say("The conversation changed. Open it again before recording.");
+      }
+      const mimeOptions=["audio/webm;codecs=opus","audio/webm","audio/mp4","audio/ogg;codecs=opus"];
+      const mimeType=mimeOptions.find(m=>MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(m))||"";
+      recorder=mimeType?new MediaRecorder(recorderStream,{mimeType}):new MediaRecorder(recorderStream);
+      recorderChunks=[];recorderStartedAt=Date.now();recorderChatId=chat.id;recorderStopReason="";
+      recorder.ondataavailable=event=>{if(event.data&&event.data.size)recorderChunks.push(event.data);};
+      recorder.onerror=()=>{recorderStopReason="error";try{if(recorder&&recorder.state!=="inactive")recorder.stop();}catch(_){};};
+      recorder.onstop=()=>{
+        const activeRecorder=recorder;
+        const blobType=(activeRecorder&&activeRecorder.mimeType)||mimeType||"audio/webm";
+        const duration=Math.max(1,Math.min(120000,Date.now()-recorderStartedAt));
+        const blob=new Blob(recorderChunks,{type:blobType});
+        const ext=blobType.includes("mp4")?"m4a":blobType.includes("ogg")?"ogg":"webm";
+        const stillSameChat=currentSelectedChat()&&String(currentSelectedChat().id)===String(recorderChatId);
+        if(recorderStream)recorderStream.getTracks().forEach(t=>t.stop());
+        recorderStream=null;recorder=null;recorderChunks=[];
+        const button=$(".send-button"), input=$("#message-input");
+        if(button){button.classList.remove("recording");button.innerHTML=bridge.icon("mic");button.title="Record voice message";button.setAttribute("aria-label","Record voice message");}
+        if(input){input.disabled=false;input.placeholder="Type a message";}
+        if(recorderStopReason==="error"){say("Voice recording failed.");return;}
+        if(!stillSameChat){say("Voice note cancelled because the conversation changed.");return;}
+        void uploadStoredAttachment(blob,{type:"voice",name:"voice-note."+ext,mime:blobType,durationMs:duration});
+      };
+      recorder.start(250);
+      const button=$(".send-button"),input=$("#message-input");
+      if(button){button.classList.add("recording");button.innerHTML="■";button.title="Stop recording and send";button.setAttribute("aria-label","Stop recording and send voice message");}
+      if(input){input.disabled=true;input.placeholder="Recording… tap the red square to send";}
+      say("Recording voice message. Tap the red button to send; the maximum length is two minutes.");
+      window.waVoiceLimit=setTimeout(()=>{if(recorder&&recorder.state!=="inactive"){recorderStopReason="limit";stopVoiceRecording();say("Two-minute recording limit reached.");}},120000);
+    }catch(error){
+      if(recorderStream)recorderStream.getTracks().forEach(t=>t.stop());
+      recorderStream=null;recorder=null;
+      say(error&&error.name==="NotAllowedError"?"Microphone permission was denied. Allow microphone access in your browser settings and try again.":safeError(error,"Could not start voice recording."));
+    }
+  }
+  function stopVoiceRecording(){
+    if(window.waVoiceLimit){clearTimeout(window.waVoiceLimit);window.waVoiceLimit=null;}
+    if(recorder&&recorder.state!=="inactive"){try{recorder.stop();}catch(_){cleanupRecorder();}}
+  }
+  function cleanupRecorder(){
+    if(window.waVoiceLimit){clearTimeout(window.waVoiceLimit);window.waVoiceLimit=null;}
+    if(recorderStream)recorderStream.getTracks().forEach(t=>t.stop());
+    recorderStream=null;recorder=null;recorderChunks=[];
+    const button=$(".send-button"),input=$("#message-input");
+    if(button){button.classList.remove("recording");button.innerHTML=bridge.icon("mic");button.title="Record voice message";}
+    if(input){input.disabled=false;input.placeholder="Type a message";}
+  }
+  async function deleteOrHideMessage(){
+    const me=getUser(),s=appState(),chat=currentSelectedChat(),ref=s&&s.lastContextMessage;
+    if(!me||!me.isSupabase||!chat||!ref||!ref.id)return;
+    const message=(chat.messages||[]).find(m=>String(m.id)===String(ref.id));
+    if(!message)return say("Select a message first.");
+    try{
+      if(message.from==="me"){
+        const {error}=await db.from("aeroshell_messages").delete().eq("id",message.id).eq("sender_id",me.id);
+        if(error)throw error;
+      }else{
+        const {error}=await db.from("aeroshell_message_hides").insert({message_id:message.id,user_id:me.id});
+        if(error&&error.code!=="23505")throw error;
+      }
+      bridge.closeDialog();await loadData(true);say(message.from==="me"?"Message deleted for everyone.":"Message removed from your view.");
+    }catch(error){say(safeError(error,"Could not remove this message."));}
+  }
+
   async function sendRequest(person){
     const me=getUser(),s=appState();
     if(!me||!me.isSupabase)return say("Sign in with a Supabase account to send a contact request.");
@@ -293,6 +441,13 @@
   document.addEventListener("click",event=>{
     const target=event.target.closest("[data-action],[data-dialog-action],[data-setting-option]");if(!target)return;
     const action=target.dataset.action||"",dialogAction=target.dataset.dialogAction||"",me=getUser();
+    if(me&&me.isSupabase&&action==="open-attachment"){
+      event.preventDefault();event.stopImmediatePropagation();void openAttachment(target.dataset.messageId);return;
+    }
+    if(me&&me.isSupabase&&action==="delete-message"){
+      event.preventDefault();event.stopImmediatePropagation();void deleteOrHideMessage();return;
+    }
+    if(me&&me.isSupabase&&action==="logout"){event.preventDefault();event.stopImmediatePropagation();bridge.openDialog("Log out","<p class='screen-description'>Sign out of this device. Your account and server-side conversations will remain saved.</p>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='backend-logout'>Log out</button>");return;}
     if(me&&me.isSupabase&&target.dataset.settingOption==="Change number"){
       event.preventDefault();event.stopImmediatePropagation();
       bridge.openDialog("Change in-app ID","<p class='screen-description'>Changing an ID safely requires a dedicated server-side uniqueness flow. Your current ID remains active; it is not a real phone number.</p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
@@ -362,6 +517,20 @@
     },220);
   },true);
   document.addEventListener("change",event=>{const target=event.target;if(target&&target.id==="profile-photo-input"&&target.files&&target.files[0]&&getUser()&&getUser().isSupabase)void updateAvatar(target.files[0]);},true);
+  document.addEventListener("change",event=>{
+    const target=event.target;
+    if(!target||target.id!=="attachment-input"||!target.files||!target.files[0]||!getUser()||!getUser().isSupabase)return;
+    event.preventDefault();event.stopImmediatePropagation();
+    const file=target.files[0];target.value="";
+    void uploadStoredAttachment(file,{type:"file",name:file.name,mime:file.type||"application/octet-stream"});
+  },true);
+  document.addEventListener("click",event=>{
+    const button=event.target.closest(".send-button");
+    if(!button||!getUser()||!getUser().isSupabase)return;
+    const input=$("#message-input");
+    if(input&&input.value.trim())return;
+    event.preventDefault();event.stopImmediatePropagation();void startVoiceRecording();
+  },true);
   window.addEventListener("beforeinstallprompt",event=>{
     event.preventDefault();window.__waInstallPrompt=event;
     if(!$("#install-app-button")){const button=document.createElement("button");button.id="install-app-button";button.type="button";button.className="install-app-button";button.textContent="Install app";const foot=$(".auth-card-footer");(foot||document.body).insertAdjacentElement("beforebegin",button);}
@@ -375,6 +544,7 @@
     if(prompt){prompt.prompt();prompt.userChoice.finally(()=>{window.__waInstallPrompt=null;button.hidden=true;});}
     else say("Install this app from the browser menu: Install app or Add to Home Screen.");
   },true);
+  window.addEventListener("pagehide",()=>{if(recorder&&recorder.state!=="inactive")try{recorder.stop();}catch(_){}cleanupRecorder();},{once:true});
   window.waBackendLogout=async()=>{
     if(liveChannel&&db)try{await db.removeChannel(liveChannel);}catch(_){}
     liveChannel=null;liveUserId="";if(window.WhatsAppCalls)window.WhatsAppCalls.cleanup();
