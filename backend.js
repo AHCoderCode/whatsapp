@@ -561,6 +561,108 @@
     }catch(error){say(safeError(error,"Could not update your event RSVP."));}
   }
 
+
+  async function publishStatus(){
+    const me=getUser();if(!me||!me.isSupabase)return;
+    const text=String($("#status-text")?.value||"").trim().slice(0,700);
+    if(!text)return say("Write a status before sharing it.");
+    try{
+      await db.from("whatsapp_statuses").delete().eq("user_id",me.id).lt("expires_at",new Date().toISOString());
+      const {error}=await db.from("whatsapp_statuses").insert({user_id:me.id,text,expires_at:new Date(Date.now()+24*60*60*1000).toISOString()});
+      if(error)throw error;bridge.closeDialog();await loadData(true);bridge.setView("updates");say("Status shared. It expires after 24 hours.");
+    }catch(error){say(safeError(error,"Could not share the status."));}
+  }
+  async function deleteStatus(statusId){
+    const me=getUser();if(!me||!me.isSupabase)return;
+    try{const {error}=await db.from("whatsapp_statuses").delete().eq("id",statusId).eq("user_id",me.id);if(error)throw error;bridge.closeDialog();await loadData(true);say("Status deleted.");}
+    catch(error){say(safeError(error,"Could not delete this status."));}
+  }
+  function openStatus(statusId){
+    const s=appState(),status=(s&&s.backendStatuses||[]).find(row=>String(row.id)===String(statusId));
+    if(!status)return say("This status has expired or is no longer available.");
+    const date=new Date(status.createdAt);
+    const body="<div class='wa-status-view'><strong>"+esc(status.name)+" <span>@"+esc(status.username)+"</span></strong><small>"+esc(Number.isNaN(date.getTime())?"Recently":date.toLocaleString())+"</small><p>"+esc(status.text)+"</p></div>";
+    const footer=status.userId===getUser().id
+      ?"<button class='secondary-button' data-action='close-dialog'>Close</button><button class='danger-button' data-dialog-action='delete-status' data-status-id='"+esc(status.id)+"'>Delete status</button>"
+      :"<button class='secondary-button' data-action='close-dialog'>Close</button>";
+    bridge.openDialog("Status update",body,footer);
+  }
+  async function createCommunity(){
+    const me=getUser();if(!me||!me.isSupabase)return;
+    const name=String($("#community-name")?.value||"").trim().slice(0,60);
+    const description=String($("#community-description")?.value||"").trim().slice(0,500);
+    if(!name)return say("Enter a community name.");
+    try{
+      const {data,error}=await db.from("whatsapp_communities").insert({name,description,created_by:me.id}).select("id").single();
+      if(error)throw error;
+      const member=await db.from("whatsapp_community_members").insert({community_id:data.id,user_id:me.id,role:"owner"});
+      if(member.error){try{await db.from("whatsapp_communities").delete().eq("id",data.id).eq("created_by",me.id);}catch(_){}throw member.error;}
+      bridge.closeDialog();await loadData(true);bridge.setView("communities");say("Community created and saved to Supabase.");
+    }catch(error){say(safeError(error,"Could not create the community."));}
+  }
+  function openCommunity(communityId){
+    const s=appState(),item=(s&&s.backendCommunities||[]).find(row=>String(row.id)===String(communityId));
+    if(!item)return say("This community is no longer available.");
+    const mine=item.createdBy===getUser().id;
+    const body="<div class='wa-community-detail'><h3>"+esc(item.name)+"</h3><p>"+esc(item.description||"No description yet.")+"</p><small>"+(mine?"Created by you":item.joined?"You are a member":"Public community")+"</small></div>";
+    const footer="<button class='secondary-button' data-action='close-dialog'>Close</button>"+(item.joined?"<button class='primary-button' data-dialog-action='leave-community' data-community-id='"+esc(item.id)+"'>Leave community</button>":"<button class='primary-button' data-dialog-action='join-community' data-community-id='"+esc(item.id)+"'>Join community</button>");
+    bridge.openDialog("Community",body,footer);
+  }
+  async function setCommunityMembership(communityId,join){
+    const me=getUser();if(!me||!me.isSupabase)return;
+    try{
+      if(join){
+        const community=(appState().backendCommunities||[]).find(c=>String(c.id)===String(communityId));
+        const role=community&&community.createdBy===me.id?"owner":"member";
+        const {error}=await db.from("whatsapp_community_members").insert({community_id:communityId,user_id:me.id,role});
+        if(error&&error.code!=="23505")throw error;
+      }else{
+        const {error}=await db.from("whatsapp_community_members").delete().eq("community_id",communityId).eq("user_id",me.id);
+        if(error)throw error;
+      }
+      bridge.closeDialog();await loadData(true);bridge.setView("communities");say(join?"Joined the community.":"Left the community.");
+    }catch(error){say(safeError(error,"Could not update community membership."));}
+  }
+  async function createChannel(){
+    const me=getUser();if(!me||!me.isSupabase)return;
+    const name=String($("#channel-name")?.value||"").trim().slice(0,70);
+    const description=String($("#channel-description")?.value||"").trim().slice(0,500);
+    if(!name)return say("Enter a channel name.");
+    try{
+      const {data,error}=await db.from("whatsapp_channels").insert({name,description,created_by:me.id}).select("id").single();
+      if(error)throw error;
+      const follow=await db.from("whatsapp_channel_follows").insert({channel_id:data.id,user_id:me.id});
+      if(follow.error){try{await db.from("whatsapp_channels").delete().eq("id",data.id).eq("created_by",me.id);}catch(_){}throw follow.error;}
+      bridge.closeDialog();await loadData(true);bridge.setView("channels");say("Channel created and followed.");
+    }catch(error){say(safeError(error,"Could not create the channel. Channel names must be unique."));}
+  }
+  async function toggleChannelFollow(channelId){
+    const me=getUser();if(!me||!me.isSupabase)return;
+    const channel=(appState().backendChannels||[]).find(c=>String(c.id)===String(channelId));
+    if(!channel)return say("This channel is no longer available.");
+    try{
+      if(channel.following){
+        const {error}=await db.from("whatsapp_channel_follows").delete().eq("channel_id",channelId).eq("user_id",me.id);
+        if(error)throw error;
+      }else{
+        const {error}=await db.from("whatsapp_channel_follows").insert({channel_id:channelId,user_id:me.id});
+        if(error&&error.code!=="23505")throw error;
+      }
+      await loadData(true);
+    }catch(error){say(safeError(error,"Could not update channel follow state."));}
+  }
+  function openChannelSearch(){
+    const body="<p class='screen-description'>Search channels created by users of this app.</p><div class='dialog-field'><label for='channel-search-input'>Search channels</label><input id='channel-search-input' placeholder='Search channels'></div><div id='channel-search-results'></div>";
+    bridge.openDialog("Discover channels",body,"<button class='secondary-button' data-action='close-dialog'>Close</button>");
+    renderChannelSearchResults("");
+  }
+  function renderChannelSearchResults(query){
+    const result=$("#channel-search-results");if(!result)return;
+    const s=appState(),q=String(query||"").trim().toLowerCase();
+    const channels=(s&&s.backendChannels||[]).filter(c=>!q||(c.name+" "+c.description).toLowerCase().includes(q));
+    result.innerHTML=channels.length?channels.map(c=>"<div class='channel-row'>"+bridge.avatarHTML({name:c.name})+"<span class='community-copy'><strong>"+esc(c.name)+"</strong><span>"+esc(c.description||"No description")+"</span></span><button class='"+(c.following?"secondary-button":"primary-button")+"' data-action='toggle-channel' data-channel-id='"+esc(c.id)+"'>"+(c.following?"Following":"Follow")+"</button></div>").join(""):"<div class='empty-state'>No matching channels. You can create one from Channels.</div>";
+  }
+
   async function updateProfile(name,about){
     const me=getUser();if(!me||!me.isSupabase)return;
     name=String(name||"").trim().slice(0,48);about=String(about||"Available").trim().slice(0,140)||"Available";
@@ -639,8 +741,41 @@
     else if(getUser()&&getUser().isSupabase){event.preventDefault();event.stopImmediatePropagation();void sendMessage($("#message-input")?.value||"");}
   },true);
   document.addEventListener("click",event=>{
-    const target=event.target.closest("[data-action],[data-dialog-action],[data-setting-option],[data-menu-action]");if(!target)return;
+    const target=event.target.closest("[data-action],[data-dialog-action],[data-setting-option],[data-menu-action],[data-community-id]");if(!target)return;
     const action=target.dataset.action||"",menuAction=target.dataset.menuAction||"",dialogAction=target.dataset.dialogAction||"",me=getUser();
+    if(me&&me.isSupabase&&action==="status-preview"){
+      event.preventDefault();event.stopImmediatePropagation();openStatus(target.dataset.statusId);return;
+    }
+    if(me&&me.isSupabase&&dialogAction==="publish-status"){
+      event.preventDefault();event.stopImmediatePropagation();void publishStatus();return;
+    }
+    if(me&&me.isSupabase&&dialogAction==="delete-status"){
+      event.preventDefault();event.stopImmediatePropagation();void deleteStatus(target.dataset.statusId);return;
+    }
+    if(me&&me.isSupabase&&dialogAction==="create-community"){
+      event.preventDefault();event.stopImmediatePropagation();void createCommunity();return;
+    }
+    if(me&&me.isSupabase&&target.dataset.communityId&&action!==""){
+      event.preventDefault();event.stopImmediatePropagation();openCommunity(target.dataset.communityId);return;
+    }
+    if(me&&me.isSupabase&&target.dataset.communityId&&dialogAction==="join-community"){
+      event.preventDefault();event.stopImmediatePropagation();void setCommunityMembership(target.dataset.communityId,true);return;
+    }
+    if(me&&me.isSupabase&&target.dataset.communityId&&dialogAction==="leave-community"){
+      event.preventDefault();event.stopImmediatePropagation();void setCommunityMembership(target.dataset.communityId,false);return;
+    }
+    if(me&&me.isSupabase&&action==="new-channel"){
+      event.preventDefault();event.stopImmediatePropagation();bridge.openDialog("Create channel","<div class='dialog-field'><label for='channel-name'>Channel name</label><input id='channel-name' maxlength='70' placeholder='Channel name'></div><div class='dialog-field'><label for='channel-description'>Description</label><textarea id='channel-description' maxlength='500' rows='3' placeholder='What is this channel about?'></textarea></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='create-channel'>Create channel</button>");return;
+    }
+    if(me&&me.isSupabase&&dialogAction==="create-channel"){
+      event.preventDefault();event.stopImmediatePropagation();void createChannel();return;
+    }
+    if(me&&me.isSupabase&&action==="toggle-channel"){
+      event.preventDefault();event.stopImmediatePropagation();void toggleChannelFollow(target.dataset.channelId);return;
+    }
+    if(me&&me.isSupabase&&action==="channel-search"){
+      event.preventDefault();event.stopImmediatePropagation();openChannelSearch();return;
+    }
     if(me&&me.isSupabase&&dialogAction==="send-poll"){
       event.preventDefault();event.stopImmediatePropagation();void sendPoll();return;
     }
@@ -696,6 +831,12 @@
     if(me&&me.isSupabase&&dialogAction==="backend-logout"){event.preventDefault();event.stopImmediatePropagation();void window.waBackendLogout();return;}
   },true);
 
+  document.addEventListener("input",event=>{
+    const target=event.target;
+    if(target&&target.id==="channel-search-input"&&getUser()&&getUser().isSupabase){
+      event.stopImmediatePropagation();renderChannelSearchResults(target.value);return;
+    }
+  },true);
   document.addEventListener("input",event=>{
     const target=event.target;
     if(!target||!["signup-phone","login-identity"].includes(target.id))return;
