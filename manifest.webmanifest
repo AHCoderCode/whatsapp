@@ -1,7 +1,7 @@
 {
   "name": "WhatsApp",
   "short_name": "WhatsApp",
-  "description": "A WhatsApp-style chat list interface preview.",
+  "description": "WhatsApp-style local frontend demo with chats, groups, profile and contact requests.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
