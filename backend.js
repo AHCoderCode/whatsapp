@@ -305,6 +305,24 @@
     if(me&&me.isSupabase&&action==="logout"){event.preventDefault();event.stopImmediatePropagation();bridge.openDialog("Log out","<p class='screen-description'>Sign out of this account on this device?</p>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='backend-logout'>Log out</button>");return;}
     if(me&&me.isSupabase&&dialogAction==="backend-logout"){event.preventDefault();event.stopImmediatePropagation();void window.waBackendLogout();return;}
   },true);
+
+  document.addEventListener("input",event=>{
+    const target=event.target;
+    if(!target||!["signup-phone","login-identity"].includes(target.id))return;
+    event.stopImmediatePropagation();
+    const fieldId=target.id, label=$("#"+(fieldId==="signup-phone"?"signup-phone-match":"login-identity-match"));
+    const value=target.value;
+    if(fieldId==="signup-phone") target.value=String(value||"").replace(/[^\d\s()-]/g,"").slice(0,18);
+    const number=canonicalNumber(target.value);
+    if(!label)return;
+    if(!number){label.textContent=fieldId==="signup-phone"?"Enter nine digits to check whether this app ID is available.":"";return;}
+    label.textContent="Checking the shared account directory…";
+    void usernameFromNumber(number).then(username=>{
+      if(!label.isConnected)return;
+      if(fieldId==="signup-phone")label.textContent=username?"This in-app ID belongs to @"+username+". Choose another ID.":"No account currently uses this in-app ID.";
+      else label.textContent=username?"In-app ID belongs to @"+username+".":"No account uses this ID; try your username instead.";
+    }).catch(error=>{if(label.isConnected)label.textContent=safeError(error,"Custom ID lookup is temporarily unavailable.");});
+  },true);
   document.addEventListener("input",event=>{
     const target=event.target;if(!target||target.id!=="friend-search"||!getUser()||!getUser().isSupabase)return;
     event.stopImmediatePropagation();clearTimeout(searchTimer);
