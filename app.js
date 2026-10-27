@@ -235,22 +235,22 @@
     });
     const phone = generatePhone();
     if (authMode === "signup") {
-      authSlot.innerHTML = "<h2 class='auth-heading'>Create your account</h2><p class='auth-subheading'>Choose a username and an in-app number. No real phone number or SMS verification is needed for this demo.</p>" +
+      authSlot.innerHTML = "<h2 class='auth-heading'>Create your account</h2><p class='auth-subheading'>Create a secure account using a username and a custom in-app ID. No real phone number or SMS verification is required.</p>" +
         "<form class='auth-form' id='signup-form' novalidate>" +
         "<div id='auth-error' class='form-error' role='alert'></div>" +
         authField("signup-name","Your display name","text","How people see you","","This can be changed later.","autocomplete='name' maxlength='48' required") +
-        authField("signup-username","Username","text","Choose a unique username","","3–20 characters: letters, numbers, dots or underscores. Other people can find you by this.","autocomplete='username' maxlength='20' required") +
-        "<div class='form-field'><label for='signup-phone'>Your custom WhatsApp number</label><div class='phone-field-wrap'><span class='phone-prefix'>" + icon("phone") + "+990</span><input id='signup-phone' name='phone' type='tel' value='" + esc(phone.replace("+990 ","")) + "' inputmode='numeric' autocomplete='tel-national' required></div><span class='field-help'>A unique in-app demo number, not a real telephone number. It can be used to find your username.</span><span class='form-username-match' id='signup-phone-match'></span></div>" +
-        authField("signup-password","Password","password","At least 6 characters","","Stored in this browser only for this frontend prototype.","autocomplete='new-password' minlength='6' required") +
+        authField("signup-username","Username","text","Choose a unique username","","3–20 characters: letters, numbers or underscores. Other people can find you by this.","autocomplete='username' maxlength='20' required") +
+        "<div class='form-field'><label for='signup-phone'>Your custom WhatsApp number</label><div class='phone-field-wrap'><span class='phone-prefix'>" + icon("phone") + "+990</span><input id='signup-phone' name='phone' type='tel' value='" + esc(phone.replace("+990 ","")) + "' inputmode='numeric' autocomplete='tel-national' required></div><span class='field-help'>A unique in-app ID, not a real telephone number. It can be used to find your username.</span><span class='form-username-match' id='signup-phone-match'></span></div>" +
+        authField("signup-password","Password","password","","","Supabase securely handles your password. Do not share it with anyone.","autocomplete='new-password' minlength='8' required") +
         authField("signup-confirm","Confirm password","password","Type your password again","","","autocomplete='new-password' minlength='6' required") +
         "<div class='form-error' id='signup-error' role='alert'></div><button class='auth-primary' type='submit'>Create account " + icon("chevron") + "</button></form>" +
-        "<div class='auth-separator'>OR</div><button class='auth-secondary' type='button' data-action='demo-login'>" + icon("sparkles") + " Try the interactive demo</button>";
+        "<div class='auth-separator'>OR</div><button class='auth-secondary' type='button' data-action='demo-login'>" + icon("sparkles") + " Try the interactive demo (local only)</button>";
       const phoneInput = $("#signup-phone");
       if (phoneInput) phoneInput.addEventListener("input", () => {
         phoneInput.value = phoneInput.value.replace(/[^\d\s()-]/g,"").slice(0,18);
         const match = lookupIdentity("+990 " + phoneInput.value);
         const label = $("#signup-phone-match");
-        if (label) label.textContent = match ? "This in-app number belongs to @" + match.username + ". Choose another number." : "This number is available in the local demo.";
+        if (label) label.textContent = match ? "This in-app ID belongs to @" + match.username + ". Choose another number." : "Checking the shared account directory…";
       });
     } else {
       authSlot.innerHTML = "<h2 class='auth-heading'>Welcome back</h2><p class='auth-subheading'>Log in with your username or custom in-app number.</p>" +
@@ -310,12 +310,12 @@
     if (db.accounts.some(a=>normalizeUsername(a.username)===username)) return fail("That username is already taken on this browser.");
     if (phoneDigits.length !== 9) return fail("Enter exactly 9 digits after the +990 demo prefix.");
     if (db.accounts.concat(db.directory).some(a=>normalizePhone(a.phone)===normalizePhone(phone))) return fail("That custom number is already in use. Choose another.");
-    if (password.length < 6) return fail("Use a password with at least 6 characters.");
+    if (password.length < 8) return fail("Use a password with at least 8 characters.");
     if (password !== confirm) return fail("The passwords do not match.");
     const user = {id:uid("account"),username:username,name:name,phone:phone,about:"Available",password:password,avatar:initials(name),avatarColor:Math.floor(Math.random()*12)+1,createdAt:new Date().toISOString()};
     db.accounts.push(user); saveDb();
     persistUser(user);
-    toast("Account created locally. No backend account exists yet.");
+    toast("Demo account created locally. This account does not sync to other devices.");
   }
   function handleLogin() {
     const identity = $("#login-identity").value.trim();
@@ -323,11 +323,11 @@
     const error = $("#login-error");
     const user = lookupIdentity(identity);
     if (!user || !db.accounts.some(a=>a.id===user.id) || user.password !== password) {
-      error.textContent = "Account not found or password incorrect. Use your browser's demo account or create a local account.";
+      error.textContent = "Account not found or password incorrect. Try your username and password again.";
       error.classList.add("show"); return;
     }
     persistUser(user);
-    toast("Logged in to the local demo.");
+    toast("Logged in to this browser-only demo account.");
   }
   function enterDemo() {
     let user = db.accounts.find(a=>a.demoAccount);
@@ -474,7 +474,7 @@
     const sent=state.sentRequests||[];
     const receivedHtml=received.length?received.map(r=>"<div class='request-card'>"+avatarHTML(r)+"<div class='request-info'><strong>"+esc(r.name)+"</strong><span>@"+esc(r.username)+" · "+esc(r.phone)+"</span><span>"+esc(r.note||"Would like to connect")+" · "+esc(r.time||"Recently")+"</span></div><div class='request-actions'><button class='accept-request' data-action='accept-request' data-request-id='"+esc(r.id)+"'>Accept</button><button class='decline-request' data-action='decline-request' data-request-id='"+esc(r.id)+"'>Decline</button></div></div>").join(""):"<div class='empty-state'>No new contact requests.<br>When someone asks to connect, they will appear here.</div>";
     const sentHtml=sent.length?sent.map(r=>"<div class='request-card'>"+avatarHTML(r)+"<div class='request-info'><strong>"+esc(r.name)+"</strong><span>@"+esc(r.username)+" · "+esc(r.phone)+"</span><span>Request sent · Pending</span></div><div class='request-actions'><button class='decline-request' data-action='cancel-request' data-request-id='"+esc(r.id)+"'>Cancel</button></div></div>").join(""):"<div class='empty-state'>No outgoing requests.</div>";
-    main.innerHTML="<section class='section-screen'>"+screenHeader("Contact requests","<button class='primary-button' data-action='find-friends'>"+icon("user-plus")+" Find people</button>")+"<div class='screen-content'><p class='screen-description'>Manage connection requests. Accepting a request adds the person to your local chat list; declining removes it. No notification is sent to a server.</p><div class='request-section-label'>RECEIVED · "+received.length+"</div><div class='section-card'>"+receivedHtml+"</div><div class='request-section-label'>SENT · "+sent.length+"</div><div class='section-card'>"+sentHtml+"</div><div class='screen-description'>Contact requests are an extra feature of this demo and are not a native WhatsApp feature.</div></div></section>";
+    main.innerHTML="<section class='section-screen'>"+screenHeader("Contact requests","<button class='primary-button' data-action='find-friends'>"+icon("user-plus")+" Find people</button>")+"<div class='screen-content'><p class='screen-description'>Manage connection requests. Requests are shared across devices. Accepting connects the two accounts; declining or cancelling updates the server.</p><div class='request-section-label'>RECEIVED · "+received.length+"</div><div class='section-card'>"+receivedHtml+"</div><div class='request-section-label'>SENT · "+sent.length+"</div><div class='section-card'>"+sentHtml+"</div><div class='screen-description'>Contact requests use this app’s own account directory. They are not linked to real WhatsApp accounts.</div></div></section>";
   }
   function downloadLocalJson(filename, object) {
     const blob=new Blob([JSON.stringify(object,null,2)],{type:"application/json"});
@@ -495,7 +495,7 @@
       openDialog(title,"<p class='screen-description'>"+esc(message)+"</p><p class='screen-description'>This report describes this browser-only demo, not WhatsApp's real storage.</p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
     }
     if(title==="Change number"){
-      openDialog("Change custom number","<p class='screen-description'>Choose a new unique in-app demo number. It is not a real phone number.</p><div class='dialog-field'><label for='new-custom-number'>Custom number after +990</label><input id='new-custom-number' inputmode='numeric' value='"+esc(state.profile.phone.replace("+990 ",""))+"'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='save-custom-number'>Save number</button>");return;
+      openDialog("Change custom number","<p class='screen-description'>Choose a unique in-app ID. It is not a real phone number.</p><div class='dialog-field'><label for='new-custom-number'>Custom number after +990</label><input id='new-custom-number' inputmode='numeric' value='"+esc(state.profile.phone.replace("+990 ",""))+"'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='save-custom-number'>Save number</button>");return;
     }
     if(title==="Two-step verification"){
       openDialog(title,"<p class='screen-description'>Create a local six-digit demo PIN. It is saved only in this browser and does not protect a real account.</p><div class='dialog-field'><label for='two-step-pin'>Six-digit PIN</label><input id='two-step-pin' inputmode='numeric' maxlength='6' placeholder='••••••'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='save-two-step'>Save PIN</button>");return;
@@ -669,7 +669,7 @@
     return[];
   }
   function createNewChatDialog() {
-    const body="<p class='screen-description'>Search by username or custom in-app number. Numbers beginning with +990 are demo IDs and do not work as real phone numbers.</p><div class='dialog-field'><label for='friend-search'>Username or custom number</label><input id='friend-search' placeholder='@username or +990 700 100 101' autocomplete='off'></div><div id='friend-lookup-result'></div>";
+    const body="<p class='screen-description'>Search for a registered username or custom in-app ID. The +990 number is not a real phone number.</p><div class='dialog-field'><label for='friend-search'>Username or custom number</label><input id='friend-search' placeholder='@username or +990 700 100 101' autocomplete='off'></div><div id='friend-lookup-result'></div>";
     openDialog("Find people",body,"<button class='secondary-button' data-action='close-dialog'>Close</button>");
   }
   function createGroupDialog() {
@@ -682,7 +682,7 @@
     openDialog("New community",body,"<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='create-community'>Create community</button>");
   }
   function editProfileDialog() {
-    const p=state.profile;const body="<div class='dialog-field'><label for='edit-name'>Display name</label><input id='edit-name' maxlength='48' value='"+esc(p.name)+"'></div><div class='dialog-field'><label for='edit-about'>About</label><input id='edit-about' maxlength='140' value='"+esc(p.about)+"'></div><div class='dialog-field'><label>Username</label><input value='@"+esc(p.username)+"' readonly><span class='field-help'>Username changes will be available when the backend is added.</span></div><div class='dialog-field'><label>Custom in-app number</label><input value='"+esc(p.phone)+"' readonly><span class='field-help'>Numbers are local demo identifiers only.</span></div>";
+    const p=state.profile;const body="<div class='dialog-field'><label for='edit-name'>Display name</label><input id='edit-name' maxlength='48' value='"+esc(p.name)+"'></div><div class='dialog-field'><label for='edit-about'>About</label><input id='edit-about' maxlength='140' value='"+esc(p.about)+"'></div><div class='dialog-field'><label>Username</label><input value='@"+esc(p.username)+"' readonly><span class='field-help'>Usernames are unique identifiers and cannot be edited from this screen.</span></div><div class='dialog-field'><label>Custom in-app number</label><input value='"+esc(p.phone)+"' readonly><span class='field-help'>This unique app ID is not a real phone number and cannot receive SMS.</span></div>";
     openDialog("Edit profile",body,"<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='save-profile'>Save</button>");
   }
   function editGroupDialog(chat) {
@@ -793,7 +793,7 @@
     if(action==="new-status"){openDialog("New status","<div class='dialog-field'><label for='status-text'>Type a status update</label><textarea id='status-text' rows='3' maxlength='700' placeholder='What’s on your mind?'></textarea></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='publish-status'>Share status</button>");return;}
     if(action==="status-preview"){toast("Status viewer preview.");return;}
     if(action==="new-call"){openPopup(el,[{icon:"phone",label:"New voice call",action:"new-voice-call"},{icon:"video",label:"New video call",action:"new-video-call"}],null);return;}
-    if(action==="new-voice-call"||action==="new-video-call"||action==="call-entry"){toast("Calls are not connected in this frontend demo.");return;}
+    if(action==="new-voice-call"||action==="new-video-call"||action==="call-entry"){toast("Calls must be started from a contact chat and require microphone/camera access plus relay setup.");return;}
     if(action==="channel-search"){openDialog("Discover channels","<div class='dialog-field'><label for='channel-search-input'>Search channels</label><input id='channel-search-input' placeholder='Search channels'></div><div id='channel-search-results'></div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");renderChannelSearchResults();return;}
     if(action==="toggle-channel"){const ch=state.channels.find(c=>c.id===el.dataset.channelId);if(ch){ch.following=!ch.following;saveState();renderMain();toast(ch.following?"Channel followed in preview":"Channel unfollowed");}return;}
     if(action==="go-starred"){setView("starred");return;}
@@ -998,7 +998,7 @@
     if(target.id==="friend-search"){
       const contact=lookupDirectory(target.value);const box=$("#friend-lookup-result");if(!box)return;
       if(!target.value.trim()){box.innerHTML="";return;}
-      if(!contact){box.innerHTML="<div class='empty-state'>No local demo account matches this username or number. You can still try another value.</div>";return;}
+      if(!contact){box.innerHTML="<div class='empty-state'>No account matched that username or in-app ID. Try another value.</div>";return;}
       const isSelf=normalizeUsername(contact.username)===normalizeUsername(currentUser.username);
       const existing=state.chats.find(c=>normalizeUsername(c.username)===normalizeUsername(contact.username));
       const sent=state.sentRequests.some(r=>normalizeUsername(r.username)===normalizeUsername(contact.username));
