@@ -137,7 +137,7 @@
       let groups=[],roster=[],groupMessages=[];
       if(groupIds.length){
         const [g,m,gm]=await Promise.all([
-          db.from("aeroshell_groups").select("id,name,avatar_data,created_by,updated_at").in("id",groupIds).order("updated_at",{ascending:false}),
+          db.from("aeroshell_groups").select("id,name,avatar_data,created_by,updated_at,description").in("id",groupIds).order("updated_at",{ascending:false}),
           db.from("aeroshell_group_members").select("group_id,user_id,role").in("group_id",groupIds),
           db.from("aeroshell_messages").select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms").in("group_id",groupIds).order("created_at",{ascending:true}).limit(800)
         ]);
@@ -453,12 +453,50 @@
   }
   async function createGroup(){
     const me=getUser();if(!me||!me.isSupabase)return say("Sign in to create a shared group.");
-    const name=String($("#group-name")?.value||"").trim();
-    const memberIds=$$("#group-contact-list input[type=checkbox]:checked").map(el=>el.value).filter(id=>appState().chats.some(c=>String(c.id)===String(id)&&c.type==="person"));
+    const name=String($("#group-name")?.value||"").trim(),description=String($("#group-description")?.value||"").trim().slice(0,500);
+    const memberIds=$("#group-contact-list input[type=checkbox]:checked").map(el=>el.value).filter(id=>appState().chats.some(c=>String(c.id)===String(id)&&c.type==="person"));
     if(!name)return say("Enter a group name.");
-    try{const {data,error}=await db.rpc("aeroshell_create_group",{p_name:name,p_avatar_data:null,p_member_ids:memberIds});if(error)throw error;bridge.closeDialog();await loadData(true);if(data){bridge.setView("chats");bridge.selectChat(data);}say("Group created for your contacts.");}
-    catch(error){say(safeError(error,"Could not create the group."));}
+    if(name.length>60)return say("Group names are limited to 60 characters.");
+    try{
+      const {data,error}=await db.rpc("aeroshell_create_group",{p_name:name,p_avatar_data:null,p_member_ids:memberIds});if(error)throw error;
+      if(description&&data){const result=await db.from("aeroshell_groups").update({description}).eq("id",data);if(result.error)throw result.error;}
+      bridge.closeDialog();await loadData(true);if(data){bridge.setView("chats");bridge.selectChat(data);}say("Group created and saved to your account.");
+    }catch(error){say(safeError(error,"Could not create the group."));}
   }
+
+  async function updateGroup(groupId) {
+    const me=getUser();if(!me||!me.isSupabase)return;
+    const name=String($("#edit-group-name")?.value||"").trim();
+    const description=String($("#edit-group-about")?.value||"").trim().slice(0,500);
+    if(!name)return say("Group subject cannot be empty.");
+    if(name.length>60)return say("Group subjects are limited to 60 characters.");
+    try{
+      const {data,error}=await db.from("aeroshell_groups").update({name,description}).eq("id",groupId).select("id").maybeSingle();
+      if(error)throw error;if(!data)throw new Error("Only a group admin can change group information.");
+      bridge.closeDialog();await loadData(true);bridge.selectChat(groupId);say("Group information saved to Supabase.");
+    }catch(error){say(safeError(error,"Could not save group information."));}
+  }
+  function openAddParticipants() {
+    const me=getUser(),chat=bridge.getCurrentChat(),s=appState();
+    if(!me||!me.isSupabase||!chat||chat.type!=="group")return say("Open a group to add participants.");
+    const already=new Set((chat.participants||[]).map(p=>typeof p==="string"?p:(p.id||"")));
+    const candidates=(s.chats||[]).filter(p=>p.type==="person"&&!already.has(p.id));
+    const body=candidates.length?candidates.map(p=>"<div class='pick-row'>"+bridge.avatarHTML(p)+"<label for='add-member-"+esc(p.id)+"'>@"+esc(p.username)+"</label><input id='add-member-"+esc(p.id)+"' type='checkbox' value='"+esc(p.id)+"'></div>").join(""):"<div class='empty-state'>All your accepted contacts are already members of this group.</div>";
+    bridge.openDialog("Add participants",body,"<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='add-group-participants' data-chat-id='"+esc(chat.id)+"' "+(candidates.length?"":"disabled")+">Add selected</button>");
+  }
+  async function addGroupParticipants(groupId) {
+    const me=getUser(),s=appState();
+    if(!me||!me.isSupabase)return;
+    const ids=$("#dialog-backdrop input[type=checkbox]:checked").map(el=>el.value).filter(id=>(s.chats||[]).some(c=>String(c.id)===String(id)&&c.type==="person"));
+    if(!ids.length)return say("Select at least one accepted contact.");
+    try{
+      const rows=ids.map(id=>({group_id:groupId,user_id:id,role:"member",added_by:me.id}));
+      const {error}=await db.from("aeroshell_group_members").insert(rows);
+      if(error)throw error;
+      bridge.closeDialog();await loadData(true);bridge.selectChat(groupId);say(ids.length+" participant(s) added to the group.");
+    }catch(error){say(safeError(error,"Could not add participants. The current account may not be a group admin."));}
+  }
+
   document.addEventListener("submit",event=>{
     const form=event.target;if(!form||!form.matches("#signup-form,#login-form,#message-form"))return;
     if(form.id===""||form.id==="signup-form"||form.id==="login-form"){event.preventDefault();event.stopImmediatePropagation();form.id==="signup-form"?void signUp(form):void signIn(form);}
@@ -467,6 +505,15 @@
   document.addEventListener("click",event=>{
     const target=event.target.closest("[data-action],[data-dialog-action],[data-setting-option]");if(!target)return;
     const action=target.dataset.action||"",dialogAction=target.dataset.dialogAction||"",me=getUser();
+    if(me&&me.isSupabase&&action==="add-participants"){
+      event.preventDefault();event.stopImmediatePropagation();openAddParticipants();return;
+    }
+    if(me&&me.isSupabase&&dialogAction==="save-group"){
+      event.preventDefault();event.stopImmediatePropagation();void updateGroup(target.dataset.chatId);return;
+    }
+    if(me&&me.isSupabase&&dialogAction==="add-group-participants"){
+      event.preventDefault();event.stopImmediatePropagation();void addGroupParticipants(target.dataset.chatId);return;
+    }
     if(me&&me.isSupabase&&action==="open-attachment"){
       event.preventDefault();event.stopImmediatePropagation();void openAttachment(target.dataset.messageId);return;
     }
