@@ -120,7 +120,7 @@
         db.from("aeroshell_profiles").select("id,username,display_name,about,custom_number,avatar_data,created_at").eq("id",me.id).maybeSingle(),
         db.from("aeroshell_friend_requests").select("id,requester_id,recipient_id,status,created_at,responded_at").or("requester_id.eq."+me.id+",recipient_id.eq."+me.id).order("created_at",{ascending:false}).limit(300),
         db.from("aeroshell_group_members").select("group_id,role").eq("user_id",me.id),
-        db.from("aeroshell_messages").select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path").or("sender_id.eq."+me.id+",recipient_id.eq."+me.id).order("created_at",{ascending:true}).limit(800),
+        db.from("aeroshell_messages").select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms").or("sender_id.eq."+me.id+",recipient_id.eq."+me.id).order("created_at",{ascending:true}).limit(800),
         db.from("aeroshell_calls").select("id,caller_id,callee_id,status,created_at,media_type").or("caller_id.eq."+me.id+",callee_id.eq."+me.id).order("created_at",{ascending:false}).limit(100)
       ]);
       for(const result of [profileResult,requestResult,membershipResult,messageResult])if(result.error)throw result.error;
@@ -137,7 +137,7 @@
         const [g,m,gm]=await Promise.all([
           db.from("aeroshell_groups").select("id,name,avatar_data,created_by,updated_at").in("id",groupIds).order("updated_at",{ascending:false}),
           db.from("aeroshell_group_members").select("group_id,user_id,role").in("group_id",groupIds),
-          db.from("aeroshell_messages").select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path").in("group_id",groupIds).order("created_at",{ascending:true}).limit(800)
+          db.from("aeroshell_messages").select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms").in("group_id",groupIds).order("created_at",{ascending:true}).limit(800)
         ]);
         if(g.error)throw g.error;if(m.error)throw m.error;if(gm.error)throw gm.error;
         groups=g.data||[];roster=m.data||[];groupMessages=gm.data||[];
@@ -225,7 +225,7 @@
     const button=$(".send-button");if(button)button.disabled=true;
     try{
       const payload={sender_id:me.id,recipient_id:chat.type==="group"?null:chat.id,group_id:chat.type==="group"?chat.id:null,body,message_type:"text"};
-      const {data,error}=await db.from("aeroshell_messages").insert(payload).select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path").single();
+      const {data,error}=await db.from("aeroshell_messages").insert(payload).select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms").single();
       if(error)throw error;if(data)insertMessageIntoUI(data);
       const input=$("#message-input");if(input){input.value="";input.style.height="";input.dispatchEvent(new Event("input",{bubbles:true}));}
     }catch(error){say(safeError(error,"Message was not delivered."));}
