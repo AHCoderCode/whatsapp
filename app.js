@@ -27,6 +27,10 @@
   let currentUser = null;
   let attachmentFile = null;
   let demoDirectory = [];
+  let replyingTo = null;
+  let selectedMessageRow = null;
+  let messageHoldTimer = null;
+  let messageHoldStart = null;
   const settingsTabs = [
     ["account","key","Account"],["privacy","shield","Privacy"],["chats","chat","Chats"],
     ["notifications","bell","Notifications"],["personalization","palette","Appearance"],
@@ -340,6 +344,7 @@
     updateCounts();
   }
   function setView(next) {
+    if(next!=="chats")replyingTo=null;
     view = next;
     archivedMode = next==="archived";
     selectedChatId = null;
@@ -361,8 +366,21 @@
     const outgoing = message.from==="me";
     const sender = !outgoing&&chat.type==="group" ? "<span class='message-sender'>" + esc(message.sender || "Group member") + "</span>" : "";
     const time = esc(message.time || "");
-    const reactions = message.reactions && message.reactions.length ? "<span class='reaction'>" + esc(message.reactions.join(" ")) + "</span>" : "";
-    const checks = outgoing ? "<span class='message-read-status " + (message.status==="read"?"is-read":"") + "'>" + icon(message.status==="read"?"checks":"check") + "</span>" : "";
+    const groupedReactions = new Map();
+    (Array.isArray(message.reactions)?message.reactions:[]).forEach(reaction=>{
+      const emoji=typeof reaction==="string"?reaction:reaction&&reaction.emoji;
+      if(!emoji)return;
+      const item=groupedReactions.get(emoji)||{emoji,count:0,selected:false};
+      item.count++;
+      if(typeof reaction!=="string"&&currentUser&&String(reaction.user_id||reaction.userId)===String(currentUser.id))item.selected=true;
+      groupedReactions.set(emoji,item);
+    });
+    const reactions = Array.from(groupedReactions.values()).map(item=>
+      "<button type='button' class='message-reaction "+(item.selected?"selected":"")+"' data-action='react-message' data-chat-id='"+esc(chat.id)+"' data-message-id='"+esc(message.id)+"' data-emoji='"+esc(item.emoji)+"' aria-label='React "+esc(item.emoji)+"'>"+esc(item.emoji)+"<span>"+item.count+"</span></button>"
+    ).join("");
+    const reactionRow = reactions ? "<div class='message-reactions'>"+reactions+"</div>" : "";
+    const replyQuote = message.replyToText ? "<button type='button' class='message-reply-quote' data-action='open-reply-target' data-chat-id='"+esc(chat.id)+"' data-message-id='"+esc(message.replyToId||"")+"' aria-label='Jump to replied-to message'><strong>"+esc(message.replyToSender||"Reply")+"</strong><span>"+esc(message.replyToText)+"</span></button>" : "";
+    const checks = outgoing ? "<span class='message-read-status "+(message.status==="read"?"is-read":"")+"' title='"+(message.status==="read"?"Read":"Sent")+"' aria-label='"+(message.status==="read"?"Read":"Sent")+"'>"+icon(message.status==="read"?"checks":"check")+"</span>" : "";
     const attachmentAction = message.attachmentPath ? "<button type='button' class='message-attachment-open' data-action='open-attachment' data-message-id='" + esc(message.id) + "'>" + icon(message.attachmentType==="voice"?"mic":(message.attachmentMime||"").startsWith("image/")?"image":"file") + "<span>" + esc(message.attachmentName || (message.attachmentType==="voice"?"Play voice message":"Open attachment")) + "</span></button>" : "";
     const pollCard = message.poll ? (function(){
       const p=message.poll, options=Array.isArray(p.options)?p.options:[], counts=Array.isArray(p.counts)?p.counts:[];
@@ -378,7 +396,7 @@
       return "<div class='wa-event-card'><span class='wa-event-kicker'>EVENT</span><strong>"+esc(e.title)+"</strong><span class='wa-event-date'>"+esc(valid?date.toLocaleString():"Date unavailable")+"</span><small>"+Number(e.total||0)+" going"+(Number(e.interested||0)?" · "+Number(e.interested)+" interested":"")+"</small><button type='button' class='primary-button wa-event-rsvp "+(going?"going":"")+"' data-action='event-rsvp' data-event-id='"+esc(e.id)+"'>"+(going?"Going ✓ · Cancel RSVP":"I'm going")+"</button></div>";
     })() : "";
     const textBody = message.poll || message.event ? "" : esc(message.text);
-    return "<div class='message-row " + (outgoing?"outgoing":"incoming") + "' data-message-id='" + esc(message.id) + "'><div class='message-bubble'>" + sender + "<span class='message-text'>" + textBody + "</span>" + pollCard + eventCard + attachmentAction + "<span class='message-meta'>" + time + checks + "</span>" + reactions + "</div></div>";
+    return "<div class='message-row " + (outgoing?"outgoing":"incoming") + "' data-message-id='" + esc(message.id) + "'><div class='message-bubble'>" + sender + replyQuote + "<span class='message-text'>" + textBody + "</span>" + pollCard + eventCard + attachmentAction + "<span class='message-meta'>" + time + checks + "</span>" + reactionRow + "</div></div>";
   }
   function renderWelcome() {
     main.innerHTML = "<div class='welcome-pane'><div class='welcome-content'><svg class='welcome-art' viewBox='0 0 320 250' aria-hidden='true'><ellipse cx='161' cy='220' rx='112' ry='9' fill='#e0e6e8'/><path d='M61 142c-1-40 39-70 89-70 45 0 79 25 83 60 4 36-31 66-78 69l-30 24 4-26c-40-8-67-29-68-57Z' fill='#d9fdd3'/><path d='M76 139c0-30 31-54 71-54 40 0 72 24 72 54s-32 54-72 54c-10 0-20-1-29-4l-22 14 4-22c-15-10-24-24-24-42Z' fill='#25d366'/><path d='M128 114c-3-5-5-5-8-5s-7 3-8 7c-2 5 2 15 7 23 8 11 18 19 30 25 7 3 13 5 17 4 5-1 8-6 8-10 0-2-1-3-4-5l-10-5c-2-1-3 0-5 2l-4 5c-1 1-2 2-4 1-6-2-12-7-17-12-4-4-7-9-8-12 0-1 0-2 1-3l4-4c1-2 1-3 1-4l-4-7Z' fill='#fff'/></svg><h2>Messaging Web</h2><p>Send and receive messages with ease, right from your computer.</p><div class='welcome-divider'></div><div class='welcome-caption'>" + icon("lock") + "<span>Your messages sync through the connected account backend</span></div></div><div class='welcome-footer'>" + icon("lock") + "<span>WhatsApp is an independent messaging app and is not connected to other messaging accounts</span></div></div>";
@@ -396,12 +414,15 @@
       }
       messages += messageHTML(m,chat);
     });
-    const callActions = "<button class='call-button' data-action='call-menu'>" + icon("video") + "<span>Video call</span>" + icon("chevron") + "</button>";
+    const callActions = "<button class='call-button desktop-call-button' data-action='call-menu' title='Voice or video call'>" + icon("video") + "<span>Call</span>" + icon("chevron") + "</button><button class='icon-button mobile-call-button' data-action='call-menu' title='Voice or video call' aria-label='Voice or video call'>" + icon("phone") + "</button>";
+    const replyPreview = replyingTo && String(replyingTo.chatId)===String(chat.id)
+      ? "<div class='reply-composer-preview'><div class='reply-composer-mark'></div><div class='reply-composer-copy'><strong>Replying to "+esc(replyingTo.sender||"message")+"</strong><span>"+esc(replyingTo.text||"")+"</span></div><button type='button' class='reply-composer-cancel' data-action='cancel-reply' aria-label='Cancel reply'>×</button></div>"
+      : "";
     main.innerHTML = "<section class='conversation'>" +
       "<header class='conversation-header'><button class='back-button' data-action='back-to-list' aria-label='Back to chats'>" + icon("back") + "</button><button class='conversation-person' data-action='chat-info' aria-label='Open contact information'>" +
       avatarHTML(chat) + "<span class='person-copy'><span class='person-name'>" + esc(chat.name) + "</span><span class='person-subtitle'>" + esc(subtitle) + "</span></span></button><div class='conversation-actions'>" + callActions +
       "<button class='icon-button' data-action='chat-search' title='Search in chat' aria-label='Search in chat'>" + icon("search") + "</button><button class='icon-button' data-action='chat-menu' title='More options' aria-label='More options'>" + icon("more") + "</button></div></header>" +
-      pinned + "<div class='message-scroll' id='message-scroll'><div class='encryption-notice'>" + icon("lock") + " Messages sync through your account backend. This app does not provide end-to-end encryption.</div>" + messages + "</div>" +
+      pinned + "<div class='message-scroll' id='message-scroll'><div class='encryption-notice'>" + icon("lock") + " Messages sync through your account backend. This app does not provide end-to-end encryption.</div>" + messages + "</div>" + replyPreview +
       "<form class='composer' id='message-form'><button class='composer-tool' type='button' data-action='attachment' aria-label='Attach' title='Attach'>" + icon("paperclip") + "</button><button class='composer-tool' type='button' data-action='emoji' aria-label='Emoji' title='Emoji'>" + icon("smile") + "</button><div class='composer-box'><textarea id='message-input' rows='1' placeholder='Type a message' aria-label='Type a message'></textarea></div><button class='send-button' type='submit' aria-label='Send message' title='Send message'>" + icon("send") + "</button></form></section>";
     requestAnimationFrame(()=>{const sc=$("#message-scroll");if(sc)sc.scrollTop=sc.scrollHeight;});
   }
@@ -609,6 +630,8 @@
   function updateMobile() { updateMobileMode(); }
   function selectChat(id) {
     const chat=findChat(id);if(!chat)return;
+    if(replyingTo&&String(replyingTo.chatId)!==String(chat.id))replyingTo=null;
+    closeMessageActionToolbar();
     selectedChatId=chat.id;view="chats";archivedMode=false;chat.unread=0;
     closePopup();closeDialog();renderSidebar();renderMain();updateNav();updateMobile();
     requestAnimationFrame(()=>{const sc=$("#message-scroll");if(sc)sc.scrollTop=sc.scrollHeight;const input=$("#message-input");if(input&&!window.matchMedia("(max-width:700px)").matches)input.focus({preventScroll:true});});
@@ -818,7 +841,14 @@
     chat[prop]=value===undefined?!chat[prop]:value;
     saveState();renderSidebar();renderMain();
   }
-  function useAction(action,chat) {
+  function openForwardMessageDialog(reference, sourceChat) {
+    const targets=(state&&state.chats||[]).filter(item=>item&&(item.type==="person"||item.type==="group")&&!item.archived&&String(item.id)!==String(sourceChat&&sourceChat.id));
+    const body="<p class='screen-description'>Choose a chat to forward this message to.</p><div id='forward-target-list' class='forward-target-list'>"+
+      (targets.length?targets.map((target,index)=>"<label class='forward-target-row'><input type='radio' name='forward-target' value='"+esc(target.id)+"' "+(index===0?"":"")+"><span class='forward-target-avatar'>"+avatarHTML(target)+"</span><span><strong>"+esc(target.name||target.username||"Chat")+"</strong><small>"+(target.type==="group"?"Group":"@"+esc(target.username||""))+"</small></span></label>").join(""):"<div class='empty-state'>No other accepted chats or groups are available to forward to.</div>")+
+      "</div>";
+    openDialog("Forward message",body,"<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='confirm-forward-message' "+(targets.length?"":"disabled")+">Forward</button>");
+  }
+    function useAction(action,chat) {
     if(["open-chat"].includes(action)){if(chat)selectChat(chat.id);return;}
     if(!chat && ["toggle-unread","toggle-favorite","toggle-pin","toggle-mute","toggle-archive","toggle-lock","toggle-favorite"].includes(action)){toast("Choose a chat first.");return;}
     if(action==="toggle-unread"){chat.unread=chat.unread?0:1;save();renderMain();toast(chat.unread?"Marked as unread":"Marked as read");return;}
@@ -839,16 +869,43 @@
       if(ref && chat) {
         if(!state.starredMessages.some(m=>m.id===ref.id)) state.starredMessages.unshift({id:ref.id,chatId:chat.id,chatName:chat.name,text:ref.text,avatar:chat.avatar,time:ref.time});
         saveState();toast("Message starred.");renderSidebar();
-      } else toast("Right-click a message to star it.");
-      return;
+      } else toast("Hold or right-click a message to star it.");
+      closeMessageActionToolbar();return;
     }
     if(action==="pinned-preview"){toast(chat&&chat.pinnedMessage?"Pinned message: "+chat.pinnedMessage.text:"No pinned message.");return;}
     if(action==="unpin-message"){if(chat)chat.pinnedMessage=null;save();renderMain();toast("Pinned message removed.");return;}
-    if(action==="reply-message"){const input=$("#message-input");if(input){input.value="Replying: ";input.focus();}return;}
-    if(action==="forward-message"){toast("Forward is a UI-only demo action.");return;}
-    if(action==="copy-message"){const msg=state.lastContextMessage;if(msg&&navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(msg.text).then(()=>toast("Message copied")).catch(()=>toast(msg.text));}else if(msg)toast(msg.text);return;}
-    if(action==="delete-message"){const ref=state.lastContextMessage;if(ref&&chat){chat.messages=chat.messages.filter(m=>m.id!==ref.id);save();renderMain();toast("Message removed locally.");}return;}
-    if(action==="voice-call"||action==="video-call"){const call={id:uid("call"),name:chat?chat.name:"New call",time:"Just now",type:"outgoing",avatar:chat?chat.avatar:1};state.calls.unshift(call);saveState();toast("Call UI preview only — no actual call is placed.");return;}
+    if(action==="reply-message"){
+      const ref=state.lastContextMessage;
+      if(!ref||!chat){toast("Hold a message first to reply.");return;}
+      replyingTo={id:ref.id,chatId:chat.id,text:String(ref.text||""),sender:String(ref.sender||(ref.from==="me"?"You":chat.name)||"Message")};
+      closeMessageActionToolbar();renderMain();
+      const input=$("#message-input");if(input)input.focus({preventScroll:true});
+      return;
+    }
+    if(action==="forward-message"){
+      const ref=state.lastContextMessage;
+      if(!ref||!chat){toast("Hold a message first to forward.");return;}
+      closeMessageActionToolbar();openForwardMessageDialog(ref,chat);return;
+    }
+    if(action==="copy-message"){
+      const msg=state.lastContextMessage;
+      closeMessageActionToolbar();
+      if(msg&&navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(msg.text).then(()=>toast("Message copied")).catch(()=>toast(msg.text));
+      else if(msg)toast(msg.text);
+      return;
+    }
+    if(action==="delete-message"){
+      const ref=state.lastContextMessage;
+      closeMessageActionToolbar();
+      if(!ref||!chat){toast("Hold a message first to delete it.");return;}
+      if(currentUser&&currentUser.isSupabase&&window.waAppBridge&&typeof window.waAppBridge.deleteBackendMessage==="function"){
+        void window.waAppBridge.deleteBackendMessage(ref).catch(error=>toast("Delete failed: "+String(error&&error.message||"Please try again.")));
+        return;
+      }
+      chat.messages=chat.messages.filter(m=>String(m.id)!==String(ref.id));saveState();renderMain();toast("Message removed from this device.");
+      return;
+    }
+    if(action==="voice-call"||action==="video-call"){return;}
     if(action==="shared-media"){const attachments=(chat.attachments||[]);openDialog("Media, links and documents",attachments.length?attachments.map(a=>"<div class='setting-row'>"+icon(a.type==="image"?"image":"file")+"<span class='setting-copy'><span class='setting-title'>"+esc(a.name)+"</span><span class='setting-subtitle'>"+esc(a.type||"file")+"</span></span></div>").join(""):"<div class='empty-state'>No local attachments in this chat.</div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;}
     if(action==="edit-group"){editGroupDialog(chat);return;}
     if(action==="edit-group-description"){editGroupDialog(chat);return;}
@@ -866,6 +923,33 @@
   }
   function handleAction(action,el) {
     const chat=findChat(el.dataset.chatId)||currentChat();
+    if(action==="close-message-toolbar"){closeMessageActionToolbar();return;}
+    if(action==="cancel-reply"){replyingTo=null;renderMain();const input=$("#message-input");if(input)input.focus({preventScroll:true});return;}
+    if(action==="open-reply-target"){
+      const id=String(el.dataset.messageId||"");
+      const target=id?main.querySelector(".message-row[data-message-id='"+id+"']"):null;
+      if(target)target.scrollIntoView({behavior:"smooth",block:"center"});else toast("The original message is no longer visible in this chat.");
+      return;
+    }
+    if(action==="react-message"){
+      const messageId=String(el.dataset.messageId||state.lastContextMessage&&state.lastContextMessage.id||"");
+      const targetChat=chat||currentChat();
+      const message=targetChat&&(targetChat.messages||[]).find(item=>String(item.id)===messageId);
+      if(!message){toast("That message is no longer available.");closeMessageActionToolbar();return;}
+      const reference={id:message.id,text:message.text,from:message.from,chatId:targetChat.id,chatName:targetChat.name,avatar:targetChat.avatar,messageType:message.messageType,attachmentPath:message.attachmentPath||""};
+      state.lastContextMessage=reference;
+      const emoji=String(el.dataset.emoji||"👍");
+      closeMessageActionToolbar();
+      if(currentUser&&currentUser.isSupabase&&window.waAppBridge&&typeof window.waAppBridge.toggleBackendReaction==="function"){
+        void window.waAppBridge.toggleBackendReaction(reference,emoji).catch(error=>toast("Reaction failed: "+String(error&&error.message||"Please try again.")));
+      }else{
+        const current=Array.isArray(message.reactions)?message.reactions:[];
+        const index=current.findIndex(item=>(typeof item==="string"?item:item&&item.emoji)===emoji);
+        if(index>=0)current.splice(index,1);else current.push(emoji);
+        message.reactions=current;saveState();renderMain();
+      }
+      return;
+    }
     if(action==="new-chat"){createNewChatDialog();return;}
     if(action==="new-group"){createGroupDialog();return;}
     if(action==="new-community"){createCommunityDialog();return;}
@@ -884,7 +968,7 @@
     if(action==="new-status"){openDialog("New status","<div class='dialog-field'><label for='status-text'>Type a status update</label><textarea id='status-text' rows='3' maxlength='700' placeholder='What’s on your mind?'></textarea></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='publish-status'>Share status</button>");return;}
     if(action==="status-preview"){toast("Status viewer preview.");return;}
     if(action==="new-call"){openPopup(el,[{icon:"phone",label:"New voice call",action:"new-voice-call"},{icon:"video",label:"New video call",action:"new-video-call"}],null);return;}
-    if(action==="new-voice-call"||action==="new-video-call"||action==="call-entry"){toast("Calls must be started from a contact chat and require microphone/camera access plus relay setup.");return;}
+    if(action==="new-voice-call"||action==="new-video-call"||action==="call-entry"){return;}
     if(action==="channel-search"){openDialog("Discover channels","<div class='dialog-field'><label for='channel-search-input'>Search channels</label><input id='channel-search-input' placeholder='Search channels'></div><div id='channel-search-results'></div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");renderChannelSearchResults();return;}
     if(action==="toggle-channel"){const ch=state.channels.find(c=>c.id===el.dataset.channelId);if(ch){ch.following=!ch.following;saveState();renderMain();toast(ch.following?"Channel followed in preview":"Channel unfollowed");}return;}
     if(action==="go-starred"){setView("starred");return;}
@@ -966,6 +1050,22 @@
     }
     if(t.dataset.dialogAction){
       const action=t.dataset.dialogAction;
+      if(action==="confirm-forward-message"){
+        const chosen=$("input[name='forward-target']:checked").map(input=>input.value)[0];
+        if(!chosen){toast("Choose a chat first.");return;}
+        const ref=state.lastContextMessage;
+        if(!ref){toast("Hold a message first.");return;}
+        const finish=()=>{closeDialog();closeMessageActionToolbar();};
+        if(currentUser&&currentUser.isSupabase&&window.waAppBridge&&typeof window.waAppBridge.forwardBackendMessage==="function"){
+          void window.waAppBridge.forwardBackendMessage(ref,chosen).then(finish).catch(error=>toast("Forward failed: "+String(error&&error.message||"Please try again.")));
+        }else{
+          const target=findChat(chosen);
+          if(!target){toast("That chat is no longer available.");return;}
+          target.messages.push({id:uid("msg"),from:"me",text:ref.text,time:nowTime(),date:dayLabel(),status:"sent",reactions:[]});
+          target.preview=ref.text;target.time="Now";target.lastOutgoing=true;saveState();renderSidebar();renderMain();finish();toast("Message forwarded in this demo.");
+        }
+        return;
+      }
       if(action==="create-group"){
         const name=$("#group-name").value.trim();const desc=$("#group-description").value.trim();
         const ids=$$("#group-contact-list input:checked").map(i=>i.value);
@@ -1159,18 +1259,64 @@
     const menu=$("#popup-menu");
     if(menu&&!menu.contains(event.target)&&!event.target.closest("[data-action]"))closePopup();
   });
+  function closeMessageActionToolbar() {
+    const toolbar=main.querySelector("#message-action-toolbar");
+    if(toolbar)toolbar.remove();
+    if(selectedMessageRow&&selectedMessageRow.isConnected)selectedMessageRow.classList.remove("selected-message");
+    selectedMessageRow=null;
+  }
+  function showMessageActionToolbar(row) {
+    const chat=currentChat();
+    if(!row||!chat||!state)return;
+    const message=(chat.messages||[]).find(m=>String(m.id)===String(row.dataset.messageId));
+    if(!message)return;
+    closeMessageActionToolbar();
+    const text=String(message.text||message.attachmentName||(message.messageType==="voice"?"Voice message":"Attachment"));
+    state.lastContextMessage={id:String(message.id),text,chatId:chat.id,chatName:chat.name,avatar:chat.avatar,time:message.time,
+      from:message.from,sender:message.from==="me"?"You":chat.name,messageType:message.messageType||"text",attachmentPath:message.attachmentPath||""};
+    const reactions=["👍","❤️","😂","😮","🙏"].map(emoji=>
+      "<button type='button' class='message-toolbar-emoji' data-action='react-message' data-chat-id='"+esc(chat.id)+"' data-message-id='"+esc(message.id)+"' data-emoji='"+esc(emoji)+"' aria-label='React "+esc(emoji)+"'>"+emoji+"</button>"
+    ).join("");
+    const deleteLabel=message.from==="me"?"Delete for everyone":"Delete for me";
+    const toolbar="<div id='message-action-toolbar' class='message-action-toolbar' role='toolbar' aria-label='Message actions'>"+
+      "<div class='message-toolbar-top'><button type='button' class='message-toolbar-close' data-action='close-message-toolbar' aria-label='Close message actions'>×</button><span>Message selected</span><div class='message-toolbar-reactions'>"+reactions+"</div></div>"+
+      "<div class='message-toolbar-actions'>"+
+      "<button type='button' data-action='reply-message' data-chat-id='"+esc(chat.id)+"'>"+icon("reply")+"<span>Reply</span></button>"+
+      "<button type='button' data-action='forward-message' data-chat-id='"+esc(chat.id)+"'>"+icon("forward")+"<span>Forward</span></button>"+
+      "<button type='button' data-action='star-message' data-chat-id='"+esc(chat.id)+"'>"+icon("star")+"<span>Star</span></button>"+
+      "<button type='button' data-action='copy-message' data-chat-id='"+esc(chat.id)+"'>"+icon("copy")+"<span>Copy</span></button>"+
+      "<button type='button' class='message-toolbar-delete' data-action='delete-message' data-chat-id='"+esc(chat.id)+"'>"+icon("trash")+"<span>"+deleteLabel+"</span></button>"+
+      "</div></div>";
+    main.insertAdjacentHTML("afterbegin",toolbar);
+    selectedMessageRow=row;
+    row.classList.add("selected-message");
+  }
   main.addEventListener("contextmenu",event=>{
     const row=event.target.closest(".message-row");
     if(!row)return;
-    const chat=currentChat();
-    if(!chat)return;
-    const message=chat.messages.find(m=>String(m.id)===String(row.dataset.messageId));
-    if(!message)return;
     event.preventDefault();
-    state.lastContextMessage={id:message.id,text:message.text,chatId:chat.id,chatName:chat.name,avatar:chat.avatar,time:message.time};
-    const anchor=row;
-    openPopup(anchor,menuItems("message-menu",chat),chat.id);
+    showMessageActionToolbar(row);
   });
+  main.addEventListener("pointerdown",event=>{
+    const row=event.target.closest(".message-row");
+    if(!row||event.pointerType==="mouse"||event.target.closest("button,a,input"))return;
+    clearTimeout(messageHoldTimer);
+    messageHoldStart={x:event.clientX,y:event.clientY,row,triggered:false};
+    messageHoldTimer=setTimeout(()=>{
+      if(!messageHoldStart||messageHoldStart.row!==row)return;
+      messageHoldStart.triggered=true;
+      showMessageActionToolbar(row);
+    },480);
+  },{passive:true});
+  main.addEventListener("pointermove",event=>{
+    if(!messageHoldStart)return;
+    if(Math.abs(event.clientX-messageHoldStart.x)>12||Math.abs(event.clientY-messageHoldStart.y)>12){
+      clearTimeout(messageHoldTimer);messageHoldTimer=null;messageHoldStart=null;
+    }
+  },{passive:true});
+  const clearMessageHold=()=>{clearTimeout(messageHoldTimer);messageHoldTimer=null;messageHoldStart=null;};
+  main.addEventListener("pointerup",clearMessageHold,{passive:true});
+  main.addEventListener("pointercancel",clearMessageHold,{passive:true});
   window.addEventListener("resize",updateMobile);
 
   const originalHandleAction=handleAction;
@@ -1235,6 +1381,8 @@
   // Small public bridge used by backend.js; database/auth code remains in a separate module.
   window.waAppBridge = {
     getState: () => state,
+    getReplyContext: () => replyingTo ? Object.assign({},replyingTo) : null,
+    clearReplyContext: () => { replyingTo=null; closeMessageActionToolbar(); renderMain(); },
     getCurrentUser: () => currentUser,
     getCurrentChat: () => currentChat(),
     getSelectedChatId: () => selectedChatId,
