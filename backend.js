@@ -75,7 +75,7 @@
   }
   function localMessage(row, me, chat) {
     const stamp=new Date(row.created_at);
-    const body=row.body||(row.attachment_name?"📎 "+row.attachment_name:row.message_type==="voice"?"🎤 Voice message":"");
+    const body=row.message_type==="voice"?"🎤 Voice message":(row.body||(row.attachment_name?"📎 "+row.attachment_name:""));
     return {id:row.id,from:row.sender_id===me.id?"me":"them",text:body,
       time:stamp.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}),
       date:stamp.toDateString()===new Date().toDateString()?"TODAY":stamp.toLocaleDateString(),
