@@ -293,8 +293,8 @@
     const name = $("#signup-name").value.trim();
     const username = normalizeUsername($("#signup-username").value);
     let phoneDigits = normalizePhone($("#signup-phone").value);
-    if (phoneDigits.length === 9 && !phoneDigits.startsWith("990")) phoneDigits = "990" + phoneDigits;
-    const phone = "+990 " + phoneDigits.replace(/^990/,"").replace(/(\d{3})(\d{3})(\d{0,3}).*/, "$1 $2 $3").trim();
+    if (phoneDigits.startsWith("990")) phoneDigits = phoneDigits.slice(3);
+    const phone = "+990 " + phoneDigits.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3");
     const password = $("#signup-password").value;
     const confirm = $("#signup-confirm").value;
     const error = $("#signup-error");
@@ -302,7 +302,7 @@
     if (!name) return fail("Enter a display name.");
     if (!/^[a-z0-9._]{3,20}$/.test(username)) return fail("Username must be 3–20 characters using letters, numbers, dots or underscores.");
     if (db.accounts.some(a=>normalizeUsername(a.username)===username)) return fail("That username is already taken on this browser.");
-    if (normalizePhone(phone).length < 9) return fail("Enter a custom number with at least 9 digits after the demo prefix.");
+    if (phoneDigits.length !== 9) return fail("Enter exactly 9 digits after the +990 demo prefix.");
     if (db.accounts.concat(db.directory).some(a=>normalizePhone(a.phone)===normalizePhone(phone))) return fail("That custom number is already in use. Choose another.");
     if (password.length < 6) return fail("Use a password with at least 6 characters.");
     if (password !== confirm) return fail("The passwords do not match.");
