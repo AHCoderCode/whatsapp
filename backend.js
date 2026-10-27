@@ -618,7 +618,7 @@
   });
   window.addEventListener("appinstalled",()=>{window.__waInstallPrompt=null;say("App installed.");});
   document.addEventListener("click",event=>{
-    const button=event.target.closest("#install-app-button");if(!button)return;
+    const button=event.target.closest("#install-app-button,[data-action='install-app']");if(!button)return;
     event.preventDefault();event.stopImmediatePropagation();
     const prompt=window.__waInstallPrompt;
     if(prompt){prompt.prompt();prompt.userChoice.finally(()=>{window.__waInstallPrompt=null;button.hidden=true;});}
