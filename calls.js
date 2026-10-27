@@ -46,11 +46,11 @@
       "<div class='wa-call-audio-stage'><div class='wa-call-avatar'>"+esc(peer.avatar||String(peer.name||peer.username||"U").slice(0,2).toUpperCase())+"</div><h2>"+esc(peer.name||peer.username||"Contact")+"</h2><p>"+esc(status)+"</p><audio id='wa-call-remote-audio' autoplay playsinline></audio></div>")+
       "<div class='wa-call-security'><span>🔒</span> Encrypted WebRTC media · Relay-only connection</div>"+
       "<div class='wa-call-controls'>"+
-      (incoming?"<button class='wa-call-control decline' type='button' data-wa-call='decline' aria-label='Decline call'>✕<span>Decline</span></button><button class='wa-call-control accept' type='button' data-wa-call='accept' aria-label='Accept call'>"+(video?"▣":"☎")+"<span>Accept</span></button>":
+      (incoming?"<button class='wa-call-control decline' type='button' data-wa-call='decline' aria-label='Decline call'>"+bridge.icon("phone")+"<span>Decline</span></button><button class='wa-call-control accept' type='button' data-wa-call='accept' aria-label='Accept call'>"+(video?bridge.icon("video"):bridge.icon("phone"))+"<span>Accept</span></button>":
       (phase==="connected"||phase==="connecting"||phase==="outgoing"||phase==="preparing"?
-      "<button class='wa-call-control "+(muted?"active":"")+"' type='button' data-wa-call='mute' aria-label='Toggle microphone'>"+(muted?"🎙":"🎤")+"<span>"+(muted?"Unmute":"Mute")+"</span></button>"+
-      (video?"<button class='wa-call-control "+(cameraOff?"active":"")+"' type='button' data-wa-call='camera' aria-label='Toggle camera'>"+(cameraOff?"◻":"▣")+"<span>"+(cameraOff?"Camera on":"Camera off")+"</span></button>":"")+
-      "<button class='wa-call-control decline' type='button' data-wa-call='end' aria-label='End call'>☎<span>End call</span></button>":""))+
+      "<button class='wa-call-control "+(muted?"active":"")+"' type='button' data-wa-call='mute' aria-label='Toggle microphone'>"+(muted?bridge.icon("mute"):bridge.icon("mic"))+"<span>"+(muted?"Unmute":"Mute")+"</span></button>"+
+      (video?"<button class='wa-call-control "+(cameraOff?"active":"")+"' type='button' data-wa-call='camera' aria-label='Toggle camera'>"+(cameraOff?bridge.icon("camera"):bridge.icon("video"))+"<span>"+(cameraOff?"Camera on":"Camera off")+"</span></button>":"")+
+      "<button class='wa-call-control decline' type='button' data-wa-call='end' aria-label='End call'>"+bridge.icon("phone")+"<span>End call</span></button>":""))+
       "</div><p class='wa-call-footnote'>Calls connect only when both people are online and have allowed microphone/camera access.</p></section></div>";
     const remoteVideo=$("#wa-call-remote-video"),localVideo=$("#wa-call-local-video"),remoteAudio=$("#wa-call-remote-audio");
     if(remoteStream){
@@ -73,13 +73,13 @@
     const button=root().querySelector("[data-wa-call='mute']");
     if(!button)return;
     button.classList.toggle("active",muted);
-    button.innerHTML=(muted?"🎙":"🎤")+"<span>"+(muted?"Unmute":"Mute")+"</span>";
+    button.innerHTML=(muted?bridge.icon("mute"):bridge.icon("mic"))+"<span>"+(muted?"Unmute":"Mute")+"</span>";
   }
   function updateCameraButton(){
     const button=root().querySelector("[data-wa-call='camera']");
     if(!button)return;
     button.classList.toggle("active",cameraOff);
-    button.innerHTML=(cameraOff?"◻":"▣")+"<span>"+(cameraOff?"Camera on":"Camera off")+"</span>";
+    button.innerHTML=(cameraOff?bridge.icon("camera"):bridge.icon("video"))+"<span>"+(cameraOff?"Camera on":"Camera off")+"</span>";
   }
   async function relayServers(callId){
     const client=db();if(!client)throw new Error("Supabase is not connected.");
