@@ -12,7 +12,7 @@
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
   const usernamePattern = /^[a-z0-9_]{3,20}$/;
   let signedProfile = null, liveChannel = null, liveUserId = "", people = new Map();
-  let busy = false, loading = false, searchTimer = null, searchCounter = 0;
+  let busy = false, loading = false, refreshQueued = false, searchTimer = null, searchCounter = 0;
 
   const getUser = () => bridge.getCurrentUser();
   const appState = () => bridge.getState();
@@ -119,7 +119,8 @@
   }
   async function loadData(quiet) {
     const me=getUser(),s=appState();
-    if(!db||!me||!me.isSupabase||!s||loading)return;
+    if(!db||!me||!me.isSupabase||!s)return;
+    if(loading){refreshQueued=true;return;}
     loading=true;
     try{
       const [profileResult,requestResult,membershipResult,messageResult,callResult]=await Promise.all([
@@ -222,7 +223,7 @@
       subscribe(me.id);
       if(window.WhatsAppCalls)window.WhatsAppCalls.subscribe();
     }catch(error){if(!quiet)say(safeError(error,"Could not load messaging data from Supabase."));}
-    finally{loading=false;}
+    finally{loading=false;if(refreshQueued){refreshQueued=false;queueMicrotask(()=>void loadData(true));}}
   }
   async function hydrate(authUser){
     const {data,error}=await db.from("aeroshell_profiles").select("id,username,display_name,about,custom_number,avatar_data,created_at").eq("id",authUser.id).maybeSingle();
@@ -623,8 +624,8 @@
     else if(getUser()&&getUser().isSupabase){event.preventDefault();event.stopImmediatePropagation();void sendMessage($("#message-input")?.value||"");}
   },true);
   document.addEventListener("click",event=>{
-    const target=event.target.closest("[data-action],[data-dialog-action],[data-setting-option]");if(!target)return;
-    const action=target.dataset.action||"",dialogAction=target.dataset.dialogAction||"",me=getUser();
+    const target=event.target.closest("[data-action],[data-dialog-action],[data-setting-option],[data-menu-action]");if(!target)return;
+    const action=target.dataset.action||"",menuAction=target.dataset.menuAction||"",dialogAction=target.dataset.dialogAction||"",me=getUser();
     if(me&&me.isSupabase&&dialogAction==="send-poll"){
       event.preventDefault();event.stopImmediatePropagation();void sendPoll();return;
     }
@@ -649,7 +650,7 @@
     if(me&&me.isSupabase&&action==="open-attachment"){
       event.preventDefault();event.stopImmediatePropagation();void openAttachment(target.dataset.messageId);return;
     }
-    if(me&&me.isSupabase&&action==="delete-message"){
+    if(me&&me.isSupabase&&(action==="delete-message"||menuAction==="delete-message")){
       event.preventDefault();event.stopImmediatePropagation();void deleteOrHideMessage();return;
     }
     if(me&&me.isSupabase&&action==="logout"){event.preventDefault();event.stopImmediatePropagation();bridge.openDialog("Log out","<p class='screen-description'>Sign out of this device. Your account and server-side conversations will remain saved.</p>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='backend-logout'>Log out</button>");return;}
