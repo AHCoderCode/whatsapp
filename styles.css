@@ -196,3 +196,36 @@ button,input,textarea,select{max-width:100%}
 .wa-channel-post header small{font-size:10px;color:#667781}
 .wa-channel-post p{margin:0;font-size:13px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
 .text-danger-button{align-self:flex-start;border:0;background:transparent;color:#bf3145;font:inherit;font-size:11px;cursor:pointer;padding:4px 0}
+
+/* Vexel Chat release polish: familiar messaging patterns, original visual identity. */
+:root{--vexel-green:#008069;--vexel-accent:#00a884;--vexel-mint:#d9fdd3;--vexel-text:#111b21;--vexel-muted:#667781;--vexel-border:#e9edef}
+.sidebar-header h1,.screen-header h2{color:var(--vexel-text);letter-spacing:-.35px}
+.chat-row.selected{background:#f0f2f5}
+.filter-chip.active{background:#d9fdd3;color:#075e54;border-color:#d9fdd3}
+.requests-strip{border-radius:12px;transition:background .16s ease}
+.requests-strip:hover,.icon-button:hover,.rail-button:hover{background:#f0f2f5}
+.main-pane{background:#efeae2}
+.welcome-pane{background:#f7f8fa}
+.conversation-header{background:#f0f2f5;box-shadow:0 1px 2px #0b141a08}
+.message-scroll{background-color:#efeae2;background-image:radial-gradient(#c8c2b8 .65px,transparent .65px);background-size:18px 18px}
+.message-bubble{box-shadow:0 1px 1px #00000018}
+.message-row.outgoing .message-bubble{background:#d9fdd3}
+.composer{background:#f0f2f5}
+.composer-box{border:1px solid #e6e9eb;box-shadow:0 1px 1px #00000008}
+.send-button{background:var(--vexel-green);color:#fff}
+.send-button:hover{background:#006e5b}
+.auth-primary,.primary-button,.accept-request{background:var(--vexel-green);border-color:var(--vexel-green)}
+.auth-primary:hover,.primary-button:hover,.accept-request:hover{background:#006e5b}
+.form-field input:focus,.settings-search:focus-within{border-color:var(--vexel-accent);box-shadow:0 0 0 2px #00a8841a}
+.request-card{border-bottom:1px solid #f0f2f2}
+.request-info strong{color:var(--vexel-text)}
+.empty-state[role=status]{padding:17px 12px;color:var(--vexel-muted)}
+@media(max-width:700px){
+  .sidebar-header{background:#fff}
+  .sidebar-header h1{font-size:24px;font-weight:700}
+  .mobile-nav{background:#fff;border-top-color:#e9edef}
+  .mobile-tab.active .mobile-tab-icon{background:#d9fdd3}
+  .message-scroll{padding-top:17px;background-size:16px 16px}
+  .conversation-header{background:#f0f2f5}
+  .composer{padding-left:8px;padding-right:8px}
+}
