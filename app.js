@@ -407,6 +407,7 @@
     if (picker) picker.hidden = !active || !messageReactionPickerOpen;
   }
   function selectMessageForActions(row) {
+    messageReactionPickerOpen = false;
     const chat = currentChat();
     if (!chat || !row) return;
     const message = chat.messages.find(m => String(m.id) === String(row.dataset.messageId));
@@ -418,6 +419,7 @@
   }
   function dismissMessageSelection(keepContext) {
     selectedMessage = null;
+    messageReactionPickerOpen = false;
     if (!keepContext && state) state.lastContextMessage = null;
     syncMessageSelectionUI();
   }
