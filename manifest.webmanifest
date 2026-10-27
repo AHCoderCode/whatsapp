@@ -1,7 +1,7 @@
 {
   "name": "WhatsApp",
   "short_name": "WhatsApp",
-  "description": "WhatsApp-style local frontend demo with chats, groups, profile and contact requests.",
+  "description": "Responsive installable messaging app with Supabase accounts, real-time chats, contact requests, polls, events and one-to-one voice/video calling.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
