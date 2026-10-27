@@ -711,7 +711,7 @@
     const result=$("#channel-search-results");if(!result)return;
     const s=appState(),q=String(query||"").trim().toLowerCase();
     const channels=(s&&s.backendChannels||[]).filter(c=>!q||(c.name+" "+c.description).toLowerCase().includes(q));
-    result.innerHTML=channels.length?channels.map(c=>"<div class='channel-row'>"+bridge.avatarHTML({name:c.name})+"<span class='community-copy'><strong>"+esc(c.name)+"</strong><span>"+esc(c.description||"No description")+"</span></span><button class='"+(c.following?"secondary-button":"primary-button")+"' data-action='toggle-channel' data-channel-id='"+esc(c.id)+"'>"+(c.following?"Following":"Follow")+"</button></div>").join(""):"<div class='empty-state'>No matching channels. You can create one from Channels.</div>";
+    result.innerHTML=channels.length?channels.map(c=>"<div class='channel-row'>"+bridge.avatarHTML({name:c.name})+"<button class='channel-open-button community-copy' type='button' data-action='open-channel' data-channel-id='"+esc(c.id)+"'><strong>"+esc(c.name)+"</strong><span>"+esc(c.description||"No description")+"</span></button><button class='"+(c.following?"secondary-button":"primary-button")+"' data-action='toggle-channel' data-channel-id='"+esc(c.id)+"'>"+(c.following?"Following":"Follow")+"</button></div>").join(""):"<div class='empty-state'>No matching channels. You can create one from Channels.</div>";
   }
 
   async function updateProfile(name,about){
