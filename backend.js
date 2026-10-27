@@ -22,9 +22,15 @@
     if (/invalid login credentials/i.test(m)) return "Username or in-app number or password is incorrect.";
     if (/duplicate key|unique constraint|aeroshell_profiles_username_key|custom_number_uidx/i.test(m)) return "That username or custom app ID is already taken. Choose another.";
     if (/email not confirmed/i.test(m)) return "Email confirmation is enabled. In Supabase Auth, switch OFF Confirm email, then sign up again with a new username.";
+    if (/too many username searches|rate_limited|too many requests|429/i.test(m)) return "Too many searches in a short time. Wait a minute, then try again.";
     if (/row-level security|permission denied|not allowed/i.test(m)) return "Supabase rejected that request under its security rules. Check the README backend checklist; do not disable row-level security.";
     return m || fallback || "Something went wrong. Check your connection and try again.";
   };
+  function withTimeout(promise, ms, message) {
+    let timer;
+    const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), ms); });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+  }
   const canonicalNumber = value => {
     const digits = String(value || "").replace(/\D/g, "");
     const tail = digits.startsWith("990") ? digits.slice(3) : digits;
@@ -918,17 +924,28 @@
     }).catch(error=>{if(label.isConnected)label.textContent=safeError(error,"Custom ID lookup is temporarily unavailable.");});
   },true);
   document.addEventListener("input",event=>{
-    const target=event.target;if(!target||target.id!=="friend-search"||!getUser()||!getUser().isSupabase)return;
-    event.stopImmediatePropagation();clearTimeout(searchTimer);
-    const value=target.value;const result=$("#friend-lookup-result");if(!result)return;
+    const target=event.target;
+    if(!target||target.id!=="friend-search"||!getUser()||!getUser().isSupabase)return;
+    event.stopImmediatePropagation();
+    clearTimeout(searchTimer);
+    const seq=++searchCounter;
+    const value=String(target.value||"");
+    const trimmed=value.trim().replace(/^@+/,"");
+    const result=$("#friend-lookup-result");
+    if(!result)return;
+    if(!trimmed){result.innerHTML="";return;}
+    if(trimmed.length<3){result.innerHTML="<div class='empty-state'>Enter at least 3 username characters to search.</div>";return;}
+    result.innerHTML="<div class='empty-state' role='status' aria-live='polite'>Searching people…</div>";
     searchTimer=setTimeout(async()=>{
-      const seq=++searchCounter;
-      if(String(value||"").trim().length<3){result.innerHTML="";return;}
-      result.innerHTML="<div class='empty-state'>Searching verified accounts…</div>";
+      if(seq!==searchCounter)return;
+      const box=$("#friend-lookup-result");
+      if(!box)return;
       try{
-        const found=await searchPeople(value);if(seq!==searchCounter||!$("#friend-lookup-result"))return;
-        if(!found.length){result.innerHTML="<div class='empty-state'>No account matched that username or in-app ID.</div>";return;}
-        result.innerHTML=found.map(p=>{
+        const found=await withTimeout(searchPeople(value),10000,"People search timed out. Check your connection and try again.");
+        const liveBox=$("#friend-lookup-result");
+        if(seq!==searchCounter||!liveBox)return;
+        if(!found.length){liveBox.innerHTML="<div class='empty-state'>No account matched that username or in-app ID. Check the spelling and try again.</div>";return;}
+        liveBox.innerHTML=found.map(p=>{
           const s=appState(),friend=s.chats.some(c=>String(c.id)===String(p.id));
           const incoming=(s.requests||[]).find(r=>r.requestUserId===p.id||r.username===p.username);
           const sent=(s.sentRequests||[]).some(r=>r.requestUserId===p.id||r.username===p.username);
@@ -936,9 +953,12 @@
             incoming?"<button class='primary-button' data-action='accept-found-request' data-request-id='"+esc(incoming.id)+"'>Accept request</button>":
             sent?"<button class='secondary-button' disabled>Request sent</button>":
             "<button class='primary-button' data-action='send-contact-request' data-contact-username='"+esc(p.username)+"'>Send contact request</button>";
-          return "<div class='request-card'>"+bridge.avatarHTML(p)+"<div class='request-info'><strong>@"+esc(p.username)+"</strong><span>Verified in-app account</span></div>"+action+"</div>";
+          return "<div class='request-card'>"+bridge.avatarHTML(p)+"<div class='request-info'><strong>@"+esc(p.username)+"</strong><span>Registered Vexel Chat account</span></div>"+action+"</div>";
         }).join("");
-      }catch(error){if($("#friend-lookup-result"))result.innerHTML="<div class='empty-state'>"+esc(safeError(error,"Search failed."))+"</div>";}
+      }catch(error){
+        const liveBox=$("#friend-lookup-result");
+        if(seq===searchCounter&&liveBox)liveBox.innerHTML="<div class='empty-state' role='status'>"+esc(safeError(error,"Search failed. Check your connection and try again."))+"</div>";
+      }
     },220);
   },true);
   document.addEventListener("change",event=>{const target=event.target;if(target&&target.id==="profile-photo-input"&&target.files&&target.files[0]&&getUser()&&getUser().isSupabase)void updateAvatar(target.files[0]);},true);
