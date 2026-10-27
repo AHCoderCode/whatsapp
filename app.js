@@ -461,7 +461,7 @@
       }
       messages += messageHTML(m,chat);
     });
-    const callActions = "<button class='call-button' data-action='call-menu'>" + icon("video") + "<span>Video call</span>" + icon("chevron") + "</button>";
+    const callActions = "<button class='call-button desktop-call-button' data-action='call-menu' title='Voice or video call'>" + icon("video") + "<span>Call</span>" + icon("chevron") + "</button><button type='button' class='icon-button mobile-call-button' data-action='call-menu' title='Voice or video call' aria-label='Voice or video call'>" + icon("phone") + "</button>";
     main.innerHTML = "<section class='conversation'>" +
       "<header class='message-selection-toolbar' id='message-selection-toolbar' hidden><button class='icon-button' type='button' data-message-toolbar-action='cancel' aria-label='Cancel selection'>" + icon("x") + "</button><span class='message-selection-count' id='message-selection-count'>1</span><div class='message-selection-actions'><button class='icon-button' type='button' data-message-toolbar-action='react' title='React' aria-label='React to message'>" + icon("smile") + "</button><button class='icon-button' type='button' data-message-toolbar-action='reply' title='Reply' aria-label='Reply'>" + icon("reply") + "</button><button class='icon-button' type='button' data-message-toolbar-action='forward' title='Forward' aria-label='Forward'>" + icon("forward") + "</button><button class='icon-button' type='button' data-message-toolbar-action='star' title='Star' aria-label='Star'>" + icon("star") + "</button><button class='icon-button' type='button' data-message-toolbar-action='copy' title='Copy' aria-label='Copy'>" + icon("copy") + "</button><button class='icon-button' type='button' data-message-toolbar-action='delete' title='Delete' aria-label='Delete'>" + icon("trash") + "</button><button class='icon-button' type='button' data-message-toolbar-action='more' title='More options' aria-label='More message options'>" + icon("more") + "</button></div></header><div class='message-reaction-picker' id='message-reaction-picker' hidden><span class='message-reaction-picker-label'>React</span><button type='button' data-message-reaction-emoji='👍' aria-label='Like'>👍</button><button type='button' data-message-reaction-emoji='❤️' aria-label='Love'>❤️</button><button type='button' data-message-reaction-emoji='😂' aria-label='Laugh'>😂</button><button type='button' data-message-reaction-emoji='😮' aria-label='Wow'>😮</button><button type='button' data-message-reaction-emoji='🙏' aria-label='Thanks'>🙏</button></div>" +
       "<header class='conversation-header'><button class='back-button' data-action='back-to-list' aria-label='Back to chats'>" + icon("back") + "</button><button class='conversation-person' data-action='chat-info' aria-label='Open contact information'>" +
@@ -939,7 +939,13 @@
       openDialog("Delete message",body,actions+"<button class='secondary-button' data-action='close-dialog'>Cancel</button>");
       return;
     }
-    if(action==="voice-call"||action==="video-call"){const call={id:uid("call"),name:chat?chat.name:"New call",time:"Just now",type:"outgoing",avatar:chat?chat.avatar:1};state.calls.unshift(call);saveState();toast("Call UI preview only — no actual call is placed.");return;}
+    if(action==="voice-call"||action==="video-call"){
+      if(!chat||chat.type!=="person"){toast("Open a person's conversation before calling.");return;}
+      const calls=window.WhatsAppCalls;
+      if(!calls||typeof calls.start!=="function"){toast("The calling service did not finish loading. Refresh the app and try again.");return;}
+      void calls.start(chat,action==="video-call"?"video":"audio").catch(error=>toast("Could not start call: "+String(error&&error.message||"Check permissions and relay setup.")));
+      return;
+    }
     if(action==="shared-media"){const attachments=(chat.attachments||[]);openDialog("Media, links and documents",attachments.length?attachments.map(a=>"<div class='setting-row'>"+icon(a.type==="image"?"image":"file")+"<span class='setting-copy'><span class='setting-title'>"+esc(a.name)+"</span><span class='setting-subtitle'>"+esc(a.type||"file")+"</span></span></div>").join(""):"<div class='empty-state'>No local attachments in this chat.</div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;}
     if(action==="edit-group"){editGroupDialog(chat);return;}
     if(action==="edit-group-description"){editGroupDialog(chat);return;}
@@ -977,7 +983,12 @@
     if(action==="new-status"){openDialog("New status","<div class='dialog-field'><label for='status-text'>Type a status update</label><textarea id='status-text' rows='3' maxlength='700' placeholder='What’s on your mind?'></textarea></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='publish-status'>Share status</button>");return;}
     if(action==="status-preview"){toast("Status viewer preview.");return;}
     if(action==="new-call"){openPopup(el,[{icon:"phone",label:"New voice call",action:"new-voice-call"},{icon:"video",label:"New video call",action:"new-video-call"}],null);return;}
-    if(action==="new-voice-call"||action==="new-video-call"||action==="call-entry"){toast("Calls must be started from a contact chat and require microphone/camera access plus relay setup.");return;}
+    if(action==="new-voice-call"||action==="new-video-call"||action==="call-entry"){
+      const calls=window.WhatsAppCalls;
+      if(!calls||typeof calls.openPicker!=="function"){toast("The calling service did not finish loading. Refresh the app and try again.");return;}
+      calls.openPicker(action==="new-video-call"||el.dataset.mediaType==="video"?"video":"audio");
+      return;
+    }
     if(action==="channel-search"){openDialog("Discover channels","<div class='dialog-field'><label for='channel-search-input'>Search channels</label><input id='channel-search-input' placeholder='Search channels'></div><div id='channel-search-results'></div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");renderChannelSearchResults();return;}
     if(action==="toggle-channel"){const ch=state.channels.find(c=>c.id===el.dataset.channelId);if(ch){ch.following=!ch.following;saveState();renderMain();toast(ch.following?"Channel followed in preview":"Channel unfollowed");}return;}
     if(action==="go-starred"){setView("starred");return;}
