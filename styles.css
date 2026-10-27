@@ -402,3 +402,11 @@ button,input,textarea,select{max-width:100%}
 .message-meta .message-read-status{color:#7a8b91}
 .message-meta .message-read-status svg{color:#7a8b91}
 .message-meta .message-read-status.is-read,.message-meta .message-read-status.is-read svg{color:#078ee8}
+
+/* Size SVG glyphs in the call close affordance and keep long-press actions finger-friendly. */
+.wa-call-close svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+@media(max-width:700px){
+  .message-toolbar-close{min-width:32px;min-height:32px}
+  .message-toolbar-emoji{min-width:32px;min-height:32px}
+  .wa-call-close{width:42px;height:42px;flex-basis:42px}
+}
