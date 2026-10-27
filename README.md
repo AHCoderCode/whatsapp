@@ -26,7 +26,7 @@ This app uses the Supabase project shared with the Windows 12 Master Chat, so th
 
 Never place a Supabase service-role/secret key or Metered account secret in HTML, browser JavaScript, GitHub or public Vercel environment variables. The browser contains only the Supabase publishable key and relies on RLS. **Do not disable RLS to make a rejected query work.**
 
-The custom-ID lookup migration, lookup-rate-limit migration, group description migration, persistent polls/events, statuses/channels/communities and channel-post migrations have already been applied to the connected Supabase project. Do not copy-paste or rerun those migrations.
+The custom-ID lookup, lookup-rate-limit, group description, polls/events, status/channel/community and channel-post migrations have already been applied to the connected Supabase project. Do not copy-paste or rerun those migrations.
 
 ## Exact relay setup (required for actual calls)
 
@@ -47,7 +47,7 @@ The custom-ID lookup migration, lookup-rate-limit migration, group description m
 
 1. Open the [Supabase project dashboard](https://supabase.com/dashboard/project/qoyqfmovzvtyvxutakym).
 2. Go to **Authentication → Sign In / Providers → Email** and turn **Confirm email OFF** for this username-only prototype. The app uses internal aliases like `username@aeroshell.invalid`, not actual mailboxes. This is a prototype shortcut; a public production app should add genuine email/phone verification and recovery before signup is opened to everyone.
-3. Under **Database → Publications / Realtime**, the connected project already publishes the message, request, call, call-signal, read-receipt, poll/event, status/channel and community tables used here. Do not change the existing policies just to silence a failed request.
+3. Under **Database → Publications / Realtime**, the connected project already publishes the message, request, call, call-signal, read-receipt, poll/event, status/channel and community tables used here. Do not change existing policies just to silence a failed request.
 4. Under **Authentication → URL Configuration**, set Site URL to `https://whatsapp-vexel-ai.vercel.app`. Add these Redirect URLs if you use those hostnames: `https://whatsapp-vexel-ai.vercel.app/**`, `https://whatsapp-for.vercel.app/**`, `https://whatsapp-git-main-vexel-ai.vercel.app/**`. Recovery/OAuth flows may need the localhost redirect `http://localhost:8080/**` for local testing.
 5. Under **Authentication → Security and Protection**, enable leaked-password protection if available on your project plan. The Supabase Advisor previously reported this as disabled.
 6. Review **Database → Advisors**. The lookup rate-limit tables intentionally have RLS enabled and no browser policies; don't make them publicly readable. Keep all RLS enabled.
