@@ -28,14 +28,14 @@
   let attachmentFile = null;
   let demoDirectory = [
     { username:"ayesha.k", name:"Ayesha Khan", phone:"+990 700 100 101", about:"Available", avatar:1, online:true },
-    { username:"hassan.r", name:"Hassan Raza", phone:"+990 700 100 102", about:"Hey there! I am using WhatsApp.", avatar:3, online:false },
+    { username:"hassan.r", name:"Hassan Raza", phone:"+990 700 100 102", about:"Hey there! I am using Vexel Chat.", avatar:3, online:false },
     { username:"mom", name:"Mom", phone:"+990 700 100 103", about:"Love you always", avatar:5, online:false },
     { username:"dad", name:"Dad", phone:"+990 700 100 104", about:"Busy", avatar:6, online:false },
     { username:"ali.r", name:"Ali Raza", phone:"+990 700 100 105", about:"At work", avatar:7, online:true },
     { username:"sara.a", name:"Sara Ahmed", phone:"+990 700 100 106", about:"Good vibes only", avatar:9, online:false },
     { username:"noor.f", name:"Noor Fatima", phone:"+990 700 100 107", about:"At school", avatar:2, online:false },
     { username:"zainab", name:"Zainab", phone:"+990 700 100 108", about:"Available", avatar:5, online:false },
-    { username:"bilal.k", name:"Bilal Khan", phone:"+990 700 100 109", about:"Can't talk, WhatsApp only", avatar:4, online:false },
+    { username:"bilal.k", name:"Bilal Khan", phone:"+990 700 100 109", about:"Can't talk, Vexel Chat only", avatar:4, online:false },
     { username:"mina.s", name:"Mina Shah", phone:"+990 700 100 110", about:"✨", avatar:8, online:true },
     { username:"hira.m", name:"Hira Malik", phone:"+990 700 100 111", about:"Available", avatar:10, online:false },
     { username:"hamza", name:"Hamza", phone:"+990 700 100 112", about:"At the gym", avatar:11, online:false }
@@ -81,7 +81,7 @@
     personalization:[
       ["palette","Theme","Choose light or dark appearance.","toggle-theme"],
       ["image","Chat wallpaper","Change the conversation wallpaper.","wallpaper"],
-      ["sparkles","Accent color","WhatsApp green accent theme.","Green"]
+      ["sparkles","Accent color","Vexel Chat green accent theme.","Green"]
     ],
     storage:[
       ["database","Manage storage","Review the local data used by this preview.","button"],
@@ -102,7 +102,7 @@
       ["help","Help center","Browse common questions.","button"],
       ["phone","Contact us","Contact support (preview only).","button"],
       ["file","Terms and privacy policy","Review the demo privacy note.","button"],
-      ["info","App info","WhatsApp-style frontend demo · v0.2","button"]
+      ["info","App info","Vexel Chat · v1.0","button"]
     ],
     shortcuts:[
       ["new","New chat","Ctrl + Alt + N","Ctrl + Alt + N"],
@@ -178,7 +178,7 @@
       calls:[],
       backendStatuses:[],backendChannels:[],backendChannelPosts:[],backendCommunities:[],
       communities:[{id:"community-school",name:"School community",description:"Class updates and school friends",groups:["School Friends","Study Group"]},{id:"community-family",name:"Family community",description:"Family updates in one place",groups:["Family Group","Cousins Group"]}],
-      channels:[{id:"whatsapp-official",name:"WhatsApp",initials:"W",avatar:2,description:"Official updates from WhatsApp",following:true},{id:"meta-official",name:"Meta",initials:"M",avatar:3,description:"Updates from Meta",following:false},{id:"tech-today",name:"Technology Today",initials:"T",avatar:7,description:"Technology news and updates",following:false}],
+      channels:[{id:"whatsapp-official",name:"Vexel Chat",initials:"VC",avatar:2,description:"Updates from the Vexel Chat team",following:true},{id:"meta-official",name:"Meta",initials:"M",avatar:3,description:"Updates from Meta",following:false},{id:"tech-today",name:"Technology Today",initials:"T",avatar:7,description:"Technology news and updates",following:false}],
       settings:{dark:false,wallpaper:"default",readReceipts:true,keepArchived:true,enterToSend:true,mediaVisibility:true,appLock:false,reduceMotion:false,keyboardNav:true,highContrast:false,spellcheck:true,reactionNotifications:true,securityNotifications:true},
       starredMessages:[],
       blocked:[],
@@ -454,7 +454,7 @@
     return "<div class='message-row " + (outgoing?"outgoing":"incoming") + "' data-message-id='" + esc(message.id) + "'><div class='message-bubble'>" + sender + "<span class='message-text'>" + textBody + "</span>" + pollCard + eventCard + attachmentAction + "<span class='message-meta'>" + time + checks + "</span>" + reactions + "</div></div>";
   }
   function renderWelcome() {
-    main.innerHTML = "<div class='welcome-pane'><div class='welcome-content'><svg class='welcome-art' viewBox='0 0 320 250' aria-hidden='true'><ellipse cx='161' cy='220' rx='112' ry='9' fill='#e0e6e8'/><path d='M61 142c-1-40 39-70 89-70 45 0 79 25 83 60 4 36-31 66-78 69l-30 24 4-26c-40-8-67-29-68-57Z' fill='#d9fdd3'/><path d='M76 139c0-30 31-54 71-54 40 0 72 24 72 54s-32 54-72 54c-10 0-20-1-29-4l-22 14 4-22c-15-10-24-24-24-42Z' fill='#25d366'/><path d='M128 114c-3-5-5-5-8-5s-7 3-8 7c-2 5 2 15 7 23 8 11 18 19 30 25 7 3 13 5 17 4 5-1 8-6 8-10 0-2-1-3-4-5l-10-5c-2-1-3 0-5 2l-4 5c-1 1-2 2-4 1-6-2-12-7-17-12-4-4-7-9-8-12 0-1 0-2 1-3l4-4c1-2 1-3 1-4l-4-7Z' fill='#fff'/></svg><h2>Messaging Web</h2><p>Send and receive messages with ease, right from your computer.</p><div class='welcome-divider'></div><div class='welcome-caption'>" + icon("lock") + "<span>Your messages sync through the connected account backend</span></div></div><div class='welcome-footer'>" + icon("lock") + "<span>This is a separate messaging app, not connected to WhatsApp accounts</span></div></div>";
+    main.innerHTML = "<div class='welcome-pane'><div class='welcome-content'><svg class='welcome-art' viewBox='0 0 320 250' aria-hidden='true'><ellipse cx='161' cy='220' rx='112' ry='9' fill='#e0e6e8'/><path d='M61 142c-1-40 39-70 89-70 45 0 79 25 83 60 4 36-31 66-78 69l-30 24 4-26c-40-8-67-29-68-57Z' fill='#d9fdd3'/><path d='M76 139c0-30 31-54 71-54 40 0 72 24 72 54s-32 54-72 54c-10 0-20-1-29-4l-22 14 4-22c-15-10-24-24-24-42Z' fill='#25d366'/><path d='M128 114c-3-5-5-5-8-5s-7 3-8 7c-2 5 2 15 7 23 8 11 18 19 30 25 7 3 13 5 17 4 5-1 8-6 8-10 0-2-1-3-4-5l-10-5c-2-1-3 0-5 2l-4 5c-1 1-2 2-4 1-6-2-12-7-17-12-4-4-7-9-8-12 0-1 0-2 1-3l4-4c1-2 1-3 1-4l-4-7Z' fill='#fff'/></svg><h2>Messaging Web</h2><p>Send and receive messages with ease, right from your computer.</p><div class='welcome-divider'></div><div class='welcome-caption'>" + icon("lock") + "<span>Your messages sync through the connected account backend</span></div></div><div class='welcome-footer'>" + icon("lock") + "<span>Vexel Chat is an independent messaging app and is not connected to other messaging accounts</span></div></div>";
   }
   function renderConversation(chat) {
     if (!chat) { renderWelcome(); return; }
@@ -490,7 +490,7 @@
     const sent=state.sentRequests||[];
     const receivedHtml=received.length?received.map(r=>"<div class='request-card'>"+avatarHTML(r)+"<div class='request-info'><strong>"+esc(r.name)+"</strong><span>@"+esc(r.username)+" · "+esc(r.phone)+"</span><span>"+esc(r.note||"Would like to connect")+" · "+esc(r.time||"Recently")+"</span></div><div class='request-actions'><button class='accept-request' data-action='accept-request' data-request-id='"+esc(r.id)+"'>Accept</button><button class='decline-request' data-action='decline-request' data-request-id='"+esc(r.id)+"'>Decline</button></div></div>").join(""):"<div class='empty-state'>No new contact requests.<br>When someone asks to connect, they will appear here.</div>";
     const sentHtml=sent.length?sent.map(r=>"<div class='request-card'>"+avatarHTML(r)+"<div class='request-info'><strong>"+esc(r.name)+"</strong><span>@"+esc(r.username)+" · "+esc(r.phone)+"</span><span>Request sent · Pending</span></div><div class='request-actions'><button class='decline-request' data-action='cancel-request' data-request-id='"+esc(r.id)+"'>Cancel</button></div></div>").join(""):"<div class='empty-state'>No outgoing requests.</div>";
-    main.innerHTML="<section class='section-screen'>"+screenHeader("Contact requests","<button class='primary-button' data-action='find-friends'>"+icon("user-plus")+" Find people</button>")+"<div class='screen-content'><p class='screen-description'>Manage connection requests. Requests are shared across devices. Accepting connects the two accounts; declining or cancelling updates the server.</p><div class='request-section-label'>RECEIVED · "+received.length+"</div><div class='section-card'>"+receivedHtml+"</div><div class='request-section-label'>SENT · "+sent.length+"</div><div class='section-card'>"+sentHtml+"</div><div class='screen-description'>Contact requests use this app’s own account directory. They are not linked to real WhatsApp accounts.</div></div></section>";
+    main.innerHTML="<section class='section-screen'>"+screenHeader("Contact requests","<button class='primary-button' data-action='find-friends'>"+icon("user-plus")+" Find people</button>")+"<div class='screen-content'><p class='screen-description'>Manage connection requests. Requests are shared across devices. Accepting connects the two accounts; declining or cancelling updates the server.</p><div class='request-section-label'>RECEIVED · "+received.length+"</div><div class='section-card'>"+receivedHtml+"</div><div class='request-section-label'>SENT · "+sent.length+"</div><div class='section-card'>"+sentHtml+"</div><div class='screen-description'>Contact requests use this app’s own account directory and are not linked to other messaging services.</div></div></section>";
   }
   function downloadLocalJson(filename, object) {
     const blob=new Blob([JSON.stringify(object,null,2)],{type:"application/json"});
@@ -508,7 +508,7 @@
     if(title==="Manage storage"||title==="Manage media"||title==="Network usage"){
       const size=new Blob([JSON.stringify(state)]).size;
       const message=title==="Network usage"?"Network requests: 0. All app state is stored locally.":title==="Manage media"?"Local attachments: "+state.chats.reduce((sum,c)=>sum+(c.attachments||[]).length,0):"Estimated local demo data: "+Math.round(size/1024)+" KB.";
-      openDialog(title,"<p class='screen-description'>"+esc(message)+"</p><p class='screen-description'>This report describes this browser-only demo, not WhatsApp's real storage.</p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
+      openDialog(title,"<p class='screen-description'>"+esc(message)+"</p><p class='screen-description'>This report describes local browser data, not your account's server-side storage.</p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
     }
     if(title==="Change number"){
       openDialog("Change custom number","<p class='screen-description'>Choose a unique in-app ID. It is not a real phone number.</p><div class='dialog-field'><label for='new-custom-number'>Custom number after +990</label><input id='new-custom-number' inputmode='numeric' value='"+esc(state.profile.phone.replace("+990 ",""))+"'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='save-custom-number'>Save number</button>");return;
