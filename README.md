@@ -1,71 +1,87 @@
-# WhatsApp-style messaging app
+# Messaging Web
 
-Responsive, installable messaging web app with Supabase authentication, persistent contact requests, direct and group chats, Realtime message updates, and one-to-one WebRTC voice/video calling.
+Responsive installable messaging app built on Supabase Auth, Postgres, Storage and Realtime. It also includes one-to-one WebRTC voice/video calling through the Supabase TURN-credential function and Metered TURN service.
 
 **Live app:** https://whatsapp-vexel-ai.vercel.app  
-**Repository:** https://github.com/AHCoderCode/whatsapp
+**Source:** https://github.com/AHCoderCode/whatsapp  
+**Supabase project:** `windows-12-beta-chat` (`qoyqfmovzvtyvxutakym`)
 
-## What is connected
+## What is connected to the backend
 
-- Username/password accounts using Supabase Auth; the custom `+990 xxx xxx xxx` identifier is an **in-app ID only**, not a real phone number. It cannot receive SMS or dial the phone network.
-- Display name, username, custom ID and profile photo (photo is size-compressed before saving).
-- Search registered usernames or look up a custom ID, then send an actual friend/contact request. The recipient accepts or declines; chat access follows the accepted friend relationship.
-- Direct and group text messages are stored in Supabase and streamed to signed-in users using Realtime.
-- One-to-one audio and video calls use WebRTC and the existing relay-only Supabase Edge Function. Calls require a working Metered TURN account and browser permissions; direct peer connections are intentionally not used.
-- PWA installation with an app manifest, service worker, install button and browser-menu fallback.
+- Username/password accounts using Supabase Auth. Usernames and custom IDs are unique. The `+990 xxx xxx xxx` value is an **in-app ID**, not a real telephone number.
+- Profile display name, about text and compressed profile photo.
+- User search, real contact requests (send/accept/decline/cancel), accepted contacts, and persistent direct conversations.
+- Persistent group text conversations, group descriptions, and adding accepted contacts to groups.
+- Realtime text messages, read receipts, and message removal (own messages can be deleted for everyone; messages from others can be hidden from the local account).
+- Private storage attachments and recorded voice notes. The current storage policy accepts files up to 15 MB except video files; voice notes are limited to two minutes.
+- Database-backed polls and voting, event invitations and RSVPs, text status updates expiring after 24 hours, channel directory/follows/text posts, and community creation/membership.
+- One-to-one audio/video WebRTC calls, including incoming-call controls, mute, camera toggle, hang-up, and relay-only networking. Actual calling requires valid Metered TURN settings and the receiving user to accept the call.
+- Installable PWA shell with service worker, manifest icons, install button and browser menu fallback.
 
-The number resolver endpoint is a convenience lookup rather than an authentication factor; the password is still checked by Supabase Auth. Persistent throttling is in place, but add CAPTCHA and operational monitoring before exposing the signup/search flow broadly.\n\nPrivate file attachments (up to 15 MB, excluding video), voice notes (up to two minutes), read receipts, group descriptions and adding accepted contacts to groups are connected to Supabase. Some original screens (Updates, Channels, Communities, poll/event voting, camera/status viewer, disappearing messages, and some message/settings actions) remain previews or are not fully persisted. Group messaging is supported; multi-person group calls and true WhatsApp interoperability are not part of this standalone app.
+Some legacy settings and actions remain local preferences or previews (for example privacy visibility settings, disappearing messages, the in-app camera/status photo capture flow, and some message actions). Communities currently manage membership but do not yet bind subgroups or community announcements. Channels support text posts only; group calls are not included. The app is not connected to real WhatsApp accounts and does not implement WhatsApp's end-to-end encryption.
 
-## Important architecture and security notes
+## Security boundaries
 
-The site uses the shared Supabase project backing the Windows 12 Master Chat so both use the same account directory/contact infrastructure. Its existing row-level security and private profile-discovery functions are retained. A publishable key is intended for client use; **never add a Supabase service-role/secret key to HTML, JavaScript, GitHub, or Vercel public environment variables**. Do not disable RLS to work around a denied query.
+This app uses the Supabase project shared with the Windows 12 Master Chat, so the same account infrastructure is deliberately reused. Account deletion is disabled in this frontend to avoid accidentally deleting an identity used by both apps.
 
-The `whatsapp_custom_profile_identifiers` database migration has already been applied to the connected Supabase project by the maintainers. It adds profile display names and custom in-app IDs, and a restricted function to resolve a custom ID to a username. Do not apply the same SQL manually a second time.
+Never place a Supabase service-role/secret key or Metered account secret in HTML, browser JavaScript, GitHub or public Vercel environment variables. The browser contains only the Supabase publishable key and relies on RLS. **Do not disable RLS to make a rejected query work.**
 
-## Exact Supabase setup checklist
+The custom-ID lookup migration, lookup-rate-limit migration, group description migration, persistent polls/events, statuses/channels/communities and channel-post migrations have already been applied to the connected Supabase project. Do not copy-paste or rerun those migrations.
 
-1. Open Supabase project **windows-12-beta-chat** (project ref `qoyqfmovzvtyvxutakym`) and confirm it is healthy.
-2. Go to **Authentication → Sign In / Providers → Email**. Turn **Confirm email OFF** for this username-only prototype. Accounts use internal aliases like `username@aeroshell.invalid`, not real mailboxes. If confirmation remains enabled, signup may create the account without starting a session. For production, prefer real email/phone verification instead of leaving confirmation bypassed.
-3. In **SQL Editor**, verify that `public.aeroshell_profiles` has `display_name`, `about`, and `custom_number`; the `aeroshell_username_by_custom_number(text)` function exists; and the custom-number unique index exists. The migration `whatsapp_custom_profile_identifiers` has already been applied. Do not run the migration again.
-4. Under **Database → Publications / Realtime**, keep `aeroshell_messages`, `aeroshell_friend_requests`, `aeroshell_calls`, and `aeroshell_call_signals` in `supabase_realtime`. They are already included in this project. Keep row-level security (RLS) enabled.
-5. Under **Edge Functions → Secrets**, set the Metered relay secrets using the values from your Metered dashboard:
-   - `METERED_TURN_DOMAIN`
-   - `METERED_TURN_API_KEY`
+## Exact relay setup (required for actual calls)
 
-   These are server-side Edge Function secrets. Do **not** put the values into GitHub, HTML/JavaScript, or public Vercel variables.
-6. Under **Edge Functions**, confirm both `master-chat-turn-credentials` and `whatsapp-lookup-identity` show **ACTIVE**. The custom-ID lookup function uses the platform-provided server-side secret key (`SUPABASE_SECRET_KEYS`, with legacy `SUPABASE_SERVICE_ROLE_KEY` fallback), applies both per-instance throttling and persistent database-backed limits (24 lookups/minute per IP hash and 3/minute per IP/ID pair), and returns only a matching username. IP and target values are SHA-256 hashed with the server-only service key before being stored; raw IP addresses are not stored in the rate-limit tables. Direct anonymous execution of both lookup/rate-limit SQL functions is revoked, and the rate-limit tables have RLS enabled with no client policies.
-7. Under **Authentication → URL Configuration**, set Site URL to `https://whatsapp-vexel-ai.vercel.app` and add `https://whatsapp-vexel-ai.vercel.app/**` to Redirect URLs. Add `https://whatsapp-for.vercel.app/**`, `https://whatsapp-git-main-vexel-ai.vercel.app/**`, and `http://localhost:8080/**` only if you use those URLs. Username/password sign-in does not require OAuth redirects, but recovery links may.
-8. Under **Project Settings → API / Data API**, ensure the `public` schema is exposed to the Data API. The browser uses only the publishable key and authenticated client calls; table grants/RLS continue to protect records. Do not make profiles, messages or signaling publicly readable.
-9. Under **Authentication → Security and Protection**, enable leaked-password protection if available in your project plan. The Supabase Advisor currently reports it disabled.
-10. Open **Edge Functions → master-chat-turn-credentials → Logs** after attempting a call. If the app says the relay is not configured or unavailable, recheck the Metered secrets and domain.
-11. Open **Database → Advisors** and review security/performance findings. The current security checks no longer report the custom-number SQL function as publicly executable; one private-schema informational finding and disabled leaked-password protection may remain. Do not disable RLS to silence an advisor.
-12. Test with two independent accounts/devices before sharing the app.
+1. Open [Metered Dashboard](https://dashboard.metered.ca/) and sign in or create an account.
+2. Open **TURN Server & SFU → Credentials**. If Metered asks you to choose a TURN plan, review its current price and terms with a parent/guardian before choosing anything paid.
+3. Click **Create Credential**. The label, region and project options are optional. You can label it `messaging-web-production` to recognise it later. Use the default options unless you know you need a specific region.
+4. Create it and wait up to **two minutes** for the credentials to propagate.
+5. On that credential's row click **Get credential → Show API Key**. Copy the **credential API key** (the one for that credential). Do not copy the ICE username/password array, and do not confuse it with the account-wide Secret Key on Metered's Developers page. See the [Metered TURN Quickstart](https://www.metered.ca/docs/turn-server-service/quickstart/).
+6. In Metered's left navigation open **Developers** and copy your assigned **Metered Domain**, which looks like `yourappname.metered.live`. Use the exact domain from your account; do not add `https://`, a path, or a trailing slash. The code expects a `.metered.live` domain.
+7. Open [Supabase Edge Function Secrets](https://supabase.com/dashboard/project/qoyqfmovzvtyvxutakym/functions/secrets). Add these two secrets using your own values:
+   - **Key:** `METERED_TURN_DOMAIN` · **Value:** the domain copied in step 6, such as `yourappname.metered.live`.
+   - **Key:** `METERED_TURN_API_KEY` · **Value:** the credential-specific API key copied in step 5.
+8. Click **Save**. Supabase makes updated secrets available to Edge Functions without a redeploy. Do not send either value in chat or commit it to GitHub. Supabase's [Edge Function Secrets guide](https://supabase.com/docs/guides/functions/secrets) documents the same dashboard process.
+9. In Supabase **Edge Functions**, confirm `master-chat-turn-credentials` and `whatsapp-lookup-identity` show **ACTIVE**. They are already deployed.
+10. Open **Edge Functions → master-chat-turn-credentials → Logs** after a call attempt. If the app reports `private_relay_not_configured`, double-check both secret names and values. If Metered rejects the relay immediately after creating a credential, wait two minutes and test again.
 
-## Exact end-to-end test
+## Exact Supabase account setup
 
-1. Open the live app in a private/incognito window and create **Account A** with a unique username, display name, nine digits after the `+990` prefix, and a password of at least eight characters.
-2. Open the app in a second browser profile/device and create **Account B** using a different username and custom ID.
-3. From Account A, use **New chat / Find people**, search Account B's username, and send a contact request.
-4. In Account B, open **Contact requests** and press **Accept**. Decline and cancel actions should also update the server rather than just removing a local card.
-5. Open the new conversation and send a message both ways. Confirm the other device receives it, then reload each browser and confirm history persists.
-6. Start a voice call. On the receiving device, allow microphone permission and press **Accept**; confirm two-way audio, then mute and hang up.
-7. Repeat with a video call and allow camera + microphone permissions on both devices. Use the browser's site-permission controls if the permission prompt was previously denied.
-8. Try another network if relay connectivity fails. A call must never silently fall back to a direct peer connection.
+1. Open the [Supabase project dashboard](https://supabase.com/dashboard/project/qoyqfmovzvtyvxutakym).
+2. Go to **Authentication → Sign In / Providers → Email** and turn **Confirm email OFF** for this username-only prototype. The app uses internal aliases like `username@aeroshell.invalid`, not actual mailboxes. This is a prototype shortcut; a public production app should add genuine email/phone verification and recovery before signup is opened to everyone.
+3. Under **Database → Publications / Realtime**, the connected project already publishes the message, request, call, call-signal, read-receipt, poll/event, status/channel and community tables used here. Do not change the existing policies just to silence a failed request.
+4. Under **Authentication → URL Configuration**, set Site URL to `https://whatsapp-vexel-ai.vercel.app`. Add these Redirect URLs if you use those hostnames: `https://whatsapp-vexel-ai.vercel.app/**`, `https://whatsapp-for.vercel.app/**`, `https://whatsapp-git-main-vexel-ai.vercel.app/**`. Recovery/OAuth flows may need the localhost redirect `http://localhost:8080/**` for local testing.
+5. Under **Authentication → Security and Protection**, enable leaked-password protection if available on your project plan. The Supabase Advisor previously reported this as disabled.
+6. Review **Database → Advisors**. The lookup rate-limit tables intentionally have RLS enabled and no browser policies; don't make them publicly readable. Keep all RLS enabled.
 
-## Install on each device
+## End-to-end test plan
 
-- **Windows / macOS, Chrome or Edge:** open the live HTTPS URL; use the install icon in the address bar when shown, or browser menu → **Install app**. The page's Install app button invokes the native prompt when the browser exposes it and otherwise explains the browser-menu path.
-- **Android:** open the HTTPS URL in Chrome → ⋮ menu → **Install app** or **Add to Home screen**.
-- **iPhone / iPad:** open the HTTPS URL in Safari → Share → **Add to Home Screen**.
-- If the old version opens after an update, close the installed app, reopen the site, refresh once and then reopen it. The service worker cache version is bumped whenever the app shell changes.
+Test with two separate accounts on two browser profiles or devices; using two tabs logged into the same account is not enough to test delivery or calls.
+
+1. Account A: create a username, display name, unique nine digits after the `+990` prefix and password of at least 8 characters.
+2. Account B: create a different username and different custom ID in another browser/device.
+3. Account A searches Account B's username and sends a contact request.
+4. Account B opens **Contact requests** and accepts it.
+5. Send messages both directions. Refresh both devices and verify history persists and delivery/read status updates.
+6. Send a private photo or document (up to 15 MB); open it on the other device. Record and send a short voice note; play it on the recipient.
+7. In a conversation, create a poll, vote from the other account, create an event, and RSVP from the other account.
+8. Publish a text status and confirm the accepted contact can see it. Create a channel, publish a text post, then open it from the other account. Create a community and join it from the other account.
+9. Start a voice call. On the other device, allow microphone permission and press **Accept**; check two-way audio and hang up.
+10. Repeat with video and allow camera + microphone on both devices. Test once on a different network if possible. Calls must not silently fall back to direct peer connections.
+
+## Install on your devices
+
+- **Windows / macOS — Chrome or Edge:** open the HTTPS app; click the install icon in the address bar if shown, or browser menu → **Install app**. The in-app **Install app** button invokes the native prompt when supported.
+- **Android — Chrome:** open the HTTPS app → ⋮ menu → **Install app** or **Add to Home screen**.
+- **iPhone / iPad — Safari:** open the HTTPS app → **Share → Add to Home Screen**.
+- If an installed copy looks old after deployment, close the app, open the website in the browser and refresh; then reopen the installed app. The service worker cache is bumped for each app-shell update.
 
 ## Local development
 
-Serve the repository root over HTTP (not by opening `index.html` as a `file://` URL). For example, from this directory run `python -m http.server 8080`, then visit `http://localhost:8080`. The site is a static app; no Node build is needed for the frontend. Browser microphone/camera APIs need HTTPS, except localhost, and the Supabase Edge Function must allow the local origin if you want to test calls locally.
+Serve the repository root over HTTP instead of opening `index.html` using `file://`. With Python installed, run `python -m http.server 8080` from the repository folder and browse to `http://localhost:8080`. Camera/microphone requires HTTPS except localhost. The TURN function already allows this localhost origin.
 
-## Known limitations
+## Known limits / release caveat
 
-- The custom `+990` number is only a unique app identifier—no SMS, cellular phone calls or access to real WhatsApp accounts.
-- One-to-one voice/video calls are real WebRTC calls, but relay credentials are required; no call can connect until the Metered TURN secrets are configured correctly.
-- This is not end-to-end-encrypted WhatsApp and is not endorsed by or interoperable with WhatsApp. Supabase stores messages and metadata according to its configured database/storage policies.
-- Some legacy UI screens and actions still need separate persistence/QA. Test the specific features you intend to expose before calling this a production-ready public service.
+- `+990` is a custom app identifier only; it cannot receive SMS or use the telephone network.
+- A valid Metered TURN plan/domain/API key is required before calls can actually connect.
+- Video file attachments, group calls, channel media posts, photo/video status capture and community subgroup binding are not implemented.
+- This is not official WhatsApp, cannot message real WhatsApp accounts, and does not provide end-to-end encryption. Supabase stores message text/metadata under its existing RLS policies.
+- Static syntax/build checks are not a substitute for the two-account/two-device test above. Verify actual audio/video on supported browsers before advertising the service as production-ready.
