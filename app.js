@@ -468,6 +468,52 @@
     const sentHtml=sent.length?sent.map(r=>"<div class='request-card'>"+avatarHTML(r)+"<div class='request-info'><strong>"+esc(r.name)+"</strong><span>@"+esc(r.username)+" · "+esc(r.phone)+"</span><span>Request sent · Pending</span></div><div class='request-actions'><button class='decline-request' data-action='cancel-request' data-request-id='"+esc(r.id)+"'>Cancel</button></div></div>").join(""):"<div class='empty-state'>No outgoing requests.</div>";
     main.innerHTML="<section class='section-screen'>"+screenHeader("Contact requests","<button class='primary-button' data-action='find-friends'>"+icon("user-plus")+" Find people</button>")+"<div class='screen-content'><p class='screen-description'>Manage connection requests. Accepting a request adds the person to your local chat list; declining removes it. No notification is sent to a server.</p><div class='request-section-label'>RECEIVED · "+received.length+"</div><div class='section-card'>"+receivedHtml+"</div><div class='request-section-label'>SENT · "+sent.length+"</div><div class='section-card'>"+sentHtml+"</div><div class='screen-description'>Contact requests are an extra feature of this demo and are not a native WhatsApp feature.</div></div></section>";
   }
+  function downloadLocalJson(filename, object) {
+    const blob=new Blob([JSON.stringify(object,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");a.href=url;a.download=filename;a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+  function handleSettingOption(title) {
+    if(title==="Theme"){state.settings.dark=!state.settings.dark;saveState();applySettings();renderSettings();toast("Theme updated locally.");return;}
+    if(title==="Chat wallpaper"){chooseWallpaperDialog();return;}
+    if(title==="Request account info"||title==="Chat backup"){
+      downloadLocalJson(title==="Chat backup"?"whatsapp-demo-chat-backup.json":"whatsapp-demo-account-info.json",title==="Chat backup"?{profile:state.profile,chats:state.chats,requests:state.requests,settings:state.settings}:{profile:state.profile,account:{username:currentUser.username,phone:currentUser.phone,createdAt:currentUser.createdAt},localDataOnly:true});
+      toast("Local JSON export downloaded.");return;
+    }
+    if(title==="Manage storage"||title==="Manage media"||title==="Network usage"){
+      const size=new Blob([JSON.stringify(state)]).size;
+      const message=title==="Network usage"?"Network requests: 0. All app state is stored locally.":title==="Manage media"?"Local attachments: "+state.chats.reduce((sum,c)=>sum+(c.attachments||[]).length,0):"Estimated local demo data: "+Math.round(size/1024)+" KB.";
+      openDialog(title,"<p class='screen-description'>"+esc(message)+"</p><p class='screen-description'>This report describes this browser-only demo, not WhatsApp's real storage.</p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
+    }
+    if(title==="Change number"){
+      openDialog("Change custom number","<p class='screen-description'>Choose a new unique in-app demo number. It is not a real phone number.</p><div class='dialog-field'><label for='new-custom-number'>Custom number after +990</label><input id='new-custom-number' inputmode='numeric' value='"+esc(state.profile.phone.replace("+990 ",""))+"'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='save-custom-number'>Save number</button>");return;
+    }
+    if(title==="Two-step verification"){
+      openDialog(title,"<p class='screen-description'>Create a local six-digit demo PIN. It is saved only in this browser and does not protect a real account.</p><div class='dialog-field'><label for='two-step-pin'>Six-digit PIN</label><input id='two-step-pin' inputmode='numeric' maxlength='6' placeholder='••••••'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='save-two-step'>Save PIN</button>");return;
+    }
+    if(title==="Delete account"){
+      openDialog("Delete local demo account","<p class='screen-description'>This removes this demo account and its browser-stored chat state. No remote WhatsApp account is affected.</p>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='danger-button' data-dialog-action='delete-local-account'>Delete local account</button>");return;
+    }
+    if(["Last seen and online","Profile photo","About","Status","Groups"].includes(title) && settingsTab==="privacy"){
+      const values=["Everyone","My contacts","My contacts except…","Nobody"];
+      const options=values.map(value=>"<button class='setting-row' data-dialog-action='save-setting-choice' data-setting-name='"+esc(title)+"' data-setting-value='"+esc(value)+"'><span class='setting-copy'><span class='setting-title'>"+esc(value)+"</span></span>"+icon((state.settings.privacy||{})[title]===value?"check":"circle")+"</button>").join("");
+      openDialog(title,options,"<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
+    }
+    if(title==="App language"){
+      const values=["English","اردو (Urdu)","العربية (Arabic)","Español (Spanish)"];
+      openDialog(title,values.map(value=>"<button class='setting-row' data-dialog-action='save-language' data-language='"+esc(value)+"'><span class='setting-copy'><span class='setting-title'>"+esc(value)+"</span></span>"+icon((state.settings.language||"English")===value?"check":"circle")+"</button>").join(""),"<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
+    }
+    if(title==="Accent color"){
+      const colors=[["Green","#00a884"],["Blue","#1677d2"],["Purple","#7952b3"],["Teal","#008c8c"]];
+      openDialog(title,colors.map(c=>"<button class='setting-row' data-dialog-action='save-accent' data-accent-name='"+esc(c[0])+"' data-accent-color='"+esc(c[1])+"'><span class='row-icon' style='color:"+esc(c[1])+"'>"+icon("palette")+"</span><span class='setting-copy'><span class='setting-title'>"+esc(c[0])+"</span></span>"+icon((state.settings.accent||"Green")===c[0]?"check":"circle")+"</button>").join(""),"<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
+    }
+    if(["Messages","Groups","Calls","Media auto-download","Spell check","Help center","Contact us","Terms and privacy policy","App info","Two-step verification","Security notifications","Disappearing messages","Wallpaper"].includes(title)){
+      openDialog(title,"<p class='screen-description'>This option is represented in the frontend demo. No remote account or device setting will be changed.</p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
+    }
+    if(title==="Enter is send"){state.settings.enterToSend=!state.settings.enterToSend;saveState();renderSettings();toast("Enter-to-send preference updated.");return;}
+    toast(title+" is shown as a local frontend setting.");
+  }
   function renderSettingsDetail() {
     const tab=settingsTabs.find(t=>t[0]===settingsTab)||settingsTabs[0];
     const options=settingDescriptions[settingsTab]||settingDescriptions.account;
@@ -481,7 +527,7 @@
       else if(opt[3]==="wallpaper")side="<button class='secondary-button' data-action='wallpaper'>Change</button>";
       else if(opt[3]==="button")side="<span class='end-icon'>"+icon("chevron")+"</span>";
       else side="<span class='setting-side-label'>"+esc(opt[3]||"")+"</span>";
-      return "<div class='setting-option'><span class='row-icon'>"+icon(opt[0])+"</span><div class='setting-option-copy'><strong>"+esc(opt[1])+"</strong><span>"+esc(opt[2])+"</span></div>"+side+"</div>";
+      return "<div class='setting-option' data-setting-option='"+esc(opt[1])+"' role='button' tabindex='0'><span class='row-icon'>"+icon(opt[0])+"</span><div class='setting-option-copy'><strong>"+esc(opt[1])+"</strong><span>"+esc(opt[2])+"</span></div>"+side+"</div>";
     }).join("")+"</div><p class='screen-description'>Settings here change the local interface only. No WhatsApp account, server, or device settings are affected.</p>";
     return "<div class='settings-detail-header'><h3>"+esc(tab[2])+"</h3></div><div class='settings-detail-content'>"+content+"</div>";
   }
@@ -796,7 +842,7 @@
   }
 
   document.addEventListener("click",event=>{
-    const t=event.target.closest("[data-auth-mode],[data-action],[data-view],[data-filter],[data-chat-id],[data-request-id],[data-setting-tab],[data-setting],[data-dialog-action],[data-menu-action],[data-wallpaper],[data-community-id]");
+    const t=event.target.closest("[data-auth-mode],[data-action],[data-view],[data-filter],[data-chat-id],[data-request-id],[data-setting-tab],[data-setting],[data-dialog-action],[data-menu-action],[data-wallpaper],[data-community-id],[data-setting-option]");
     if(!t)return;
     if(t.dataset.authMode){renderAuth(t.dataset.authMode);return;}
     if(t.dataset.menuAction){runMenuAction(t.dataset.menuAction,findChat(menuChatId));return;}
@@ -808,6 +854,7 @@
       if(t.dataset.action==="decline-request"){declineRequest(id);return;}
       if(t.dataset.action==="cancel-request"){state.sentRequests=state.sentRequests.filter(r=>r.id!==id);save();renderMain();toast("Outgoing request cancelled.");return;}
     }
+    if(t.dataset.settingOption){handleSettingOption(t.dataset.settingOption);return;}
     if(t.dataset.settingTab){settingsTab=t.dataset.settingTab;renderSettings();return;}
     if(t.dataset.setting){
       const key=t.dataset.setting;
@@ -846,6 +893,35 @@
         const selected=$("#dialog-backdrop input[type=checkbox]:checked").map(input=>input.value);
         c.participants=Array.from(new Set((c.participants||[]).concat(selected)));
         saveState();closeDialog();renderMain();toast(selected.length+" participant(s) added to this local group.");return;
+      }
+      if(action==="save-custom-number"){
+        const raw=normalizePhone($("#new-custom-number").value);
+        const suffix=raw.startsWith("990")?raw.slice(3):raw;
+        if(suffix.length!==9){toast("Enter exactly 9 digits after +990.");return;}
+        const newPhone="+990 "+suffix.replace(/(\d{3})(\d{3})(\d{3})/,"$1 $2 $3");
+        if(db.accounts.concat(db.directory).some(a=>normalizePhone(a.phone)===normalizePhone(newPhone)&&normalizeUsername(a.username)!==normalizeUsername(currentUser.username))){toast("That demo number is already in use.");return;}
+        state.profile.phone=newPhone;currentUser.phone=newPhone;
+        const account=db.accounts.find(a=>a.id===currentUser.id);if(account){account.phone=newPhone;saveDb();}
+        saveState();closeDialog();renderMain();toast("Custom number updated locally.");return;
+      }
+      if(action==="save-two-step"){
+        const pin=$("#two-step-pin").value.trim();if(!/^\d{6}$/.test(pin)){toast("Enter a six-digit PIN.");return;}
+        state.settings.twoStepPin=pin;saveState();closeDialog();toast("Demo PIN saved in this browser.");return;
+      }
+      if(action==="delete-local-account"){
+        db.accounts=db.accounts.filter(a=>a.id!==currentUser.id);saveDb();
+        try{localStorage.removeItem(stateKey(currentUser.username));localStorage.removeItem(SESSION_KEY);}catch(_){}
+        closeDialog();currentUser=null;state=null;selectedChatId=null;app.classList.add("hidden");auth.classList.remove("hidden");renderAuth("signup");toast("Local account deleted.");return;
+      }
+      if(action==="save-setting-choice"){
+        state.settings.privacy=state.settings.privacy||{};state.settings.privacy[t.dataset.settingName]=t.dataset.settingValue;
+        saveState();closeDialog();renderSettings();toast("Privacy preference saved locally.");return;
+      }
+      if(action==="save-language"){
+        state.settings.language=t.dataset.language;saveState();closeDialog();renderSettings();toast("Language preference saved. Full translation is not wired into this preview.");return;
+      }
+      if(action==="save-accent"){
+        state.settings.accent=t.dataset.accentName;document.documentElement.style.setProperty("--green",t.dataset.accentColor);saveState();closeDialog();renderSettings();toast("Accent color changed.");return;
       }
       if(action==="save-contact-about"){
         const c=findChat(t.dataset.chatId);if(c){c.about=$("#contact-about").value.trim();saveState();closeDialog();renderMain();toast("Contact details updated in demo.");}return;
