@@ -909,10 +909,31 @@
     }
     if(action==="pinned-preview"){toast(chat&&chat.pinnedMessage?"Pinned message: "+chat.pinnedMessage.text:"No pinned message.");return;}
     if(action==="unpin-message"){if(chat)chat.pinnedMessage=null;save();renderMain();toast("Pinned message removed.");return;}
-    if(action==="reply-message"){const input=$("#message-input");if(input){input.value="Replying: ";input.focus();}return;}
-    if(action==="forward-message"){toast("Forward is a UI-only demo action.");return;}
-    if(action==="copy-message"){const msg=state.lastContextMessage;if(msg&&navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(msg.text).then(()=>toast("Message copied")).catch(()=>toast(msg.text));}else if(msg)toast(msg.text);return;}
-    if(action==="delete-message"){const ref=state.lastContextMessage;if(ref&&chat){chat.messages=chat.messages.filter(m=>m.id!==ref.id);save();renderMain();toast("Message removed locally.");}return;}
+    if(action==="reply-message"){
+      const ref=state.lastContextMessage;
+      if(!ref||!chat){toast("Select a message to reply to.");return;}
+      replyingTo={id:ref.id,chatId:chat.id,text:String(ref.text||ref.attachmentName||"Attachment"),sender:ref.from==="me"?"You":(ref.sender||chat.name)};
+      dismissMessageSelection(false);
+      updateReplyPreview();
+      const input=$("#message-input");if(input)input.focus();
+      return;
+    }
+    if(action==="forward-message"){showForwardMessageDialog();return;}
+    if(action==="copy-message"){
+      const msg=state.lastContextMessage;
+      if(msg&&navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(msg.text||msg.attachmentName||"").then(()=>toast("Message copied")).catch(()=>toast(msg.text||"Message"));}else if(msg)toast(msg.text||"Message");
+      dismissMessageSelection(false);return;
+    }
+    if(action==="delete-message"){
+      const ref=state.lastContextMessage;
+      if(!ref||!chat){toast("Select a message first.");return;}
+      const canDeleteEveryone=!!(currentUser&&currentUser.isSupabase&&ref.from==="me"&&/^[0-9a-f-]{36}$/i.test(String(ref.id)));
+      const body="<p class='screen-description'>Choose how you want to remove this message.</p><div class='delete-message-preview'><strong>"+esc(ref.from==="me"?"You":(ref.sender||chat.name))+"</strong><span>"+esc(ref.text||ref.attachmentName||"Attachment")+"</span></div>";
+      const actions="<button class='secondary-button' data-action='delete-message-for-me'>Delete for me</button>"+(canDeleteEveryone?"<button class='danger-button' data-action='delete-message-for-everyone'>Delete for everyone</button>":"");
+      dismissMessageSelection(true);
+      openDialog("Delete message",body,actions+"<button class='secondary-button' data-action='close-dialog'>Cancel</button>");
+      return;
+    }
     if(action==="voice-call"||action==="video-call"){const call={id:uid("call"),name:chat?chat.name:"New call",time:"Just now",type:"outgoing",avatar:chat?chat.avatar:1};state.calls.unshift(call);saveState();toast("Call UI preview only — no actual call is placed.");return;}
     if(action==="shared-media"){const attachments=(chat.attachments||[]);openDialog("Media, links and documents",attachments.length?attachments.map(a=>"<div class='setting-row'>"+icon(a.type==="image"?"image":"file")+"<span class='setting-copy'><span class='setting-title'>"+esc(a.name)+"</span><span class='setting-subtitle'>"+esc(a.type||"file")+"</span></span></div>").join(""):"<div class='empty-state'>No local attachments in this chat.</div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;}
     if(action==="edit-group"){editGroupDialog(chat);return;}
@@ -924,8 +945,10 @@
   function copyText(text) { if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(()=>toast("Copied to clipboard")).catch(()=>toast(text));else toast(text); }
   function sendMessage(text) {
     const chat=currentChat();if(!chat||!text.trim())return;
-    const msg={id:uid("msg"),from:"me",text:text.trim(),time:nowTime(),date:dayLabel(),status:"sent",reactions:[]};
+    const quote=replyingTo&&String(replyingTo.chatId)===String(chat.id)?Object.assign({},replyingTo):null;
+    const msg={id:uid("msg"),from:"me",text:text.trim(),time:nowTime(),date:dayLabel(),status:"sent",reactions:[],replyTo:quote};
     chat.messages.push(msg);chat.preview=text.trim();chat.time="Now";chat.lastOutgoing=true;chat.lastMessageType="text";chat.unread=0;
+    replyingTo=null;dismissMessageSelection(false);
     saveState();renderSidebar();renderMain();
     requestAnimationFrame(()=>{const sc=$("#message-scroll");if(sc)sc.scrollTop=sc.scrollHeight;});
   }
@@ -1213,33 +1236,113 @@
   });
   document.addEventListener("keydown",event=>{
     if(event.key==="Escape"){
+      if(selectedMessage){dismissMessageSelection(false);return;}
       closePopup();if($("#dialog-backdrop"))closeDialog();
       else if(view==="info"){view="chats";renderMain();updateMobile();}
       else if(selectedChatId!==null&&window.matchMedia("(max-width:700px)").matches){selectedChatId=null;renderSidebar();renderMain();updateMobile();}
     }
     if((event.target.classList.contains("chat-row")||event.target.classList.contains("archived-row"))&&(event.key==="Enter"||event.key===" ")){event.preventDefault();const id=event.target.dataset.chatId;if(id)selectChat(id);else if(event.target.classList.contains("archived-row"))setView("archived");}
+    if(event.target.classList.contains("message-row")&&(event.key==="Enter"||event.key===" ")){event.preventDefault();selectMessageForActions(event.target);}
     if(event.target.id==="message-input"&&event.key==="Enter"&&!event.shiftKey&&state.settings.enterToSend){event.preventDefault();$("#message-form").requestSubmit();}
   });
   document.addEventListener("click",event=>{
     const menu=$("#popup-menu");
     if(menu&&!menu.contains(event.target)&&!event.target.closest("[data-action]"))closePopup();
   });
+  main.addEventListener("pointerdown",event=>{
+    const row=event.target.closest(".message-row");
+    if(!row||event.target.closest("button,a,input,textarea,select"))return;
+    if(event.pointerType==="mouse"&&event.button!==0)return;
+    clearTimeout(messageHoldTimer);
+    messageHoldRow=row;messageHoldStart={x:event.clientX,y:event.clientY};
+    messageHoldTimer=setTimeout(()=>{if(!messageHoldRow)return;messageHoldTriggered=true;selectMessageForActions(messageHoldRow);},520);
+  },true);
+  main.addEventListener("pointermove",event=>{
+    if(!messageHoldTimer||!messageHoldStart)return;
+    if(Math.abs(event.clientX-messageHoldStart.x)>10||Math.abs(event.clientY-messageHoldStart.y)>10){
+      clearTimeout(messageHoldTimer);messageHoldTimer=null;messageHoldRow=null;messageHoldStart=null;
+    }
+  },{capture:true,passive:true});
+  const stopMessageHold=()=>{if(messageHoldTimer){clearTimeout(messageHoldTimer);messageHoldTimer=null;}messageHoldRow=null;messageHoldStart=null;};
+  main.addEventListener("pointerup",stopMessageHold,true);
+  main.addEventListener("pointercancel",stopMessageHold,true);
+  main.addEventListener("click",event=>{
+    if(messageHoldTriggered&&event.target.closest(".message-row")){
+      event.preventDefault();event.stopImmediatePropagation();messageHoldTriggered=false;
+    }
+  },true);
+  main.addEventListener("click",event=>{
+    const button=event.target.closest("[data-message-toolbar-action]");
+    if(!button)return;
+    event.preventDefault();event.stopPropagation();
+    const action=button.dataset.messageToolbarAction,chat=currentChat();
+    if(action==="cancel"){dismissMessageSelection(false);return;}
+    if(action==="more"){const bar=$("#message-selection-toolbar",main);if(chat&&bar)openPopup(bar,menuItems("message-menu",chat),chat.id);return;}
+    const map={reply:"reply-message",forward:"forward-message",star:"star-message",copy:"copy-message",delete:"delete-message"};
+    if(map[action])runMenuAction(map[action],chat);
+  });
   main.addEventListener("contextmenu",event=>{
     const row=event.target.closest(".message-row");
     if(!row)return;
-    const chat=currentChat();
-    if(!chat)return;
-    const message=chat.messages.find(m=>String(m.id)===String(row.dataset.messageId));
-    if(!message)return;
     event.preventDefault();
-    state.lastContextMessage={id:message.id,text:message.text,chatId:chat.id,chatName:chat.name,avatar:chat.avatar,time:message.time};
-    const anchor=row;
-    openPopup(anchor,menuItems("message-menu",chat),chat.id);
+    selectMessageForActions(row);
   });
   window.addEventListener("resize",updateMobile);
 
   const originalHandleAction=handleAction;
   handleAction=function(action,el){
+    if(action==="cancel-message-selection"){dismissMessageSelection(false);return;}
+    if(action==="cancel-reply"){replyingTo=null;updateReplyPreview();const input=$("#message-input");if(input)input.focus();return;}
+    if(action==="jump-to-reply"){
+      const targetId=el.dataset.replyTargetId;
+      const row=$(".message-row",main).find(node=>String(node.dataset.messageId)===String(targetId));
+      if(row){row.scrollIntoView({behavior:"smooth",block:"center"});row.classList.add("reply-target-flash");setTimeout(()=>row.classList.remove("reply-target-flash"),1200);}
+      return;
+    }
+    if(action==="delete-message-for-me"||action==="delete-message-for-everyone"){
+      const ref=state&&state.lastContextMessage;
+      if(!ref){toast("Select a message first.");closeDialog();return;}
+      const id=ref.id,isServer=!!(currentUser&&currentUser.isSupabase);
+      const run=async()=>{
+        try{
+          if(isServer){
+            if(action==="delete-message-for-everyone"){
+              if(ref.from!=="me"||!window.waAppBridge?.deleteBackendMessage)throw new Error("Only your own sent messages can be deleted for everyone.");
+              await window.waAppBridge.deleteBackendMessage(id);
+            }else{
+              if(!window.waAppBridge?.hideBackendMessage)throw new Error("Message sync is unavailable. Reload the app and retry.");
+              await window.waAppBridge.hideBackendMessage(id);
+            }
+          }else{
+            const targetChat=state.chats.find(c=>String(c.id)===String(ref.chatId));
+            if(targetChat)targetChat.messages=targetChat.messages.filter(m=>String(m.id)!==String(id));
+            if(targetChat&&!targetChat.messages.length)targetChat.preview="";
+            saveState();renderSidebar();renderMain();
+          }
+          closeDialog();dismissMessageSelection(false);toast(action==="delete-message-for-everyone"?"Message deleted for everyone.":"Message deleted for you.");
+        }catch(error){toast("Could not delete message: "+String(error&&error.message||"Unknown error"));}
+      };
+      void run();return;
+    }
+    if(action==="forward-message-to-chat"){
+      const targetId=el.dataset.targetChatId,draft=forwardDraft;
+      if(!draft){toast("Select a message to forward.");closeDialog();return;}
+      const target=findChat(targetId);
+      if(!target){toast("That conversation is no longer available.");return;}
+      const run=async()=>{
+        try{
+          if(currentUser&&currentUser.isSupabase){
+            if(!window.waAppBridge?.forwardBackendMessage)throw new Error("Message sync is unavailable. Reload the app and retry.");
+            await window.waAppBridge.forwardBackendMessage(targetId,draft.id,draft.text||draft.attachmentName||"Attachment");
+          }else{
+            target.messages.push({id:uid("msg"),from:"me",text:draft.text||draft.attachmentName||"Attachment",time:nowTime(),date:dayLabel(),status:"sent",forwarded:true,forwardedFromId:draft.id});
+            target.preview=draft.text||"Forwarded message";target.time="Now";saveState();renderSidebar();
+          }
+          forwardDraft=null;closeDialog();dismissMessageSelection(false);toast("Message forwarded.");
+        }catch(error){toast("Could not forward message: "+String(error&&error.message||"Unknown error"));}
+      };
+      void run();return;
+    }
     if(action==="send-contact-request"){
       const contact=lookupDirectory(el.dataset.contactUsername);
       if(contact)requestSend(contact);
@@ -1302,6 +1405,8 @@
     getState: () => state,
     getCurrentUser: () => currentUser,
     getCurrentChat: () => currentChat(),
+    getReplyToMessageId: () => { const chat=currentChat(); return replyingTo&&chat&&String(replyingTo.chatId)===String(chat.id)?replyingTo.id:null; },
+    clearReplyToMessage: (id) => { if(replyingTo&&(!id||String(replyingTo.id)===String(id))){replyingTo=null;updateReplyPreview();} },
     getSelectedChatId: () => selectedChatId,
     setBackendUser: (authUser, profile) => {
       const name = String(profile.display_name || profile.username || "User");
