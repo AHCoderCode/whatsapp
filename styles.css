@@ -170,3 +170,16 @@ button,input,textarea,select{max-width:100%}
 .wa-event-rsvp{align-self:flex-start;min-height:34px;padding:7px 12px;border-radius:9px}
 .wa-event-rsvp.going{background:#e3f4ee;color:#087f67;border:1px solid #b3ded0}
 @media(max-width:700px){.wa-poll-card,.wa-event-card{max-width:100%}.wa-poll-option{min-height:42px}}
+
+.channel-open-button{display:flex;flex:1;min-width:0;flex-direction:column;align-items:flex-start;gap:4px;border:0;padding:5px;background:transparent;color:inherit;text-align:left;cursor:pointer;font:inherit}
+.channel-open-button strong,.channel-open-button span{max-width:100%;overflow-wrap:anywhere}
+.channel-open-button span{font-size:12px;color:#667781}
+.wa-channel-detail{display:flex;flex-direction:column;gap:12px;min-width:0}
+.wa-channel-detail>p{margin:0;color:#667781;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+.wa-channel-feed{display:flex;flex-direction:column;gap:10px;max-height:min(55vh,520px);overflow:auto;overscroll-behavior:contain}
+.wa-channel-post{display:flex;flex-direction:column;gap:7px;padding:12px;border:1px solid #e0e8e6;border-radius:12px;background:#f8fbfa;min-width:0}
+.wa-channel-post header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.wa-channel-post header strong{font-size:12px}
+.wa-channel-post header small{font-size:10px;color:#667781}
+.wa-channel-post p{margin:0;font-size:13px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+.text-danger-button{align-self:flex-start;border:0;background:transparent;color:#bf3145;font:inherit;font-size:11px;cursor:pointer;padding:4px 0}
