@@ -67,7 +67,7 @@
   async function searchPeople(value) {
     const me=getUser();
     if(!db)throw new Error("The account directory connection did not load. Refresh the app and try again.");
-    if(!me||!me.isSupabase)throw new Error("Sign in to a shared Vexel Chat account to find people.");
+    if(!me||!me.isSupabase)throw new Error("Sign in to a shared WhatsApp account to find people.");
     const query=String(value||"").trim().replace(/^@+/,"").replace(/\s+/g," ").trim().toLowerCase();
     if(query.length<2)return [];
     if(query.length>80)throw new Error("Search text must be 80 characters or fewer.");
@@ -961,7 +961,7 @@
     if(query.length>80){renderStatus("Search text must be 80 characters or fewer.",false);return;}
     if(!db){renderStatus("The account directory connection did not load. Refresh the app and try again.",false);return;}
     const signedIn=getUser();
-    if(!signedIn||!signedIn.isSupabase){renderStatus("Sign in to your shared Vexel Chat account to find people.",false);return;}
+    if(!signedIn||!signedIn.isSupabase){renderStatus("Sign in to your shared WhatsApp account to find people.",false);return;}
     renderStatus("Searching the account directory…",true);
     searchTimer=setTimeout(async()=>{
       try{
