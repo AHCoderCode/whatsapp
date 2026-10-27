@@ -27,6 +27,13 @@
   let currentUser = null;
   let attachmentFile = null;
   let demoDirectory = [];
+  let replyingTo = null;
+  let selectedMessage = null;
+  let messageHoldTimer = null;
+  let messageHoldRow = null;
+  let messageHoldStart = null;
+  let messageHoldTriggered = false;
+  let forwardDraft = null;
   const settingsTabs = [
     ["account","key","Account"],["privacy","shield","Privacy"],["chats","chat","Chats"],
     ["notifications","bell","Notifications"],["personalization","palette","Appearance"],
@@ -340,6 +347,7 @@
     updateCounts();
   }
   function setView(next) {
+    if (next !== "chats") { dismissMessageSelection(false); replyingTo = null; }
     view = next;
     archivedMode = next==="archived";
     selectedChatId = null;
@@ -378,7 +386,59 @@
       return "<div class='wa-event-card'><span class='wa-event-kicker'>EVENT</span><strong>"+esc(e.title)+"</strong><span class='wa-event-date'>"+esc(valid?date.toLocaleString():"Date unavailable")+"</span><small>"+Number(e.total||0)+" going"+(Number(e.interested||0)?" · "+Number(e.interested)+" interested":"")+"</small><button type='button' class='primary-button wa-event-rsvp "+(going?"going":"")+"' data-action='event-rsvp' data-event-id='"+esc(e.id)+"'>"+(going?"Going ✓ · Cancel RSVP":"I'm going")+"</button></div>";
     })() : "";
     const textBody = message.poll || message.event ? "" : esc(message.text);
-    return "<div class='message-row " + (outgoing?"outgoing":"incoming") + "' data-message-id='" + esc(message.id) + "'><div class='message-bubble'>" + sender + "<span class='message-text'>" + textBody + "</span>" + pollCard + eventCard + attachmentAction + "<span class='message-meta'>" + time + checks + "</span>" + reactions + "</div></div>";
+    const replyQuote = message.replyTo ? "<button type='button' class='message-reply-quote' data-action='jump-to-reply' data-reply-target-id='" + esc(message.replyTo.id) + "'><span class='message-reply-quote-icon'>" + icon("reply") + "</span><span class='message-reply-quote-copy'><strong>" + esc(message.replyTo.sender || "Replied message") + "</strong><span>" + esc(message.replyTo.text || "Message") + "</span></span></button>" : "";
+    const forwardedLabel = message.forwarded ? "<span class='forwarded-label'>" + icon("forward") + " Forwarded</span>" : "";
+    const selected = selectedMessage && String(selectedMessage.id) === String(message.id) && String(selectedMessage.chatId) === String(chat.id) ? " message-selected" : "";
+    const messageLabel = (outgoing ? "You: " : (chat.name || "Contact") + ": ") + String(message.text || message.attachmentName || "Message").slice(0,100);
+    return "<div class='message-row " + (outgoing?"outgoing":"incoming") + selected + "' data-message-id='" + esc(message.id) + "' tabindex='0' aria-label='" + esc(messageLabel) + "'><div class='message-bubble'>" + sender + forwardedLabel + replyQuote + "<span class='message-text'>" + textBody + "</span>" + pollCard + eventCard + attachmentAction + "<span class='message-meta'>" + time + checks + "</span>" + reactions + "</div></div>";
+  }
+  function syncMessageSelectionUI() {
+    const bar = $("#message-selection-toolbar", main);
+    const header = $(".conversation-header", main);
+    const chat = currentChat();
+    const active = !!(selectedMessage && chat && String(selectedMessage.chatId) === String(chat.id));
+    if (bar) bar.hidden = !active;
+    if (header) header.hidden = active;
+    $(".message-row", main).forEach(row => row.classList.toggle("message-selected", active && String(row.dataset.messageId) === String(selectedMessage.id)));
+    const count = $("#message-selection-count", main);
+    if (count) count.textContent = active ? "1" : "";
+  }
+  function selectMessageForActions(row) {
+    const chat = currentChat();
+    if (!chat || !row) return;
+    const message = chat.messages.find(m => String(m.id) === String(row.dataset.messageId));
+    if (!message) return;
+    selectedMessage = { id:message.id, chatId:chat.id, text:String(message.text || ""), from:message.from, time:message.time || "", sender:message.sender || (message.from === "me" ? "You" : chat.name), attachmentName:message.attachmentName || "", replyTo:message.replyTo || null };
+    state.lastContextMessage = Object.assign({}, selectedMessage, { chatName:chat.name, avatar:chat.avatar });
+    closePopup();
+    syncMessageSelectionUI();
+  }
+  function dismissMessageSelection(keepContext) {
+    selectedMessage = null;
+    if (!keepContext && state) state.lastContextMessage = null;
+    syncMessageSelectionUI();
+  }
+  function updateReplyPreview() {
+    const box = $("#reply-preview", main);
+    const chat = currentChat();
+    if (!box) return;
+    if (!replyingTo || !chat || String(replyingTo.chatId) !== String(chat.id)) {
+      box.hidden = true;
+      box.innerHTML = "";
+      return;
+    }
+    box.hidden = false;
+    box.innerHTML = "<div class='reply-preview-accent'></div><div class='reply-preview-copy'><strong>Replying to " + esc(replyingTo.sender || "message") + "</strong><span>" + esc(replyingTo.text || "Attachment") + "</span></div><button type='button' class='reply-preview-cancel' data-action='cancel-reply' aria-label='Cancel reply'>" + icon("x") + "</button>";
+  }
+  function showForwardMessageDialog() {
+    const ref = state && state.lastContextMessage;
+    if (!ref) { toast("Select a message first."); return; }
+    forwardDraft = Object.assign({}, ref);
+    dismissMessageSelection(true);
+    const targets = (state.chats || []).filter(c => !c.archived && (c.type === "person" || c.type === "group"));
+    const body = "<p class='screen-description'>Choose a contact or group to forward this message to.</p><div class='forward-message-preview'><span>" + icon("forward") + "</span><div><strong>Forwarded message</strong><p>" + esc(ref.text || ref.attachmentName || "Attachment") + "</p></div></div>" +
+      (targets.length ? "<div class='forward-target-list'>" + targets.map(c => "<button type='button' class='forward-target' data-action='forward-message-to-chat' data-target-chat-id='" + esc(c.id) + "'>" + avatarHTML(c) + "<span><strong>" + esc(c.name || c.username || "Contact") + "</strong><small>" + (c.type === "group" ? "Group" : "@" + esc(c.username || "")) + "</small></span>" + icon("chevron") + "</button>").join("") + "</div>" : "<div class='empty-state'>You need an accepted contact or group before forwarding messages.</div>");
+    openDialog("Forward message", body, "<button class='secondary-button' data-action='close-dialog'>Cancel</button>");
   }
   function renderWelcome() {
     main.innerHTML = "<div class='welcome-pane'><div class='welcome-content'><svg class='welcome-art' viewBox='0 0 320 250' aria-hidden='true'><ellipse cx='161' cy='220' rx='112' ry='9' fill='#e0e6e8'/><path d='M61 142c-1-40 39-70 89-70 45 0 79 25 83 60 4 36-31 66-78 69l-30 24 4-26c-40-8-67-29-68-57Z' fill='#d9fdd3'/><path d='M76 139c0-30 31-54 71-54 40 0 72 24 72 54s-32 54-72 54c-10 0-20-1-29-4l-22 14 4-22c-15-10-24-24-24-42Z' fill='#25d366'/><path d='M128 114c-3-5-5-5-8-5s-7 3-8 7c-2 5 2 15 7 23 8 11 18 19 30 25 7 3 13 5 17 4 5-1 8-6 8-10 0-2-1-3-4-5l-10-5c-2-1-3 0-5 2l-4 5c-1 1-2 2-4 1-6-2-12-7-17-12-4-4-7-9-8-12 0-1 0-2 1-3l4-4c1-2 1-3 1-4l-4-7Z' fill='#fff'/></svg><h2>Messaging Web</h2><p>Send and receive messages with ease, right from your computer.</p><div class='welcome-divider'></div><div class='welcome-caption'>" + icon("lock") + "<span>Your messages sync through the connected account backend</span></div></div><div class='welcome-footer'>" + icon("lock") + "<span>WhatsApp is an independent messaging app and is not connected to other messaging accounts</span></div></div>";
@@ -398,11 +458,14 @@
     });
     const callActions = "<button class='call-button' data-action='call-menu'>" + icon("video") + "<span>Video call</span>" + icon("chevron") + "</button>";
     main.innerHTML = "<section class='conversation'>" +
+      "<header class='message-selection-toolbar' id='message-selection-toolbar' hidden><button class='icon-button' type='button' data-message-toolbar-action='cancel' aria-label='Cancel selection'>" + icon("x") + "</button><span class='message-selection-count' id='message-selection-count'>1</span><div class='message-selection-actions'><button class='icon-button' type='button' data-message-toolbar-action='reply' title='Reply' aria-label='Reply'>" + icon("reply") + "</button><button class='icon-button' type='button' data-message-toolbar-action='forward' title='Forward' aria-label='Forward'>" + icon("forward") + "</button><button class='icon-button' type='button' data-message-toolbar-action='star' title='Star' aria-label='Star'>" + icon("star") + "</button><button class='icon-button' type='button' data-message-toolbar-action='copy' title='Copy' aria-label='Copy'>" + icon("copy") + "</button><button class='icon-button' type='button' data-message-toolbar-action='delete' title='Delete' aria-label='Delete'>" + icon("trash") + "</button><button class='icon-button' type='button' data-message-toolbar-action='more' title='More options' aria-label='More message options'>" + icon("more") + "</button></div></header>" +
       "<header class='conversation-header'><button class='back-button' data-action='back-to-list' aria-label='Back to chats'>" + icon("back") + "</button><button class='conversation-person' data-action='chat-info' aria-label='Open contact information'>" +
       avatarHTML(chat) + "<span class='person-copy'><span class='person-name'>" + esc(chat.name) + "</span><span class='person-subtitle'>" + esc(subtitle) + "</span></span></button><div class='conversation-actions'>" + callActions +
       "<button class='icon-button' data-action='chat-search' title='Search in chat' aria-label='Search in chat'>" + icon("search") + "</button><button class='icon-button' data-action='chat-menu' title='More options' aria-label='More options'>" + icon("more") + "</button></div></header>" +
       pinned + "<div class='message-scroll' id='message-scroll'><div class='encryption-notice'>" + icon("lock") + " Messages sync through your account backend. This app does not provide end-to-end encryption.</div>" + messages + "</div>" +
-      "<form class='composer' id='message-form'><button class='composer-tool' type='button' data-action='attachment' aria-label='Attach' title='Attach'>" + icon("paperclip") + "</button><button class='composer-tool' type='button' data-action='emoji' aria-label='Emoji' title='Emoji'>" + icon("smile") + "</button><div class='composer-box'><textarea id='message-input' rows='1' placeholder='Type a message' aria-label='Type a message'></textarea></div><button class='send-button' type='submit' aria-label='Send message' title='Send message'>" + icon("send") + "</button></form></section>";
+      "<form class='composer' id='message-form'><div class='reply-preview' id='reply-preview' hidden></div><button class='composer-tool' type='button' data-action='attachment' aria-label='Attach' title='Attach'>" + icon("paperclip") + "</button><button class='composer-tool' type='button' data-action='emoji' aria-label='Emoji' title='Emoji'>" + icon("smile") + "</button><div class='composer-box'><textarea id='message-input' rows='1' placeholder='Type a message' aria-label='Type a message'></textarea></div><button class='send-button' type='submit' aria-label='Send message' title='Send message'>" + icon("send") + "</button></form></section>";
+    updateReplyPreview();
+    syncMessageSelectionUI();
     requestAnimationFrame(()=>{const sc=$("#message-scroll");if(sc)sc.scrollTop=sc.scrollHeight;});
   }
   function screenHeader(title,extra) { return "<header class='screen-header'><button class='icon-button mobile-only' data-action='back-to-list' aria-label='Back'>" + icon("back") + "</button><h2>" + esc(title) + "</h2>" + (extra||"") + "</header>"; }
@@ -609,6 +672,8 @@
   function updateMobile() { updateMobileMode(); }
   function selectChat(id) {
     const chat=findChat(id);if(!chat)return;
+    if (replyingTo && String(replyingTo.chatId) !== String(chat.id)) replyingTo = null;
+    if (selectedMessage && String(selectedMessage.chatId) !== String(chat.id)) dismissMessageSelection(false);
     selectedChatId=chat.id;view="chats";archivedMode=false;chat.unread=0;
     closePopup();closeDialog();renderSidebar();renderMain();updateNav();updateMobile();
     requestAnimationFrame(()=>{const sc=$("#message-scroll");if(sc)sc.scrollTop=sc.scrollHeight;const input=$("#message-input");if(input&&!window.matchMedia("(max-width:700px)").matches)input.focus({preventScroll:true});});
