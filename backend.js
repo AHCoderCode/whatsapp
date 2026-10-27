@@ -179,7 +179,8 @@
     await loadData(false);
   }
   async function signUp(form){
-    if(!db||busy)return;
+    if(!db)return showError("signup","The secure backend did not load. Refresh the page and check your internet connection.");
+    if(busy)return;
     const name=String($("#signup-name")?.value||"").trim().replace(/\s+/g," ");
     const username=String($("#signup-username")?.value||"").trim().replace(/^@+/,"").toLowerCase();
     const number=canonicalNumber($("#signup-phone")?.value);
@@ -199,7 +200,8 @@
     finally{busy=false;const b=$("#signup-form button[type=submit]");if(b){b.disabled=false;b.innerHTML="Create account "+bridge.icon("chevron");}}
   }
   async function signIn(form){
-    if(!db||busy)return;
+    if(!db)return showError("login","The secure backend did not load. Refresh the page and check your internet connection.");
+    if(busy)return;
     const identity=String($("#login-identity")?.value||"").trim(),password=$("#login-password")?.value||"";
     if(!identity||!password)return showError("login","Enter your username or custom in-app ID and password.");
     busy=true;const btn=form.querySelector("button[type=submit]");if(btn){btn.disabled=true;btn.textContent="Signing in…";}
@@ -289,8 +291,20 @@
     else if(getUser()&&getUser().isSupabase){event.preventDefault();event.stopImmediatePropagation();void sendMessage($("#message-input")?.value||"");}
   },true);
   document.addEventListener("click",event=>{
-    const target=event.target.closest("[data-action],[data-dialog-action]");if(!target)return;
+    const target=event.target.closest("[data-action],[data-dialog-action],[data-setting-option]");if(!target)return;
     const action=target.dataset.action||"",dialogAction=target.dataset.dialogAction||"",me=getUser();
+    if(me&&me.isSupabase&&target.dataset.settingOption==="Change number"){
+      event.preventDefault();event.stopImmediatePropagation();
+      bridge.openDialog("Change in-app ID","<p class='screen-description'>Changing an ID safely requires a dedicated server-side uniqueness flow. Your current ID remains active; it is not a real phone number.</p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
+    }
+    if(me&&me.isSupabase&&target.dataset.settingOption==="Delete account"){
+      event.preventDefault();event.stopImmediatePropagation();
+      bridge.openDialog("Account deletion is not enabled","<p class='screen-description'>This project shares its Supabase identity system with the Windows 12 Master Chat. Deleting it here could remove access to both apps, so account deletion is not exposed from this frontend.</p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
+    }
+    if(me&&me.isSupabase&&target.dataset.settingOption==="Log out"){
+      event.preventDefault();event.stopImmediatePropagation();
+      bridge.openDialog("Log out","<p class='screen-description'>Sign out of this device. Your account and server-side conversations will remain saved.</p>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='backend-logout'>Log out</button>");return;
+    }
     if(me&&me.isSupabase&&target.dataset.requestId&&["accept-request","decline-request","cancel-request"].includes(action)){
       event.preventDefault();event.stopImmediatePropagation();void respondRequest(target.dataset.requestId,action==="accept-request"?"accepted":action==="decline-request"?"declined":"cancel");return;
     }
