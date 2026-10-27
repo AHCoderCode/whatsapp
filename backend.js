@@ -1056,19 +1056,41 @@
   bridge.supabase=db;bridge.isBackendReady=()=>!!db;bridge.loadBackendData=()=>loadData(false);
   bridge.sendBackendMessage=sendMessage;bridge.searchBackendPeople=searchPeople;bridge.requestBackend=sendRequest;
   window.waBackend={client:db,load:()=>loadData(false),safeError};
+  function finishStartup(showAuth) {
+    const root = $("#app-screen");
+    const auth = $("#auth-screen");
+    const boot = $("#boot-screen");
+    if (showAuth) {
+      if (root) root.classList.add("hidden");
+      if (auth) auth.classList.remove("hidden");
+    } else {
+      if (auth) auth.classList.add("hidden");
+      if (root) root.classList.remove("hidden");
+    }
+    if (boot) boot.hidden = true;
+    if (document.body) document.body.classList.remove("wa-booting");
+  }
   async function bootstrap(){
-    if(!db){say("Supabase client did not load. Refresh the page and check your internet connection.");return;}
+    if(!db){
+      finishStartup(true);
+      say("Supabase client did not load. Refresh the page and check your internet connection.");
+      return;
+    }
     try{
-      const {data,error}=await db.auth.getSession();if(error)throw error;
-      if(data&&data.session&&data.session.user){await hydrate(data.session.user);}
-      else if(!(getUser()&&getUser().demoAccount)){
-        $("#app-screen")?.classList.add("hidden");$("#auth-screen")?.classList.remove("hidden");
-      }
+      const {data,error}=await db.auth.getSession();
+      if(error)throw error;
+      if(data&&data.session&&data.session.user)await hydrate(data.session.user);
+      const restored=!!(getUser()&&getUser().isSupabase);
+      finishStartup(!restored);
       db.auth.onAuthStateChange((event,session)=>{
         if(event==="SIGNED_OUT"){if(window.WhatsAppCalls)window.WhatsAppCalls.cleanup();return;}
         if(event==="SIGNED_IN"&&session&&session.user&&(!getUser()||!getUser().isSupabase))void hydrate(session.user).catch(e=>say(safeError(e,"Could not load your account.")));
       });
-    }catch(error){say(safeError(error,"Could not restore your Supabase session."));}
+    }catch(error){
+      const restored=!!(getUser()&&getUser().isSupabase);
+      finishStartup(!restored);
+      say(safeError(error,"Could not restore your Supabase session."));
+    }
   }
   void bootstrap();
 })();
