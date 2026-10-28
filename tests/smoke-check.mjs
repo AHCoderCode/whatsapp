@@ -116,7 +116,7 @@ check("push subscriptions are registered through Supabase", () => {
 });
 check("sender triggers push for inserted messages", () => includes(files.backend, 'dispatchServerPush("notify-message",{messageId:data.id})'));
 check("poll and event messages also trigger background notifications", () => {
-  const count = (files.backend.match(/dispatchServerPush\\("notify-message"/g) || []).length;
+  const count = files.backend.split('dispatchServerPush("notify-message"').length - 1;
   assert.ok(count >= 5, "text, forwarded, attachment/voice, poll and event messages should trigger push");
   includes(files.backend, 'say("Poll sent.');
   includes(files.backend, 'say("Event sent.');
