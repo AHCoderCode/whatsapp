@@ -15,6 +15,30 @@
   let activeCall=null, phase="idle", pc=null, localStream=null, remoteStream=null;
   let incomingOffer=null, callChannel=null, channelUser="", pendingSignals=new Map(), seenSignals=new Set();
   let callTimer=null, ringTimer=null, callStart=0, elapsed=0, muted=false, cameraOff=false, busy=false;
+  function notifyIncomingCall(call,peer){
+    const settings=window.waAppBridge?.getSettings?.()||{};
+    if(!call||!peer||settings.callNotifications===false||typeof Notification==="undefined"||Notification.permission!=="granted")return;
+    if(document.visibilityState==="visible"&&document.hasFocus())return;
+    const video=call.media_type==="video";
+    const options={body:(video?"Video":"Voice")+" call · Tap to open the call screen",icon:"/icon-192.svg",badge:"/icon-192.svg",tag:"wa-call-"+String(call.id),renotify:true,requireInteraction:true,data:{kind:"call",callId:String(call.id),url:"/"},actions:[{action:"accept",title:"Open call"},{action:"decline",title:"Dismiss"}]};
+    if("serviceWorker" in navigator)void navigator.serviceWorker.ready.then(registration=>registration.showNotification("Incoming call · "+(peer.name||peer.username||"Contact"),options)).catch(()=>{});
+    else try{new Notification("Incoming call · "+(peer.name||peer.username||"Contact"),options);}catch(_){}
+  }
+  async function showIncomingCallRecord(row){
+    const current=me(),client=db();
+    if(!current||!client||!row||row.callee_id!==current.id||row.status!=="ringing"||row.group_call_id||activeCall)return;
+    if(Date.now()-Date.parse(row.created_at)>45000)return;
+    let peer=(appState()?.chats||[]).find(person=>String(person.id)===String(row.caller_id));
+    if(!peer){
+      try{const result=await client.from("aeroshell_profiles").select("id,username,display_name,avatar_data").eq("id",row.caller_id).maybeSingle();const p=result.data;if(p)peer={id:p.id,username:p.username,name:p.display_name||p.username,avatarData:p.avatar_data||""};}catch(_){}
+    }
+    if(activeCall)return;
+    peer=peer||{id:row.caller_id,username:"contact",name:"Contact"};
+    activeCall=Object.assign({},row,{direction:"incoming",peer});
+    incomingOffer=null;phase="incoming";renderCallOverlay();
+    try{if(navigator.vibrate)navigator.vibrate([180,80,180]);}catch(_){}
+    ringTimer=setTimeout(()=>{if(activeCall&&activeCall.id===row.id&&phase==="incoming")void declineCall(true);},45000);
+  }
   const userMedia = async video => {
     if(!navigator.mediaDevices?.getUserMedia||typeof RTCPeerConnection==="undefined")throw new Error("This browser cannot make secure calls. Use an up-to-date browser over HTTPS.");
     return navigator.mediaDevices.getUserMedia({audio:true,video:video?{facingMode:"user",width:{ideal:1280},height:{ideal:720}}:false});
@@ -40,6 +64,12 @@
     const peer=callPeer(activeCall)||{};
     const incoming=phase==="incoming", video=activeCall.media_type==="video";
     const status=notice||(incoming?"Incoming "+(video?"video":"voice")+" call":phase==="outgoing"?"Calling @"+(peer.username||peer.name||"contact")+"…":phase==="connecting"?"Connecting through the secure relay…":phase==="connected"?formatTime(elapsed):"Preparing call…");
+    if(incoming){
+      const waiting=!incomingOffer;
+      if(!activeCall.notificationShown){activeCall.notificationShown=true;notifyIncomingCall(activeCall,peer);}
+      host.innerHTML="<section class='wa-incoming-call-banner' role='alert' aria-label='Incoming "+(video?"video":"voice")+" call'><span class='wa-incoming-call-avatar'>"+esc(peer.avatar||String(peer.name||peer.username||"U").slice(0,2).toUpperCase())+"</span><span class='wa-incoming-call-copy'><strong>"+esc(peer.name||peer.username||"Contact")+"</strong><small>"+(video?"Incoming video call":"Incoming voice call")+(waiting?" · connecting…":"")+"</small></span><button class='wa-incoming-decline' type='button' data-wa-call='decline' aria-label='Decline call'>Decline</button><button class='wa-incoming-accept' type='button' data-wa-call='accept' aria-label='Accept call' "+(waiting?"disabled":"")+">"+(waiting?"Connecting…":"Accept")+"</button></section>";
+      return;
+    }
     host.innerHTML="<div class='wa-call-backdrop wa-call-fullscreen'><section class='wa-call-window "+(video?"video-call":"audio-call")+"' role='dialog' aria-modal='true' aria-label='"+(video?"Video call":"Voice call")+"'>"+
       "<header class='wa-call-header'><div class='wa-call-title'><span class='wa-call-status-dot'></span><div><strong>"+esc(peer.name||peer.username||"Contact")+"</strong><small>"+esc(status)+"</small></div></div><button class='wa-call-close' type='button' data-wa-call='end' aria-label='End call'>" + bridge.icon("x") + "</button></header>"+
       (video?"<div class='wa-call-stage'><video class='wa-call-remote-video' id='wa-call-remote-video' autoplay playsinline></video><div class='wa-call-video-placeholder' id='wa-call-video-placeholder'><div class='wa-call-avatar'>"+esc(peer.avatar||String(peer.name||peer.username||"U").slice(0,2).toUpperCase())+"</div><strong>"+esc(peer.name||peer.username||"Contact")+"</strong><span>"+esc(phase==="incoming"?"Incoming video call":phase==="connected"?"Waiting for video…":"Waiting for video…")+"</span></div><video class='wa-call-local-video' id='wa-call-local-video' autoplay muted playsinline></video></div>":
@@ -156,20 +186,19 @@
     const pendingId=activeCall.id;
     let newId="";
     try{
-      const grantedStream=await userMedia(mediaType==="video");
-      if(!activeCall||activeCall.id!==pendingId){grantedStream.getTracks().forEach(track=>track.stop());return;}
-      localStream=grantedStream;
       const {data,error}=await client.from("aeroshell_calls").insert({caller_id:current.id,callee_id:person.id,media_type:mediaType}).select("id,caller_id,callee_id,status,created_at,updated_at,media_type,group_call_id").single();
       if(error||!data)throw error||new Error("Could not create the call.");
       newId=data.id;
       if(!activeCall||activeCall.id!==pendingId){
         try{await client.from("aeroshell_calls").update({status:"ended"}).eq("id",newId);}catch(_){}
-        if(localStream){localStream.getTracks().forEach(track=>track.stop());localStream=null;}
         return;
       }
       activeCall=Object.assign({},data,{direction:"outgoing",peer:person});
       renderCallOverlay("Calling @"+(person.username||person.name)+"…");
       ringTimer=setTimeout(()=>{if(activeCall&&activeCall.id===newId&&phase!=="connected")void endCall("No answer. Call ended after 45 seconds.");},45000);
+      const grantedStream=await userMedia(mediaType==="video");
+      if(!activeCall||activeCall.id!==newId){grantedStream.getTracks().forEach(track=>track.stop());return;}
+      localStream=grantedStream;
       const servers=await relayServers(data.id);
       if(!activeCall||activeCall.id!==newId)return;
       makePeer(activeCall,servers);
@@ -178,7 +207,7 @@
       await sendSignal(activeCall,"offer",{type:"offer",sdp:pc.localDescription.sdp});
       if(activeCall&&activeCall.id===newId)setPhase("outgoing","Calling @"+(person.username||person.name)+"…");
     }catch(error){
-      const wasCancelled=!activeCall||activeCall.id!==pendingId||(newId&&activeCall.id!==newId);
+      const wasCancelled=!activeCall||(newId?activeCall.id!==newId:activeCall.id!==pendingId);
       if(newId)try{await client.from("aeroshell_calls").update({status:"ended"}).eq("id",newId);}catch(_){}
       cleanupLocal();
       if(!wasCancelled)say(error instanceof Error?error.message:"Call could not start.");
@@ -188,6 +217,9 @@
     const current=me(),client=db();
     if(!current||!current.isSupabase||!signal||!client||signal.to_user_id!==current.id||seenSignals.has(signal.id))return;
     seenSignals.add(signal.id);
+    if(activeCall&&activeCall.id===signal.call_id&&activeCall.direction==="incoming"&&signal.kind==="offer"){
+      incomingOffer=signal;renderCallOverlay();return;
+    }
     if(!activeCall||activeCall.id!==signal.call_id){
       if(signal.kind==="offer"){
         const {data,error}=await client.from("aeroshell_calls").select("id,caller_id,callee_id,status,created_at,media_type,group_call_id").eq("id",signal.call_id).eq("callee_id",current.id).eq("status","ringing").maybeSingle();
@@ -264,6 +296,7 @@
     if(callChannel)void client.removeChannel(callChannel);
     channelUser=current.id;
     callChannel=client.channel("wa-calls-"+current.id)
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"aeroshell_calls",filter:"callee_id=eq."+current.id},event=>void showIncomingCallRecord(event.new))
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"aeroshell_call_signals",filter:"to_user_id=eq."+current.id},event=>void receiveSignal(event.new).catch(error=>say(error instanceof Error?error.message:"Call signaling failed.")))
       .on("postgres_changes",{event:"UPDATE",schema:"public",table:"aeroshell_calls"},event=>{
         const row=event.new;if(!activeCall||row.id!==activeCall.id)return;
@@ -320,6 +353,8 @@
     subscribe,
     start:(person,type)=>startCall(person,type==="video"?"video":"audio"),
     openPicker,
+    accept:()=>acceptCall(),
+    decline:()=>declineCall(false),
     cleanup:()=>{cleanupLocal();if(callChannel&&db())void db().removeChannel(callChannel);callChannel=null;channelUser="";},
     getPhase:()=>phase
   };
