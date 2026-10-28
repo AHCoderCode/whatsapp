@@ -14,7 +14,7 @@
   };
   let activeCall=null, phase="idle", pc=null, localStream=null, remoteStream=null;
   let incomingOffer=null, callChannel=null, channelUser="", pendingSignals=new Map(), seenSignals=new Set();
-  let callTimer=null, ringTimer=null, callStart=0, elapsed=0, muted=false, cameraOff=false, busy=false;
+  let callTimer=null, ringTimer=null, callStart=0, elapsed=0, muted=false, cameraOff=false, speakerOn=true, busy=false;
   let pendingNotificationAction=null;
   try{
     const params=new URLSearchParams(window.location.search);
@@ -83,7 +83,7 @@
     localStream=null;
     if(remoteStream)remoteStream.getTracks().forEach(t=>{try{t.stop();}catch(_){}});
     remoteStream=null;
-    activeCall=null;incomingOffer=null;phase="idle";busy=false;muted=false;cameraOff=false;elapsed=0;callStart=0;
+    activeCall=null;incomingOffer=null;phase="idle";busy=false;muted=false;cameraOff=false;speakerOn=true;elapsed=0;callStart=0;
     pendingSignals.clear();seenSignals.clear();
     root().innerHTML="";
   }
@@ -109,13 +109,13 @@
       (incoming?"<button class='wa-call-control decline' type='button' data-wa-call='decline' aria-label='Decline call'>" + bridge.icon("phone") + "<span>Decline</span></button><button class='wa-call-control accept' type='button' data-wa-call='accept' aria-label='Accept call'>"+(video?bridge.icon("video"):bridge.icon("phone"))+"<span>Accept</span></button>":
       (phase==="connected"||phase==="connecting"||phase==="outgoing"||phase==="preparing"?
       "<button class='wa-call-control "+(muted?"active":"")+"' type='button' data-wa-call='mute' aria-label='Toggle microphone'>"+bridge.icon("mic")+"<span>"+(muted?"Unmute":"Mute")+"</span></button>"+
-      (video?"<button class='wa-call-control "+(cameraOff?"active":"")+"' type='button' data-wa-call='camera' aria-label='Toggle camera'>"+bridge.icon("video")+"<span>"+(cameraOff?"Camera on":"Camera off")+"</span></button>":"")+
+      (video?"<button class='wa-call-control "+(cameraOff?"active":"")+"' type='button' data-wa-call='camera' aria-label='Toggle camera'>"+bridge.icon("video")+"<span>"+(cameraOff?"Camera on":"Camera off")+"</span></button>":"<button class='wa-call-control "+(speakerOn?"active":"")+"' type='button' data-wa-call='speaker' aria-label='Toggle speaker volume'>"+bridge.icon("volume")+"<span>"+(speakerOn?"Speaker":"Lower volume")+"</span></button>")+
       "<button class='wa-call-control decline' type='button' data-wa-call='end' aria-label='End call'>" + bridge.icon("phone") + "<span>End call</span></button>":""))+
       "</div><p class='wa-call-footnote'>Calls connect only when both people are online and have allowed microphone/camera access.</p></section></div>";
     const remoteVideo=$("#wa-call-remote-video"),localVideo=$("#wa-call-local-video"),remoteAudio=$("#wa-call-remote-audio");
     if(remoteStream){
       if(remoteVideo){remoteVideo.srcObject=remoteStream;void remoteVideo.play().catch(()=>{});}
-      if(remoteAudio){remoteAudio.srcObject=remoteStream;remoteAudio.volume=.95;void remoteAudio.play().catch(()=>{});}
+      if(remoteAudio){remoteAudio.srcObject=remoteStream;remoteAudio.volume=speakerOn?1:.45;void remoteAudio.play().catch(()=>{});}
     }
     if(localVideo&&localStream){localVideo.srcObject=localStream;void localVideo.play().catch(()=>{});}
     const placeholder=$("#wa-call-video-placeholder");
@@ -140,6 +140,13 @@
     if(!button)return;
     button.classList.toggle("active",cameraOff);
     button.innerHTML=(cameraOff?bridge.icon("camera"):bridge.icon("video"))+"<span>"+(cameraOff?"Camera on":"Camera off")+"</span>";
+  }
+  function toggleSpeaker(){
+    speakerOn=!speakerOn;
+    const audio=$("#wa-call-remote-audio");
+    if(audio)audio.volume=speakerOn?1:.45;
+    const button=root().querySelector("[data-wa-call='speaker']");
+    if(button){button.classList.toggle("active",speakerOn);button.innerHTML=bridge.icon("volume")+"<span>"+(speakerOn?"Speaker":"Lower volume")+"</span>";}
   }
   async function relayServers(callId){
     const client=db();if(!client)throw new Error("Supabase is not connected.");
@@ -381,6 +388,7 @@
       else if(callAction==="end")void endCall();
       else if(callAction==="mute")toggleMute();
       else if(callAction==="camera")toggleCamera();
+      else if(callAction==="speaker")toggleSpeaker();
     }
   },true);
   window.WhatsAppCalls={
