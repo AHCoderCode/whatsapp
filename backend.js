@@ -9,7 +9,9 @@
     realtime: { params: { eventsPerSecond: 10 } }
   }) : null;
   const $ = (selector, root = document) => root.querySelector(selector);
-  const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+  const $ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+  // Keep attachment rendering independent of global legacy aliases.
+  const esc = value => bridge.escapeHTML(String(value == null ? "" : value));
   const usernamePattern = /^[a-z0-9_]{3,20}$/;
   let signedProfile = null, liveChannel = null, liveUserId = "", people = new Map(), activeChannelId = "";
   let presenceChannel = null, presenceUserId = "";
