@@ -46,10 +46,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261028m");
-  includes(files.sw, "whatsapp-final-20261028m");
-  includes(files.manifest, "whatsapp-final-20261028m");
-  includes(files.sw, "whatsapp-final-shell-v42");
+  includes(files.html, "whatsapp-final-20261028n");
+  includes(files.sw, "whatsapp-final-20261028n");
+  includes(files.manifest, "whatsapp-final-20261028n");
+  includes(files.sw, "whatsapp-final-shell-v43");
 });
 check("legacy ESC compatibility aliases exist as browser globals", () => {
   includes(files.html, "var ESC = window.ESC = window.ESC || function");
@@ -169,6 +169,9 @@ check("pinning a message supports jumping to it and unpinning it", () => {
   includes(files.app, 'action==="pin-message"');
   includes(files.app, 'action==="pinned-preview"');
   includes(files.app, 'row.scrollIntoView({behavior:"smooth",block:"center"})');
+  includes(files.app, "wa_pinned_messages_");
+  includes(files.app, "persistPinnedMessage(chat.id,chat.pinnedMessage)");
+  includes(files.app, "const pins=readPinnedMessages()");
 });
 check("videos can be uploaded and played in a private attachment preview", () => {
   excludes(files.backend, "Video attachments are not enabled by the current secure storage policy");

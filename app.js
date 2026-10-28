@@ -1133,6 +1133,21 @@
     saveState();renderSidebar();renderMain();toast("@"+req.username+" added to your chats.");
   }
   function declineRequest(id) { state.requests=state.requests.filter(r=>r.id!==id);save();renderMain();toast("Request declined in this browser."); }
+  function pinnedMessagesStorageKey(){
+    const username=normalizeUsername(currentUser&&currentUser.username||state&&state.profile&&state.profile.username||"");
+    return "wa_pinned_messages_"+(username||"default");
+  }
+  function readPinnedMessages(){
+    try{const pins=JSON.parse(localStorage.getItem(pinnedMessagesStorageKey())||"{}");return pins&&typeof pins==="object"&&!Array.isArray(pins)?pins:{};}catch(_){return {};}
+  }
+  function persistPinnedMessage(chatId,pinned){
+    try{
+      const pins=readPinnedMessages(),key=String(chatId);
+      if(pinned)pins[key]=Object.assign({},pinned);
+      else delete pins[key];
+      localStorage.setItem(pinnedMessagesStorageKey(),JSON.stringify(pins));
+    }catch(_){}
+  }
   function setChatProperty(chat,prop,value) {
     if(!chat)return;
     chat[prop]=value===undefined?!chat[prop]:value;
@@ -1163,6 +1178,7 @@ function openSharedItemsDialog(chat,kind) {
       const ref=state&&state.lastContextMessage;
       if(!chat||!ref||String(ref.chatId)!==String(chat.id)){toast("Select a message first.");return;}
       chat.pinnedMessage={id:ref.id,text:String(ref.text||ref.attachmentName||"Message"),from:ref.from||"them"};
+      persistPinnedMessage(chat.id,chat.pinnedMessage);
       dismissMessageSelection(false);saveState();renderSidebar();renderMain();toast("Message pinned.");return;
     }
     if(action==="edit-message"){
@@ -1210,7 +1226,7 @@ function openSharedItemsDialog(chat,kind) {
       else toast("Pinned message: "+String(pinned.text||"Message"));
       return;
     }
-    if(action==="unpin-message"){if(chat)chat.pinnedMessage=null;saveState();renderMain();toast("Pinned message removed.");return;}
+    if(action==="unpin-message"){if(chat){chat.pinnedMessage=null;persistPinnedMessage(chat.id,null);}saveState();renderMain();toast("Pinned message removed.");return;}
     if(action==="reply-message"){
       const ref=state.lastContextMessage;
       if(!ref||!chat){toast("Select a message to reply to.");return;}
@@ -1814,8 +1830,8 @@ function openSharedItemsDialog(chat,kind) {
     const row=event.target.closest(".message-row");
     if(!row)return;
     event.preventDefault();
-    // Touch-first browsers may fire contextmenu before the requested two-second
-    // hold finishes. Keep desktop right-click, and use the pointer timer on phones.
+    // Touch browsers can fire contextmenu before the fast hold finishes.
+    // Keep desktop right-click, and use the pointer timer on phones.
     if(window.matchMedia("(pointer: coarse)").matches)return;
     selectMessageForActions(row);
   });
@@ -1968,8 +1984,13 @@ function openSharedItemsDialog(chat,kind) {
         let aliases={},hidden=[];
         try{aliases=JSON.parse(localStorage.getItem("wa_contact_aliases_"+normalizeUsername(currentUser.username))||"{}")||{};}catch(_){}
         try{hidden=JSON.parse(localStorage.getItem("wa_hidden_contacts_"+normalizeUsername(currentUser.username))||"[]")||[];}catch(_){}
+        const pins=readPinnedMessages();
         const hiddenSet=new Set(hidden.map(String));
-        state.chats=data.chats.filter(chat=>!hiddenSet.has(String(chat.id))).map(chat=>aliases[String(chat.id)]?Object.assign({},chat,{name:aliases[String(chat.id)],localAlias:aliases[String(chat.id)]}):chat);
+        state.chats=data.chats.filter(chat=>!hiddenSet.has(String(chat.id))).map(chat=>{
+          const mapped=Object.assign({},chat,aliases[String(chat.id)]?{name:aliases[String(chat.id)],localAlias:aliases[String(chat.id)]}:{});
+          if(pins[String(chat.id)])mapped.pinnedMessage=pins[String(chat.id)];
+          return mapped;
+        });
       }
       if (data.requests) state.requests = data.requests;
       if (data.sentRequests) state.sentRequests = data.sentRequests;
