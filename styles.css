@@ -450,3 +450,41 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:
 .wa-linked-device-list .linked-device-card>div{min-width:0;overflow-wrap:anywhere}
 .wa-linked-device-list .danger-button{flex:0 0 auto}
 @media(max-width:480px){.wa-linked-device-list .linked-device-card{gap:8px;padding:10px}.wa-linked-device-list .danger-button{padding:0 9px;font-size:11px}}
+
+/* Refined WhatsApp-inspired account/profile surfaces. */
+.wa-settings-profile-card{margin:0 0 20px;padding:20px;border:1px solid #dfe7e4;border-radius:18px;background:linear-gradient(135deg,#fff 0%,#f5fbf8 100%);box-shadow:0 5px 18px rgba(15,35,27,.045);overflow:hidden}
+.wa-settings-profile-top{display:flex;align-items:center;gap:18px;padding-bottom:18px}
+.wa-settings-profile-photo{position:relative;display:grid;place-items:center;flex:0 0 88px;width:88px;height:88px;padding:0;overflow:hidden;border:3px solid #fff;border-radius:50%;background:#d9fdd3;color:#075e54;font-size:22px;font-weight:650;box-shadow:0 0 0 1px #d7e9e0,0 5px 14px rgba(16,46,34,.12);cursor:pointer}
+.wa-settings-profile-photo>img{display:block;width:100%;height:100%;object-fit:cover;border-radius:50%}
+.wa-profile-camera{position:absolute;right:0;bottom:0;display:grid;place-items:center;width:31px;height:31px;border:2px solid #fff;border-radius:50%;background:#008f70;color:#fff}
+.wa-profile-camera svg{width:15px;height:15px}
+.wa-settings-profile-identity{min-width:0;flex:1}
+.wa-settings-kicker{display:block;margin-bottom:5px;color:#008f70;font-size:10px;font-weight:750;letter-spacing:.13em}
+.wa-settings-profile-identity h4{margin:0 0 4px;color:#172b25;font-size:21px;font-weight:650;letter-spacing:-.025em;overflow-wrap:anywhere}
+.wa-settings-profile-identity p{margin:0 0 9px;color:#667781;font-size:13px}
+.wa-settings-profile-identity .text-button{min-height:30px;padding:0;color:#008f70;font-size:13px;font-weight:650}
+.wa-profile-fields{border-top:1px solid #e4ebe7}
+.wa-profile-field{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;min-height:66px;padding:12px 4px;border:0;border-bottom:1px solid #e4ebe7;border-radius:0;background:transparent;color:#25332e;text-align:left;cursor:pointer;transition:background-color .16s ease,padding .16s ease}
+.wa-profile-field:last-child{border-bottom:0}
+.wa-profile-field:hover{padding-right:9px;padding-left:9px;border-radius:9px;background:#eaf7f0}
+.wa-profile-field>span{display:flex;min-width:0;flex:1;flex-direction:column;gap:5px}
+.wa-profile-field small{color:#667781;font-size:12px;font-weight:500}
+.wa-profile-field strong{color:#172b25;font-size:14px;font-weight:550;overflow-wrap:anywhere}
+.wa-profile-field>svg{flex:0 0 18px;width:18px;height:18px;color:#008f70}
+.wa-profile-helper{margin:14px 0 0;color:#667781;font-size:12px;line-height:1.6}
+.wa-about-editor .screen-description{margin-top:0}
+.wa-about-editor textarea{min-height:88px;resize:vertical}
+.primary-button,.secondary-button,.danger-button,.icon-button,.accept-request,.decline-request,.wa-call-control{transition:background-color .16s ease,color .16s ease,border-color .16s ease,box-shadow .16s ease,transform .12s ease}
+.primary-button:not(:disabled):active,.secondary-button:not(:disabled):active,.danger-button:not(:disabled):active,.accept-request:not(:disabled):active,.decline-request:not(:disabled):active,.wa-call-control:not(:disabled):active{transform:scale(.98)}
+.icon-button{transition:background-color .16s ease,color .16s ease,transform .12s ease}
+.icon-button:active{transform:scale(.95)}
+.icon-button:focus-visible,.primary-button:focus-visible,.secondary-button:focus-visible,.danger-button:focus-visible,.wa-profile-field:focus-visible,.wa-settings-profile-photo:focus-visible{outline:2px solid #008f70;outline-offset:2px}
+.setting-option{transition:background-color .16s ease}
+.settings-nav-item{transition:background-color .16s ease,color .16s ease}
+@media(max-width:700px){.wa-settings-profile-card{padding:16px;border-radius:15px}.wa-settings-profile-photo{width:76px;height:76px;flex-basis:76px}.wa-settings-profile-top{gap:14px}.wa-settings-profile-identity h4{font-size:19px}}
+.theme-dark .wa-settings-profile-card{border-color:#344740;background:linear-gradient(135deg,#202c27 0%,#1c2521 100%);box-shadow:0 5px 18px rgba(0,0,0,.12)}
+.theme-dark .wa-settings-profile-identity h4,.theme-dark .wa-profile-field strong{color:#e9edef}
+.theme-dark .wa-settings-profile-identity p,.theme-dark .wa-profile-field small,.theme-dark .wa-profile-helper{color:#aebac1}
+.theme-dark .wa-profile-fields,.theme-dark .wa-profile-field{border-color:#344740}
+.theme-dark .wa-profile-field{color:#e9edef}
+.theme-dark .wa-profile-field:hover{background:#263d34}
