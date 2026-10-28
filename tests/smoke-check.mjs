@@ -152,7 +152,8 @@ check("read receipt setting prevents database reads when disabled", () => includ
 check("read ticks have distinct grey and blue states", () => {
   includes(files.css, ".message-read-status.is-read");
   includes(files.css, ".message-read-status:not(.is-read)");
-  includes(files.app, 'message.status==="read"?"is-read":"is-delivered"');
+  includes(files.app, 'const isRead=message.status==="read"');
+  includes(files.app, 'icon(isRead?"checks":"check")');
 });
 check("message date separators distinguish today and yesterday", () => {
   includes(files.app, 'return "TODAY"');
@@ -200,7 +201,7 @@ check("incoming calls have an early top banner with accept/decline", () => {
 check("call row is created before asking for microphone or camera permission", () => {
   const start = files.calls.indexOf("async function startCall");
   const insert = files.calls.indexOf('from("aeroshell_calls").insert', start);
-  const mediaPrompt = files.calls.indexOf('await userMedia(mediaType==="video")', start);
+  const mediaPrompt = files.calls.indexOf('await userMediaWithTimeout(mediaType==="video")', start);
   assert.ok(start >= 0 && insert > start && mediaPrompt > insert);
 });
 check("call notification action can be queued until offer arrives", () => {
