@@ -46,10 +46,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261028d");
-  includes(files.sw, "whatsapp-final-20261028d");
-  includes(files.manifest, "whatsapp-final-20261028d");
-  includes(files.sw, "whatsapp-final-shell-v33");
+  includes(files.html, "whatsapp-final-20261028e");
+  includes(files.sw, "whatsapp-final-20261028e");
+  includes(files.manifest, "whatsapp-final-20261028e");
+  includes(files.sw, "whatsapp-final-shell-v34");
 });
 check("legacy ESC compatibility alias exists", () => includes(files.html, "window.ESC=window.ESC||function"));
 check("settings startup uses querySelectorAll for its forEach loop", () => {
@@ -115,6 +115,12 @@ check("push subscriptions are registered through Supabase", () => {
   includes(files.backend, "pushManager.subscribe");
 });
 check("sender triggers push for inserted messages", () => includes(files.backend, 'dispatchServerPush("notify-message",{messageId:data.id})'));
+check("poll and event messages also trigger background notifications", () => {
+  const count = (files.backend.match(/dispatchServerPush\\("notify-message"/g) || []).length;
+  assert.ok(count >= 5, "text, forwarded, attachment/voice, poll and event messages should trigger push");
+  includes(files.backend, 'say("Poll sent.');
+  includes(files.backend, 'say("Event sent.');
+});
 check("push Edge Function authenticates users and validates message ownership", () => {
   includes(files.push, "admin.auth.getUser(token)");
   includes(files.push, 'message.sender_id !== userId');
