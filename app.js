@@ -512,7 +512,7 @@
   function renderProfile() {
     const p=state.profile;
     const photo=p.avatarData?"<img src='"+esc(p.avatarData)+"' alt='Profile photo'>":esc(p.avatar||initials(p.name));
-    main.innerHTML="<section class='section-screen'>"+screenHeader("Profile","<button class='icon-button' data-action='edit-profile' aria-label='Edit profile'>"+icon("edit")+"</button>")+"<div class='screen-content'><div class='profile-card'><button class='profile-photo photo-button' data-action='change-profile-photo' aria-label='Change profile photo'>"+photo+"</button><div><h3>"+esc(p.name)+"</h3><p>@"+esc(p.username)+" · "+esc(p.phone)+"</p><button class='secondary-button' data-action='change-profile-photo'>"+icon("image")+" Change photo</button> <button class='primary-button' data-action='edit-profile'>"+icon("edit")+" Edit profile</button></div></div><div class='section-card'><h3 class='section-card-title'>Profile information</h3><div class='setting-row'><span class='row-icon'>"+icon("edit")+"</span><span class='setting-copy'><span class='setting-subtitle'>Name</span><span class='setting-title'>"+esc(p.name)+"</span></span><button class='icon-button' data-action='edit-profile' aria-label='Edit name'>"+icon("edit")+"</button></div><div class='setting-row'><span class='row-icon'>"+icon("info")+"</span><span class='setting-copy'><span class='setting-subtitle'>About</span><span class='setting-title'>"+esc(p.about)+"</span></span><button class='icon-button' data-action='edit-profile' aria-label='Edit about'>"+icon("edit")+"</button></div><div class='setting-row'><span class='row-icon'>"+icon("phone")+"</span><span class='setting-copy'><span class='setting-subtitle'>Custom in-app number</span><span class='setting-title'>"+esc(p.phone)+"</span></span><button class='icon-button' data-action='copy-phone' aria-label='Copy number'>"+icon("copy")+"</button></div><div class='setting-row'><span class='row-icon'>"+icon("users")+"</span><span class='setting-copy'><span class='setting-subtitle'>Username</span><span class='setting-title'>@"+esc(p.username)+"</span></span><button class='icon-button' data-action='copy-username' aria-label='Copy username'>"+icon("copy")+"</button></div></div><p class='screen-description'>Your in-app ID is not a real telephone number. It is not a real phone number and cannot receive SMS or phone calls.</p></div></section>";
+    main.innerHTML="<section class='section-screen'>"+screenHeader("Profile","<button class='icon-button' data-action='edit-profile' aria-label='Edit profile'>"+icon("edit")+"</button>")+"<div class='screen-content'><div class='profile-card'><button class='profile-photo photo-button' data-action='change-profile-photo' aria-label='Change profile photo'>"+photo+"</button><div><h3>"+esc(p.name)+"</h3><p>@"+esc(p.username)+" · "+esc(p.phone)+"</p><button class='secondary-button' data-action='change-profile-photo'>"+icon("image")+" Change photo</button> <button class='primary-button' data-action='edit-profile'>"+icon("edit")+" Edit profile</button></div></div><div class='section-card'><h3 class='section-card-title'>Profile information</h3><div class='setting-row'><span class='row-icon'>"+icon("edit")+"</span><span class='setting-copy'><span class='setting-subtitle'>Name</span><span class='setting-title'>"+esc(p.name)+"</span></span><button class='icon-button' data-action='edit-profile' aria-label='Edit name'>"+icon("edit")+"</button></div><div class='setting-row'><span class='row-icon'>"+icon("info")+"</span><span class='setting-copy'><span class='setting-subtitle'>About</span><span class='setting-title'>"+esc(p.about)+"</span></span><button class='icon-button' data-action='edit-about' aria-label='Edit about'>"+icon("edit")+"</button></div><div class='setting-row'><span class='row-icon'>"+icon("phone")+"</span><span class='setting-copy'><span class='setting-subtitle'>Custom in-app number</span><span class='setting-title'>"+esc(p.phone)+"</span></span><button class='icon-button' data-action='copy-phone' aria-label='Copy number'>"+icon("copy")+"</button></div><div class='setting-row'><span class='row-icon'>"+icon("users")+"</span><span class='setting-copy'><span class='setting-subtitle'>Username</span><span class='setting-title'>@"+esc(p.username)+"</span></span><button class='icon-button' data-action='copy-username' aria-label='Copy username'>"+icon("copy")+"</button></div></div><p class='screen-description'>Your in-app ID is not a real telephone number. It is not a real phone number and cannot receive SMS or phone calls.</p></div></section>";
   }
   function renderRequests() {
     const received=state.requests.filter(r=>r.status==="received");
@@ -638,7 +638,7 @@
         "<div class='wa-settings-profile-top'><button class='wa-settings-profile-photo' data-action='change-profile-photo' aria-label='Change profile photo'>"+profilePhoto+"<span class='wa-profile-camera'>"+icon("image")+"</span></button>"+
         "<div class='wa-settings-profile-identity'><span class='wa-settings-kicker'>YOUR ACCOUNT</span><h4>"+esc(state.profile.name)+"</h4><p>@"+esc(state.profile.username)+"</p><button class='text-button' data-action='edit-profile'>Edit profile</button></div></div>"+
         "<div class='wa-profile-fields'><button class='wa-profile-field' data-action='edit-profile'><span><small>Display name</small><strong>"+esc(state.profile.name||"Add your name")+"</strong></span>"+icon("edit")+"</button>"+
-        "<button class='wa-profile-field' data-action='edit-profile'><span><small>About</small><strong>"+esc(state.profile.about||"Add an About")+"</strong></span>"+icon("edit")+"</button>"+
+        "<button class='wa-profile-field' data-action='edit-about'><span><small>About</small><strong>"+esc(state.profile.about||"Add an About")+"</strong></span>"+icon("edit")+"</button>"+
         "<button class='wa-profile-field' data-action='change-profile-photo'><span><small>Profile photo</small><strong>Change or upload photo</strong></span>"+icon("image")+"</button></div>"+
         "<p class='wa-profile-helper'>Your profile changes are saved to your account and shared with contacts in this app.</p></section>";
     }
@@ -975,6 +975,11 @@
     const p=state.profile;const body="<div class='dialog-field'><label for='edit-name'>Display name</label><input id='edit-name' maxlength='48' value='"+esc(p.name)+"'></div><div class='dialog-field'><label for='edit-about'>About</label><input id='edit-about' maxlength='140' value='"+esc(p.about)+"'></div><div class='dialog-field'><label>Username</label><input value='@"+esc(p.username)+"' readonly><span class='field-help'>Usernames are unique identifiers and cannot be edited from this screen.</span></div><div class='dialog-field'><label>Custom in-app number</label><input value='"+esc(p.phone)+"' readonly><span class='field-help'>This unique app ID is not a real phone number and cannot receive SMS.</span></div>";
     openDialog("Edit profile",body,"<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='save-profile'>Save</button>");
   }
+  function editAboutDialog() {
+    const current=String(state.profile.about||"Available");
+    const body="<div class='wa-about-editor'><p class='screen-description'>Choose a short About that describes you. Changes are saved to your account.</p><div class='dialog-field'><label for='edit-about-quick'>About</label><textarea id='edit-about-quick' maxlength='140' rows='3' placeholder='Hey there! I am using WhatsApp.'>"+esc(current)+"</textarea><small class='field-help'>Up to 140 characters</small></div></div>";
+    openDialog("Edit About",body,"<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='save-about'>Save</button>");
+  }
   function editGroupDialog(chat) {
     const body="<div class='dialog-field'><label for='edit-group-name'>Group subject</label><input id='edit-group-name' maxlength='60' value='"+esc(chat.name)+"'></div><div class='dialog-field'><label for='edit-group-about'>Group description</label><textarea id='edit-group-about' rows='3'>"+esc(chat.about||"")+"</textarea></div>";
     openDialog("Edit group",body,"<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='save-group' data-chat-id='"+esc(chat.id)+"'>Save</button>");
@@ -1179,6 +1184,7 @@ function openSharedItemsDialog(chat,kind) {
     if(action==="back-to-list"){selectedChatId=null;view="chats";renderSidebar();renderMain();updateMobile();return;}
     if(action==="back-to-chat"){view="chats";renderMain();updateMobile();return;}
     if(action==="edit-profile"){editProfileDialog();return;}
+    if(action==="edit-about"){editAboutDialog();return;}
     if(action==="find-friends"){createNewChatDialog();return;}
     if(action==="copy-phone"){copyText(state.profile.phone);return;}
     if(action==="copy-username"){copyText("@"+state.profile.username);return;}
@@ -1208,6 +1214,7 @@ function openSharedItemsDialog(chat,kind) {
     if(action==="create-poll"){openDialog("Create poll","<div class='dialog-field'><label for='poll-question'>Question</label><input id='poll-question' placeholder='Ask a question'></div><div class='dialog-field'><label for='poll-options'>Options (one per line)</label><textarea id='poll-options' rows='4' placeholder='Option 1&#10;Option 2'></textarea></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='send-poll'>Add poll</button>");return;}
     if(action==="create-event"){openDialog("Create event","<div class='dialog-field'><label for='event-name'>Event name</label><input id='event-name' placeholder='Event name'></div><div class='dialog-field'><label for='event-date'>Date</label><input id='event-date' type='date'></div><div class='dialog-field'><label for='event-time'>Time</label><input id='event-time' type='time'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='send-event'>Add event</button>");return;}
     if(action==="edit-profile"){editProfileDialog();return;}
+    if(action==="edit-about"){editAboutDialog();return;}
     if(action==="wallpaper"){chooseWallpaperDialog();return;}
     if(action==="status-preview"){toast("Status viewer preview.");return;}
     if(action==="toggle-unread"||action==="toggle-favorite")return;
@@ -1344,6 +1351,16 @@ function openSharedItemsDialog(chat,kind) {
         db.accounts=db.accounts.filter(a=>a.id!==currentUser.id);saveDb();
         try{localStorage.removeItem(stateKey(currentUser.username));localStorage.removeItem(SESSION_KEY);}catch(_){}
         closeDialog();currentUser=null;state=null;selectedChatId=null;app.classList.add("hidden");auth.classList.remove("hidden");renderAuth("signup");toast("Local account deleted.");return;
+      }
+      if(action==="save-about"){
+        const about=String($("#edit-about-quick")?.value||"").trim().slice(0,140)||"Available";
+        if(currentUser&&currentUser.isSupabase){
+          if(window.waBackendSaveAbout)void window.waBackendSaveAbout(about);
+          else toast("Profile service is still loading. Try again.");
+        }else{
+          state.profile.about=about;currentUser.about=about;saveState();closeDialog();renderApp();toast("About updated.");
+        }
+        return;
       }
       if(action==="save-setting-choice"){
         state.settings.privacy=state.settings.privacy||{};state.settings.privacy[t.dataset.settingName]=t.dataset.settingValue;
@@ -1631,6 +1648,7 @@ function openSharedItemsDialog(chat,kind) {
     if(action==="open-found-chat"){selectChat(el.dataset.chatId);closeDialog();return;}
     if(action==="accept-found-request"){acceptRequest(el.dataset.requestId);closeDialog();return;}
     if(action==="edit-profile"){editProfileDialog();return;}
+    if(action==="edit-about"){editAboutDialog();return;}
     if(action==="remove-list"){state.customLists=state.customLists.filter(l=>l.id!==el.dataset.listId);saveState();renderMain();return;}
     if(action==="toggle-channel"){const c=state.channels.find(c=>c.id===el.dataset.channelId);if(c){c.following=!c.following;saveState();renderMain();}return;}
     if(action==="go-requests"){setView("requests");return;}
