@@ -1181,6 +1181,7 @@
     if(me&&me.isSupabase&&action==="accept-found-request"){event.preventDefault();event.stopImmediatePropagation();void respondRequest(target.dataset.requestId,"accepted");return;}
     if(me&&me.isSupabase&&action==="open-found-chat"){event.preventDefault();event.stopImmediatePropagation();bridge.selectChat(target.dataset.chatId);bridge.closeDialog();return;}
     if(me&&me.isSupabase&&dialogAction==="save-profile"){event.preventDefault();event.stopImmediatePropagation();void updateProfile($("#edit-name")?.value||"",$("#edit-about")?.value||"");return;}
+    if(me&&me.isSupabase&&dialogAction==="save-about"){event.preventDefault();event.stopImmediatePropagation();void updateProfile(appState()?.profile?.name||"",$("#edit-about-quick")?.value||"");return;}
     if(me&&me.isSupabase&&dialogAction==="create-group"){event.preventDefault();event.stopImmediatePropagation();void createGroup();return;}
     if(me&&me.isSupabase&&action==="find-friends"){event.preventDefault();event.stopImmediatePropagation();bridge.handleAction("new-chat",target);return;}
     if(me&&me.isSupabase&&action==="logout"){event.preventDefault();event.stopImmediatePropagation();bridge.openDialog("Log out","<p class='screen-description'>Sign out of this account on this device?</p>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='backend-logout'>Log out</button>");return;}
