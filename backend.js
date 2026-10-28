@@ -888,7 +888,7 @@
     const me=getUser();
     if(!me||!me.isSupabase)return say("Sign in to manage this account's linked browser sessions.");
     try{
-      await registerCurrentDevice();
+      if(!(await registerCurrentDevice()))return;
       const {data,error}=await db.from("whatsapp_linked_devices").select("id,device_key,device_name,created_at,last_seen_at,revoked_at").eq("user_id",me.id).is("revoked_at",null).order("last_seen_at",{ascending:false}).limit(30);
       if(error)throw error;
       const currentKey=getDeviceKey(me.username);
