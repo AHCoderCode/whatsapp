@@ -488,3 +488,9 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:
 .theme-dark .wa-profile-fields,.theme-dark .wa-profile-field{border-color:#344740}
 .theme-dark .wa-profile-field{color:#e9edef}
 .theme-dark .wa-profile-field:hover{background:#263d34}
+
+/* Make the first-run empty state actionable instead of leaving new accounts stuck. */
+.wa-empty-actions{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;margin:18px 0 8px}
+.wa-empty-actions .primary-button,.wa-empty-actions .secondary-button{min-width:126px;min-height:40px;border-radius:11px;font-weight:650}
+@media(max-width:480px){.wa-empty-actions{gap:8px}.wa-empty-actions .primary-button,.wa-empty-actions .secondary-button{flex:1;min-width:0}}
+.theme-dark .wa-empty-actions .secondary-button{border-color:#3a4b45;background:#202c27;color:#e9edef}
