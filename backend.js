@@ -12,6 +12,7 @@
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
   const usernamePattern = /^[a-z0-9_]{3,20}$/;
   let signedProfile = null, liveChannel = null, liveUserId = "", people = new Map(), activeChannelId = "";
+  let presenceChannel = null, presenceUserId = "";
   let busy = false, loading = false, refreshQueued = false, searchTimer = null, searchCounter = 0;
   let deviceHeartbeatTimer = null, deviceSyncIdentity = "";
 
@@ -140,10 +141,10 @@
     if(!chat||!message||chat.muted||typeof Notification==="undefined"||Notification.permission!=="granted")return;
     const key=chat.type==="group"?"groupNotifications":"messageNotifications";
     if(settings[key]===false)return;
-    if(document.visibilityState==="visible"&&document.hasFocus()&&String(bridge.getSelectedChatId?.()||"")===String(chat.id))return;
-    // If this device has a push subscription, the service worker owns background alerts.
-    // This avoids showing the same event twice (Realtime + Web Push).
-    if("serviceWorker" in navigator&&"PushManager" in window){
+    const appIsFocused=document.visibilityState==="visible"&&document.hasFocus();
+    if(appIsFocused&&String(bridge.getSelectedChatId?.()||"")===String(chat.id))return;
+    // Avoid duplicate background notifications, but preserve alerts for a different foreground chat.
+    if(!appIsFocused&&"serviceWorker" in navigator&&"PushManager" in window){
       try{const registration=await navigator.serviceWorker.ready;if(await registration.pushManager.getSubscription())return;}catch(_){}
     }
     const title=chat.type==="group"?(chat.name+" · "+(message.sender||"New message")):(chat.name||"New message");
@@ -173,6 +174,41 @@
       bridge.renderMain();requestAnimationFrame(()=>{const sc=$("#message-scroll");if(sc)sc.scrollTop=sc.scrollHeight;});
       if(msg.from==="them")void markReadForChat(chat);
     }
+  }
+  function refreshPresenceUI(){
+    const s=appState();
+    if(!s||!Array.isArray(s.chats))return;
+    let payloads=[];
+    try{payloads=presenceChannel?Object.values(presenceChannel.presenceState()||{}).flat():[];}catch(_){}
+    const onlineIds=new Set(payloads.filter(item=>item&&item.user_id&&item.online!==false).map(item=>String(item.user_id)));
+    let changed=false;
+    for(const chat of s.chats){
+      if(chat.type!=="person")continue;
+      const next=onlineIds.has(String(chat.id));
+      if(!!chat.online!==next){chat.online=next;changed=true;}
+    }
+    if(changed){
+      bridge.renderSidebar();
+      const selected=(s.chats||[]).find(chat=>String(chat.id)===String(bridge.getSelectedChatId?.()));
+      if(selected&&selected.type==="person")bridge.renderMain();
+    }
+  }
+  function subscribePresence(userId){
+    if(!db||!userId)return;
+    if(presenceChannel&&presenceUserId===String(userId)){refreshPresenceUI();return;}
+    if(presenceChannel)void db.removeChannel(presenceChannel);
+    presenceUserId=String(userId);
+    const channel=db.channel("whatsapp-online-status",{config:{presence:{key:String(userId)}}});
+    presenceChannel=channel;
+    const reconcile=()=>refreshPresenceUI();
+    channel.on("presence",{event:"sync"},reconcile)
+      .on("presence",{event:"join"},reconcile)
+      .on("presence",{event:"leave"},reconcile)
+      .subscribe(async status=>{
+        if(status!=="SUBSCRIBED"||presenceChannel!==channel)return;
+        try{await channel.track({user_id:String(userId),online:true,online_at:new Date().toISOString()});refreshPresenceUI();}
+        catch(error){console.warn("Could not publish online status:",error&&error.message||error);}
+      });
   }
   function subscribe(userId) {
     if(!db||!userId||(liveChannel&&liveUserId===userId))return;
@@ -359,6 +395,8 @@
       // Mark incoming messages read only after the new messages have been placed in the UI state.
       void markReadForChat(bridge.getCurrentChat());
       subscribe(me.id);
+      subscribePresence(me.id);
+      refreshPresenceUI();
       if(window.WhatsAppCalls)window.WhatsAppCalls.subscribe();
     }catch(error){if(!quiet)say(safeError(error,"Could not load messaging data from Supabase."));}
     finally{loading=false;if(refreshQueued){refreshQueued=false;queueMicrotask(()=>void loadData(true));}}
@@ -381,6 +419,8 @@
         if(target)bridge.selectChat(target.id);
       }
     }catch(_){}
+    setTimeout(()=>{if(bridge.promptNotificationSetup)void bridge.promptNotificationSetup();},650);
+    setTimeout(()=>{if(bridge.promptNotificationSetup)void bridge.promptNotificationSetup();},650);
   }
   async function signUp(form){
     if(!db)return showError("signup","The secure backend did not load. Refresh the page and check your internet connection.");
@@ -1358,6 +1398,8 @@
   window.waBackendLogout=async()=>{
     if(deviceHeartbeatTimer!==null)clearInterval(deviceHeartbeatTimer);deviceHeartbeatTimer=null;deviceSyncIdentity="";
     if(liveChannel&&db)try{await db.removeChannel(liveChannel);}catch(_){}
+    if(presenceChannel&&db)try{await db.removeChannel(presenceChannel);}catch(_){}
+    presenceChannel=null;presenceUserId="";
     liveChannel=null;liveUserId="";if(window.WhatsAppCalls)window.WhatsAppCalls.cleanup();
     try{await db.auth.signOut();}catch(_){}
     const root=$("#app-screen"),auth=$("#auth-screen");if(root)root.classList.add("hidden");if(auth)auth.classList.remove("hidden");

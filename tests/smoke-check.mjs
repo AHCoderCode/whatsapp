@@ -46,15 +46,47 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261028f");
-  includes(files.sw, "whatsapp-final-20261028f");
-  includes(files.manifest, "whatsapp-final-20261028f");
-  includes(files.sw, "whatsapp-final-shell-v35");
+  includes(files.html, "whatsapp-final-20261028g");
+  includes(files.sw, "whatsapp-final-20261028g");
+  includes(files.manifest, "whatsapp-final-20261028g");
+  includes(files.sw, "whatsapp-final-shell-v36");
 });
-check("legacy ESC compatibility alias exists", () => {
-  includes(files.html, "window.ESC=window.ESC||function");
+check("legacy ESC compatibility aliases exist as browser globals", () => {
+  includes(files.html, "var ESC = window.ESC = window.ESC || function");
+  includes(files.html, "var Escape = window.Escape = window.Escape || ESC");
+  includes(files.html, "var icon = window.icon = window.icon || function");
   includes(files.app, "window.ESC = window.ESC || esc");
-  includes(files.app, "window.icon = window.icon || ((name, cls) => icon(name, cls))");
+});
+check("checkmark icons use outlined strokes and blue read-state styling", () => {
+  includes(files.html, 'id="i-checks" viewBox="0 0 24 24"><path');
+  includes(files.html, 'fill="none" stroke="currentColor"');
+  includes(files.app, 'icon(isRead?"checks":"check")');
+  includes(files.css, ".message-meta .message-read-status svg{fill:none!important;stroke:currentColor!important");
+  includes(files.css, ".message-meta .message-read-status.is-read svg{color:#078ee8!important}");
+});
+check("startup notification onboarding registers all device push preferences", () => {
+  includes(files.app, "async function promptNotificationSetup()");
+  includes(files.app, "async function enableNotificationsFromPrompt()");
+  includes(files.app, "messageNotifications:true,groupNotifications:true,callNotifications:true");
+  includes(files.app, 'if(action==="enable-notifications"){void enableNotificationsFromPrompt();return;}');
+  includes(files.backend, "promptNotificationSetup();},650)");
+  includes(files.backend, "async function enableDevicePush(");
+});
+check("foreground notifications still show when another chat is open", () => {
+  includes(files.backend, "const appIsFocused=document.visibilityState==="visible"&&document.hasFocus();");
+  includes(files.backend, 'if(!appIsFocused&&"serviceWorker" in navigator&&"PushManager" in window)');
+});
+check("online/offline presence is tracked and reflected in direct chats", () => {
+  includes(files.backend, "function subscribePresence(userId)");
+  includes(files.backend, '.on("presence",{event:"sync"},reconcile)');
+  includes(files.backend, 'channel.track({user_id:String(userId),online:true');
+  includes(files.app, 'chat.online ? "online" : "offline"');
+});
+check("call setup has bounded permission/relay/signaling waits", () => {
+  includes(files.calls, "async function userMediaWithTimeout(video,ms=20000)");
+  includes(files.calls, "function withCallTimeout(promise,ms,message)");
+  includes(files.calls, "Preparing the secure relay…");
+  includes(files.calls, "callSetupTimer=setTimeout(");
 });
 check("optional feed failures cannot hide direct chats", () => {
   includes(files.backend, "if(profileResult.error)throw profileResult.error;");

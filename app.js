@@ -391,7 +391,8 @@
     const sender = !outgoing&&chat.type==="group" ? "<span class='message-sender'>" + esc(message.sender || "Group member") + "</span>" : "";
     const time = esc(message.time || "");
     const reactions = message.reactions && message.reactions.length ? "<span class='reaction'>" + esc(message.reactions.join(" ")) + "</span>" : "";
-    const checks = outgoing ? "<span class='message-read-status " + (message.status==="read"?"is-read":"is-delivered") + "' title='" + (message.status==="read"?"Read by recipient":"Sent") + "' aria-label='" + (message.status==="read"?"Read by recipient":"Sent") + "'>" + icon("checks") + "</span>" : "";
+    const isRead=message.status==="read";
+    const checks = outgoing ? "<span class='message-read-status " + (isRead?"is-read":"is-delivered") + "' title='" + (isRead?"Read by recipient":"Sent") + "' aria-label='" + (isRead?"Read by recipient":"Sent") + "'>" + icon(isRead?"checks":"check") + "</span>" : "";
     const isVoiceAttachment = message.attachmentType==="voice" || message.messageType==="voice";
     const voiceBars = "<span class='voice-waveform' aria-hidden='true'>" + [9,15,11,19,13,22,10,16,7,18,12,21,9,15,6,13].map((height,index)=>"<i style='--wave-height:"+height+"px;--wave-index:"+index+"'></i>").join("") + "</span>";
     const attachmentAction = message.attachmentPath ? "<button type='button' class='message-attachment-open "+(isVoiceAttachment?"voice-message-open":"")+"' data-action='open-attachment' data-message-id='" + esc(message.id) + "' aria-label='"+(isVoiceAttachment?"Play voice message":"Open attachment")+"'>" + (isVoiceAttachment?"<span class='voice-play-button'>"+icon("play")+"</span>"+voiceBars+"<span class='voice-message-copy'><strong>Voice message</strong><small>Tap to listen</small></span>":icon((message.attachmentMime||"").startsWith("image/")?"image":"file")+"<span>"+esc(message.attachmentName||"Open attachment")+"</span>") + "</button>" : "";
@@ -482,7 +483,7 @@
   }
   function renderConversation(chat) {
     if (!chat) { renderWelcome(); return; }
-    const subtitle = chat.type==="group" ? ((chat.participants||[]).slice(0,5).map(p=>typeof p==="string"?p:(p.name||p.username||"Member")).join(", ") || "Group") : (chat.online ? "online" : "click here for contact info");
+    const subtitle = chat.type==="group" ? ((chat.participants||[]).slice(0,5).map(p=>typeof p==="string"?p:(p.name||p.username||"Member")).join(", ") || "Group") : (chat.online ? "online" : "offline");
     const pinned = chat.pinnedMessage ? "<div class='pinned-banner'>" + icon("pin") + "<div class='pinned-copy'><strong>Pinned message</strong><span>" + esc(chat.pinnedMessage.text) + "</span></div><button class='icon-button' data-action='pinned-menu' aria-label='Pinned messages'>" + icon("more") + "</button></div>" : "";
     let messages = "";
     let previousDate = "";
@@ -528,20 +529,81 @@
     setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   async function requestNotificationPermission(settingKey) {
-    if(typeof Notification==="undefined"){state.settings[settingKey]=false;saveState();renderSettings();toast("This browser does not support device notifications.");return false;}
+    if(typeof Notification==="undefined"){state.settings[settingKey]=false;state.settings.notificationsSetupComplete=false;saveState();renderSettings();toast("This browser does not support device notifications.");return false;}
     let permission=Notification.permission;
     if(permission==="default"){try{permission=await Notification.requestPermission();}catch(_){permission="denied";}}
-    if(permission!=="granted"){state.settings[settingKey]=false;saveState();renderSettings();toast("Notifications are blocked. Allow them in browser or device settings, then try again.");return false;}
+    if(permission!=="granted"){state.settings[settingKey]=false;state.settings.notificationsSetupComplete=false;saveState();renderSettings();toast("Notifications are blocked. Allow them in browser or device settings, then try again.");return false;}
     saveState();renderSettings();
     let backgroundPushReady=false;
     if(window.waBackendEnablePush){
       try{backgroundPushReady=await window.waBackendEnablePush(state.settings);}catch(error){console.warn("Background push registration failed:",error&&error.message||error);}
     }
+    const allAlertsEnabled=!!(state.settings.messageNotifications&&state.settings.groupNotifications&&state.settings.callNotifications);
+    state.settings.notificationsSetupComplete=backgroundPushReady&&allAlertsEnabled;
+    saveState();
     try{
-      if("serviceWorker" in navigator){const registration=await navigator.serviceWorker.ready;await registration.showNotification("WhatsApp notifications enabled",{body:backgroundPushReady?"Background notifications are registered for this device.":"Notifications are enabled while the app is connected.",icon:"/icon-192.svg",badge:"/icon-192.svg",tag:"wa-notifications-enabled"});}
+      if("serviceWorker" in navigator){const registration=await navigator.serviceWorker.ready;await registration.showNotification("WhatsApp notifications enabled",{body:backgroundPushReady?"Background message and call alerts are registered for this device.":"Browser notifications are enabled, but background delivery still needs push registration.",icon:"/icon-192.svg",badge:"/icon-192.svg",tag:"wa-notifications-enabled"});}
       else new Notification("WhatsApp notifications enabled",{body:"Notifications are enabled while the app is connected."});
     }catch(_){}
-    toast(backgroundPushReady?"Device and background notifications enabled.":"Browser notifications enabled. Background delivery is unavailable until push registration succeeds on this signed-in device.");return true;
+    toast(backgroundPushReady?"Device and background notifications enabled.":"Browser notifications enabled, but background delivery could not be registered on this device.");return true;
+  }
+  async function enableNotificationsFromPrompt(){
+    if(!state||!currentUser||!currentUser.isSupabase){closeDialog();toast("Sign in before enabling device notifications.");return;}
+    if(typeof Notification==="undefined"||!("serviceWorker" in navigator)||!("PushManager" in window)){
+      toast("This browser does not support background push. Open this app in a current browser that supports notifications.");return;
+    }
+    let permission=Notification.permission;
+    if(permission==="default"){try{permission=await Notification.requestPermission();}catch(_){permission="denied";}}
+    if(permission!=="granted"){
+      closeDialog();
+      toast(permission==="denied"?"Notifications are blocked. Open your browser's site settings, allow notifications for this site, then reopen WhatsApp.":"Notification permission was not granted.");
+      return;
+    }
+    const nextSettings=Object.assign({},state.settings,{messageNotifications:true,groupNotifications:true,callNotifications:true});
+    try{
+      if(!window.waBackendEnablePush)throw new Error("The push service is still loading. Close this prompt and retry.");
+      await window.waBackendEnablePush(nextSettings);
+      state.settings=Object.assign(state.settings,nextSettings,{notificationsSetupComplete:true});
+      saveState();closeDialog();renderApp();
+      toast("Message, group and call notifications are enabled on this device.");
+      try{const registration=await navigator.serviceWorker.ready;await registration.showNotification("WhatsApp notifications enabled",{body:"You can now receive background message and call alerts on this device.",icon:"/icon-192.svg",badge:"/icon-192.svg",tag:"wa-notifications-enabled"});}catch(_){}
+    }catch(error){
+      console.warn("Could not register device push:",error&&error.message||error);
+      toast("The browser granted permission, but push setup did not finish. Check your connection and tap Enable notifications again.");
+    }
+  }
+  async function promptNotificationSetup(){
+    if(!state||!currentUser||!currentUser.isSupabase||$("#dialog-backdrop"))return;
+    const permission=typeof Notification==="undefined"?"unsupported":Notification.permission;
+    const settings=state.settings||{};
+    const allAlertsEnabled=!!(settings.messageNotifications&&settings.groupNotifications&&settings.callNotifications);
+    if(permission==="granted"&&allAlertsEnabled){
+      try{
+        if(!("serviceWorker" in navigator)||!("PushManager" in window))throw new Error("Push is unavailable in this browser.");
+        const registration=await navigator.serviceWorker.ready;
+        const existing=await registration.pushManager.getSubscription();
+        if(existing&&window.waBackendEnablePush){
+          await window.waBackendEnablePush(settings);
+          if(settings.notificationsSetupComplete!==true){settings.notificationsSetupComplete=true;saveState();}
+          return;
+        }
+      }catch(error){console.warn("Saved push subscription needs setup again:",error&&error.message||error);}
+      settings.notificationsSetupComplete=false;saveState();
+    }
+    const blocked=permission==="denied";
+    const unsupported=permission==="unsupported"||!("serviceWorker" in navigator)||!("PushManager" in window);
+    const body=blocked
+      ? "<p class='screen-description'>This browser has notifications blocked for this site. The browser will not show its permission prompt again until you change the site's notification permission.</p><p class='screen-description'>Open your browser's site settings for this website, change Notifications to Allow, then reopen WhatsApp.</p>"
+      : unsupported
+        ? "<p class='screen-description'>This browser does not support background push notifications. Open WhatsApp in a current browser with notification and service-worker support for device-wide alerts.</p>"
+        : "<p class='screen-description'>Enable device notifications to receive message, group and incoming-call alerts while you are using another app or when WhatsApp is in the background.</p><p class='screen-description'>Tap Enable notifications, then choose Allow in the browser's system permission prompt. You can change these preferences later in Settings.</p>";
+    const primary=blocked
+      ? "<button class='primary-button' data-action='notification-settings-help'>How to enable</button>"
+      : unsupported
+        ? "<button class='primary-button' data-action='close-dialog'>Got it</button>"
+        : "<button class='primary-button' data-action='enable-notifications'>Enable notifications</button>";
+    const secondary=unsupported?"":"<button class='secondary-button' data-action='notification-settings'>Notification settings</button>";
+    openDialog(blocked?"Notifications are blocked":unsupported?"Notifications unavailable":"Enable notifications",body,primary+secondary+"<button class='secondary-button' data-action='close-dialog'>Not now</button>");
   }
   function handleSettingOption(title) {
     if(title==="Theme"){state.settings.dark=!state.settings.dark;saveState();applySettings();renderSettings();toast("Theme updated.");return;}
@@ -1179,6 +1241,9 @@ function openSharedItemsDialog(chat,kind) {
     if(action==="go-calls"){setView("calls");return;}
     if(action==="profile"){setView("profile");return;}
     if(action==="settings"){settingsTab="account";settingsQuery="";setView("settings");return;}
+    if(action==="enable-notifications"){void enableNotificationsFromPrompt();return;}
+    if(action==="notification-settings"){closeDialog();settingsTab="notifications";settingsQuery="";setView("settings");return;}
+    if(action==="notification-settings-help"){closeDialog();toast("Open your browser's site settings for this website, set Notifications to Allow, then reopen WhatsApp.");return;}
     if(action==="sidebar-menu"||action==="row-menu"||action==="chat-menu"||action==="call-menu"||action==="attachment"||action==="emoji"||action==="more-lists"||action==="search-filters"||action==="pinned-menu"||action==="message-menu"){actionMenu(el,action);return;}
     if(action==="close-dialog"){closeDialog();return;}
     if(action==="back-to-list"){selectedChatId=null;view="chats";renderSidebar();renderMain();updateMobile();return;}
@@ -1779,6 +1844,7 @@ function openSharedItemsDialog(chat,kind) {
     avatarHTML: (person) => avatarHTML(person),
     escapeHTML: (value) => esc(value),
     getSettings: () => state && state.settings || {},
+    promptNotificationSetup: () => promptNotificationSetup(),
     updateBackendProfile: (profile) => {
       if (!currentUser || !state) return;
       currentUser.name = profile.name || currentUser.name;

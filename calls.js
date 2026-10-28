@@ -14,7 +14,7 @@
   };
   let activeCall=null, phase="idle", pc=null, localStream=null, remoteStream=null;
   let incomingOffer=null, callChannel=null, channelUser="", pendingSignals=new Map(), seenSignals=new Set();
-  let callTimer=null, ringTimer=null, callStart=0, elapsed=0, muted=false, cameraOff=false, speakerOn=true, busy=false;
+  let callTimer=null, ringTimer=null, callSetupTimer=null, callStart=0, elapsed=0, muted=false, cameraOff=false, speakerOn=true, busy=false;
   let pendingNotificationAction=null;
   try{
     const params=new URLSearchParams(window.location.search);
@@ -73,8 +73,25 @@
     if(!navigator.mediaDevices?.getUserMedia||typeof RTCPeerConnection==="undefined")throw new Error("This browser cannot make secure calls. Use an up-to-date browser over HTTPS.");
     return navigator.mediaDevices.getUserMedia({audio:true,video:video?{facingMode:"user",width:{ideal:1280},height:{ideal:720}}:false});
   };
+  async function userMediaWithTimeout(video,ms=20000){
+    let timedOut=false,timer=null;
+    const request=userMedia(video).then(stream=>{if(timedOut){stream.getTracks().forEach(track=>track.stop());return null;}return stream;});
+    const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{timedOut=true;reject(new Error("Microphone or camera permission took too long. Allow it in browser settings, then start the call again."));},ms);});
+    try{const stream=await Promise.race([request,timeout]);if(!stream)throw new Error("The media permission request expired. Start the call again.");return stream;}
+    finally{if(timer!==null)clearTimeout(timer);}
+  }
+  function withCallTimeout(promise,ms,message){
+    let timer=null;
+    const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(message)),ms);});
+    return Promise.race([Promise.resolve(promise),timeout]).finally(()=>{if(timer!==null)clearTimeout(timer);});
+  }
   const callPeer = call => call&&call.peer?call.peer:call;
-  function clearTimers(){if(ringTimer!==null)clearTimeout(ringTimer);if(callTimer!==null)clearInterval(callTimer);ringTimer=null;callTimer=null;}
+  function clearTimers(){
+    if(ringTimer!==null)clearTimeout(ringTimer);
+    if(callTimer!==null)clearInterval(callTimer);
+    if(callSetupTimer!==null)clearTimeout(callSetupTimer);
+    ringTimer=null;callTimer=null;callSetupTimer=null;
+  }
   function cleanupLocal() {
     clearTimers();
     if(pc){try{pc.ontrack=null;pc.onicecandidate=null;pc.onconnectionstatechange=null;pc.close();}catch(_){}}
@@ -201,6 +218,8 @@
     pc.onconnectionstatechange=()=>{
       if(!pc||!activeCall)return;
       if(pc.connectionState==="connected"){
+        if(callSetupTimer!==null)clearTimeout(callSetupTimer);callSetupTimer=null;
+        if(ringTimer!==null)clearTimeout(ringTimer);ringTimer=null;
         callStart=Date.now();setPhase("connected");
         if(callTimer!==null)clearInterval(callTimer);
         callTimer=setInterval(()=>{if(phase==="connected"){elapsed=Math.floor((Date.now()-callStart)/1000);updateConnectedDuration();}},1000);
@@ -237,15 +256,18 @@
       void client.functions.invoke("whatsapp-push",{body:{action:"notify-call",callId:newId}})
         .then(({error})=>{if(error)console.warn("Background call notification request failed:",error.message||error);})
         .catch(error=>console.warn("Background call notification request failed:",error));
-      const grantedStream=await userMedia(mediaType==="video");
+      const grantedStream=await userMediaWithTimeout(mediaType==="video",20000);
       if(!activeCall||activeCall.id!==newId){grantedStream.getTracks().forEach(track=>track.stop());return;}
       localStream=grantedStream;
-      const servers=await relayServers(data.id);
+      setPhase("preparing","Preparing the secure relay…");
+      const servers=await withCallTimeout(relayServers(data.id),12000,"Secure relay setup timed out. Check the TURN configuration and connection, then try again.");
       if(!activeCall||activeCall.id!==newId)return;
+      setPhase("preparing","Starting the audio connection…");
       makePeer(activeCall,servers);
-      const offer=await pc.createOffer();await pc.setLocalDescription(offer);
+      const offer=await withCallTimeout(pc.createOffer(),8000,"The call offer could not be created. Try again.");
+      await withCallTimeout(pc.setLocalDescription(offer),8000,"The local call description timed out. Try again.");
       if(!activeCall||activeCall.id!==newId)return;
-      await sendSignal(activeCall,"offer",{type:"offer",sdp:pc.localDescription.sdp});
+      await withCallTimeout(sendSignal(activeCall,"offer",{type:"offer",sdp:pc.localDescription.sdp}),8000,"The call offer could not be delivered. Check the connection and try again.");
       if(activeCall&&activeCall.id===newId)setPhase("outgoing","Calling @"+(person.username||person.name)+"…");
     }catch(error){
       const wasCancelled=!activeCall||(newId?activeCall.id!==newId:activeCall.id!==pendingId);
@@ -292,21 +314,30 @@
   async function acceptCall(){
     if(!activeCall||phase!=="incoming"||busy)return;
     const current=me(),client=db(),call=activeCall;busy=true;
+    if(ringTimer!==null)clearTimeout(ringTimer);ringTimer=null;
+    callSetupTimer=setTimeout(()=>{if(activeCall&&activeCall.id===call.id&&phase!=="connected")void endCall("Call setup timed out. Check microphone permission, relay and internet, then try again.");},40000);
     try{
-      setPhase("preparing","Requesting permissions…");
-      const grantedStream=await userMedia(call.media_type==="video");
+      setPhase("preparing","Requesting microphone permission…");
+      const grantedStream=await userMediaWithTimeout(call.media_type==="video",20000);
       if(!activeCall||activeCall.id!==call.id){grantedStream.getTracks().forEach(track=>track.stop());return;}
       localStream=grantedStream;
-      const servers=await relayServers(call.id);
+      setPhase("preparing","Preparing the secure relay…");
+      const servers=await withCallTimeout(relayServers(call.id),12000,"Secure relay setup timed out. Check TURN configuration and connection, then try again.");
       if(!activeCall||activeCall.id!==call.id){localStream.getTracks().forEach(track=>track.stop());localStream=null;return;}
+      setPhase("preparing","Joining the audio connection…");
       makePeer(call,servers);
       const offer=incomingOffer&&incomingOffer.payload&&incomingOffer.payload.sdp;
       if(!offer)throw new Error("The caller's offer is missing. Decline and ask them to call again.");
-      await pc.setRemoteDescription({type:"offer",sdp:offer});await flushCandidates();
-      const {data,error}=await client.from("aeroshell_calls").update({status:"accepted"}).eq("id",call.id).eq("callee_id",current.id).eq("status","ringing").select("id,status").maybeSingle();
+      await withCallTimeout(pc.setRemoteDescription({type:"offer",sdp:offer}),8000,"The caller's connection offer timed out. Ask them to call again.");
+      if(!activeCall||activeCall.id!==call.id)return;
+      await withCallTimeout(flushCandidates(),8000,"The relay candidates could not be prepared in time.");
+      const {data,error}=await withCallTimeout(client.from("aeroshell_calls").update({status:"accepted"}).eq("id",call.id).eq("callee_id",current.id).eq("status","ringing").select("id,status").maybeSingle(),8000,"The server did not accept the call in time.");
       if(error||!data)throw new Error("This call is no longer available.");
-      const answer=await pc.createAnswer();await pc.setLocalDescription(answer);
-      await sendSignal(call,"answer",{type:"answer",sdp:pc.localDescription.sdp});
+      if(!activeCall||activeCall.id!==call.id)return;
+      const answer=await withCallTimeout(pc.createAnswer(),8000,"The call answer could not be created.");
+      await withCallTimeout(pc.setLocalDescription(answer),8000,"The local call description timed out.");
+      if(!activeCall||activeCall.id!==call.id)return;
+      await withCallTimeout(sendSignal(call,"answer",{type:"answer",sdp:pc.localDescription.sdp}),8000,"The call answer could not be delivered. Check the connection and try again.");
       setPhase("connecting","Connecting through the secure relay…");
     }catch(error){try{await client.from("aeroshell_calls").update({status:activeCall&&activeCall.status==="accepted"?"ended":"rejected"}).eq("id",call.id).in("status",["ringing","accepted"]);}catch(_){}cleanupLocal();say(error instanceof Error?error.message:"Could not accept this call.");}
     finally{busy=false;}

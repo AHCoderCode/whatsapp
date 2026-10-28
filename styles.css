@@ -512,3 +512,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:
 .theme-dark .wa-recording-waveform i{background:#385a50}
 .theme-dark .wa-recording-waveform i.active{background:#00a884}
 @media(max-width:420px){.wa-recording-bar{grid-template-columns:38px 46px minmax(0,1fr) 38px;gap:7px;padding:8px 9px}.wa-recording-cancel,.wa-recording-send{width:36px;height:36px;min-width:36px}.wa-recording-waveform{gap:2px}}
+
+/* Message ticks are outlines; sent is grey and recipient-read is WhatsApp blue. */
+.message-meta .message-read-status svg{fill:none!important;stroke:currentColor!important;stroke-linecap:round;stroke-linejoin:round}
+.message-meta .message-read-status.is-delivered,.message-meta .message-read-status.is-delivered svg{color:#7a8b91!important}
+.message-meta .message-read-status.is-read,.message-meta .message-read-status.is-read svg{color:#078ee8!important}
