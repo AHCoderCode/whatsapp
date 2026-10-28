@@ -1,19 +1,19 @@
-const CACHE_NAME = "whatsapp-final-shell-v37";
+const CACHE_NAME = "whatsapp-final-shell-v38";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/app.js?v=whatsapp-final-20261028h",
-  "/backend.js?v=whatsapp-final-20261028h",
-  "/calls.js?v=whatsapp-final-20261028h",
-  "/styles.css?v=whatsapp-final-20261028h",
-  "/manifest.webmanifest?v=whatsapp-final-20261028h",
-  "/whatsapp-favicon.svg?v=whatsapp-final-20261028h",
+  "/app.js?v=whatsapp-final-20261028i",
+  "/backend.js?v=whatsapp-final-20261028i",
+  "/calls.js?v=whatsapp-final-20261028i",
+  "/styles.css?v=whatsapp-final-20261028i",
+  "/manifest.webmanifest?v=whatsapp-final-20261028i",
+  "/whatsapp-favicon.svg?v=whatsapp-final-20261028i",
   "/icon.svg",
   "/icon-192.svg",
   "/icon-512.svg",
-  "/icon.svg?v=whatsapp-final-20261028h",
-  "/icon-192.svg?v=whatsapp-final-20261028h",
-  "/icon-512.svg?v=whatsapp-final-20261028h",
+  "/icon.svg?v=whatsapp-final-20261028i",
+  "/icon-192.svg?v=whatsapp-final-20261028i",
+  "/icon-512.svg?v=whatsapp-final-20261028i",
 ];
 
 self.addEventListener("install", event => {
@@ -81,6 +81,8 @@ self.addEventListener("push", event => {
     tag: payload.tag || ("wa-push-" + (data.callId || data.chatId || Date.now())),
     renotify: true,
     requireInteraction: kind === "call",
+    silent: false,
+    vibrate: kind === "call" ? [1200, 350, 1200, 350, 1600] : [180, 80, 180],
     data,
     actions: kind === "call"
       ? [{ action: "accept", title: "Accept" }, { action: "decline", title: "Decline" }]

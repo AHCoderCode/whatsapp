@@ -71,6 +71,7 @@
       ["bell","Messages","Show device notifications for incoming messages.","toggle"],
       ["users","Groups","Show device notifications for group messages.","toggle"],
       ["phone","Calls","Show device notifications for incoming calls.","toggle"],
+      ["phone","Ringtone","Choose a built-in tone or select an MP3 for incoming calls.","ringer"],
       ["sparkles","Reaction notifications","Show notifications when someone reacts to messages.","toggle"]
     ],
     personalization:[
@@ -605,7 +606,11 @@
     const secondary=unsupported?"":"<button class='secondary-button' data-action='notification-settings'>Notification settings</button>";
     openDialog(blocked?"Notifications are blocked":unsupported?"Notifications unavailable":"Enable notifications",body,primary+secondary+"<button class='secondary-button' data-action='close-dialog'>Not now</button>");
   }
+
+  function openRingtoneDialog(){const api=window.WhatsAppCalls,info=api&&api.getRingtoneInfo?api.getRingtoneInfo():{name:"Built-in loud ringtone",volume:100},volume=Math.max(0,Math.min(100,Number(info.volume)||100));const body="<p class='screen-description'>Choose the sound this device plays for incoming calls. MP3 files are saved locally in this browser and are not uploaded to your account.</p>"+"<div class='wa-ringtone-current'><span class='wa-ringtone-current-icon'>"+icon("phone")+"</span><span><small>Current ringtone</small><strong id='wa-ringtone-current-name'>"+esc(info.name||"Built-in loud ringtone")+"</strong></span></div>"+"<div class='dialog-field wa-ringtone-volume-field'><label for='wa-ringtone-volume'>Ringtone volume <strong id='wa-ringtone-volume-label'>"+volume+"%</strong></label><input id='wa-ringtone-volume' type='range' min='25' max='100' step='5' value='"+volume+"'><small>Set to 100% for the loudest level available to the browser. Your phone's media volume still controls final loudness.</small></div>"+"<p class='screen-description'>When WhatsApp is closed, your phone uses its normal notification sound and vibration; browsers cannot force a custom MP3 to play in the background on every device. A powered-off phone cannot receive a web call.</p>"+"<input id='wa-ringtone-file-input' type='file' accept='.mp3,audio/mpeg' hidden>";const footer="<button class='secondary-button' data-action='use-default-ringtone'>Use built-in</button>"+"<button class='secondary-button' data-action='preview-ringtone'>Test ringtone</button>"+"<button class='primary-button' data-action='select-ringtone-file'>Choose MP3</button>"+"<button class='secondary-button' data-action='close-dialog'>Done</button>";openDialog("Incoming call ringtone",body,footer);}
+
   function handleSettingOption(title) {
+    if(title==="Ringtone"){openRingtoneDialog();return;}
     if(title==="Theme"){state.settings.dark=!state.settings.dark;saveState();applySettings();renderSettings();toast("Theme updated.");return;}
     const settingByTitle={"Read receipts":"readReceipts","Keep chats archived":"keepArchived","Enter is send":"enterToSend","Media visibility":"mediaVisibility","App lock":"appLock","Reduce motion":"reduceMotion","Keyboard navigation":"keyboardNav","High contrast":"highContrast","Spell check":"spellcheck","Reaction notifications":"reactionNotifications","Security notifications":"securityNotifications","Messages":"messageNotifications","Groups":"groupNotifications","Calls":"callNotifications"};
     if(settingByTitle[title]){
@@ -713,6 +718,7 @@
       else if(opt[3]==="button")side="<span class='end-icon'>"+icon("chevron")+"</span>";
       else if(opt[1]==="Media auto-download")side="<span class='setting-side-label'>"+esc(state.settings.mediaAutoDownload||"Wi-Fi and mobile data")+"</span>";
       else if(opt[1]==="App language")side="<span class='setting-side-label'>"+esc(state.settings.language||"English")+"</span>";
+      else if(opt[3]==="ringer"){const ringtone=window.WhatsAppCalls&&window.WhatsAppCalls.getRingtoneInfo?window.WhatsAppCalls.getRingtoneInfo():null;side="<span class='setting-side-label'>"+esc(ringtone&&ringtone.name||"Built-in loud ringtone")+"</span>";}
       else side="<span class='setting-side-label'>"+esc(opt[3]||"")+"</span>";
       return "<div class='setting-option' data-setting-option='"+esc(opt[1])+"' role='button' tabindex='0'><span class='row-icon'>"+icon(opt[0])+"</span><div class='setting-option-copy'><strong>"+esc(opt[1])+"</strong><span>"+esc(opt[2])+"</span></div>"+side+"</div>";
     }).join("")+"</div><p class='screen-description'>"+(currentUser&&currentUser.isSupabase?"Appearance and legacy privacy options are local preferences. Account profile changes, accepted contacts, groups and text messages use Supabase. Some older screens remain previews.":"Settings here change the local demo interface only. They do not change a remote account or device settings.")+"</p>";
@@ -1242,6 +1248,9 @@ function openSharedItemsDialog(chat,kind) {
     if(action==="profile"){setView("profile");return;}
     if(action==="settings"){settingsTab="account";settingsQuery="";setView("settings");return;}
     if(action==="enable-notifications"){void enableNotificationsFromPrompt();return;}
+    if(action==="select-ringtone-file"){const input=$("#wa-ringtone-file-input");if(input)input.click();else toast("Open Settings → Notifications → Ringtone first.");return;}
+    if(action==="preview-ringtone"){const api=window.WhatsAppCalls;if(!api||!api.previewRingtone){toast("Ringtone controls are still loading. Refresh and retry.");return;}void api.previewRingtone().then(played=>{if(!played)toast("The browser blocked ringtone playback. Tap Test ringtone again and check device media volume.");}).catch(error=>toast("Could not play the ringtone: "+String(error&&error.message||"Unknown error")));return;}
+    if(action==="use-default-ringtone"){const api=window.WhatsAppCalls;if(!api||!api.resetRingtone){toast("Ringtone controls are still loading. Refresh and retry.");return;}void api.resetRingtone().then(()=>{closeDialog();renderSettings();toast("Built-in ringtone selected.");}).catch(error=>toast("Could not reset ringtone: "+String(error&&error.message||"Unknown error")));return;}
     if(action==="notification-settings"){closeDialog();settingsTab="notifications";settingsQuery="";setView("settings");return;}
     if(action==="notification-settings-help"){closeDialog();toast("Open your browser's site settings for this website, set Notifications to Allow, then reopen WhatsApp.");return;}
     if(action==="sidebar-menu"||action==="row-menu"||action==="chat-menu"||action==="call-menu"||action==="attachment"||action==="emoji"||action==="more-lists"||action==="search-filters"||action==="pinned-menu"||action==="message-menu"){actionMenu(el,action);return;}
@@ -1538,8 +1547,10 @@ function openSharedItemsDialog(chat,kind) {
       const send=$(".send-button");if(send)send.innerHTML=icon(target.value.trim()?"send":"mic");
     }
   });
+  document.addEventListener("input",event=>{const target=event.target;if(!target||target.id!=="wa-ringtone-volume")return;const value=Math.max(25,Math.min(100,Number(target.value)||100));if(window.WhatsAppCalls&&window.WhatsAppCalls.setRingtoneVolume)window.WhatsAppCalls.setRingtoneVolume(value);const label=$("#wa-ringtone-volume-label");if(label)label.textContent=value+"%";});
   document.addEventListener("change",event=>{
     const t=event.target;
+    if(t.id==="wa-ringtone-file-input"&&t.files&&t.files[0]){const file=t.files[0];t.value="";if(!/\.mp3$/i.test(String(file.name||""))){toast("Choose an MP3 file (.mp3).");return;}if(file.size>10*1024*1024){toast("Choose an MP3 smaller than 10 MB.");return;}const api=window.WhatsAppCalls;if(!api||!api.setCustomRingtone){toast("Ringtone controls are still loading. Refresh and retry.");return;}void api.setCustomRingtone(file).then(()=>{closeDialog();renderSettings();toast("Custom MP3 ringtone saved on this device.");}).catch(error=>toast("Could not save ringtone: "+String(error&&error.message||"Unknown error")));return;}
     if(t.id==="profile-photo-input" && t.files && t.files[0]){
       if(currentUser&&currentUser.isSupabase){t.value="";return;}
       const file=t.files[0];

@@ -16,6 +16,21 @@
   let incomingOffer=null, callChannel=null, channelUser="", pendingSignals=new Map(), seenSignals=new Set();
   let callTimer=null, ringTimer=null, callSetupTimer=null, callStart=0, elapsed=0, muted=false, cameraOff=false, speakerOn=true, busy=false;
   let pendingNotificationAction=null;
+const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
+  let ringtoneAudio=null,ringtoneObjectUrl="",ringtoneRequestId=0,ringtoneWanted=false,ringtoneStartPromise=null,previewRingtoneTimer=null,builtInRingtoneBlob=null;
+  function openRingtoneDatabase(){return new Promise((resolve,reject)=>{if(!("indexedDB" in window)){reject(new Error("This browser cannot save a custom ringtone."));return;}const request=indexedDB.open(RINGTONE_DB_NAME,1);request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains(RINGTONE_STORE_NAME))request.result.createObjectStore(RINGTONE_STORE_NAME);};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error||new Error("Could not open local ringtone storage."));request.onblocked=()=>reject(new Error("Ringtone storage is busy. Close other WhatsApp tabs and retry."));});}
+  async function getSavedRingtone(){const database=await openRingtoneDatabase();return new Promise((resolve,reject)=>{const request=database.transaction(RINGTONE_STORE_NAME,"readonly").objectStore(RINGTONE_STORE_NAME).get("custom");request.onsuccess=()=>{const result=request.result||null;database.close();resolve(result);};request.onerror=()=>{const error=request.error||new Error("Could not load the saved ringtone.");database.close();reject(error);};});}
+  async function setCustomRingtone(file){if(!file||typeof file.size!=="number")throw new Error("Choose an MP3 audio file first.");if(!/\.mp3$/i.test(String(file.name||"")))throw new Error("Select an .mp3 file for your ringtone.");if(file.size<1024||file.size>10*1024*1024)throw new Error("Choose an MP3 between 1 KB and 10 MB.");stopIncomingRingtone();const database=await openRingtoneDatabase();await new Promise((resolve,reject)=>{const transaction=database.transaction(RINGTONE_STORE_NAME,"readwrite");transaction.objectStore(RINGTONE_STORE_NAME).put({blob:file,name:String(file.name),type:file.type||"audio/mpeg",savedAt:Date.now()},"custom");transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error||new Error("Could not save this ringtone on the device."));transaction.onabort=()=>reject(transaction.error||new Error("Saving the ringtone was cancelled."));}).finally(()=>database.close());try{localStorage.setItem("wa_call_ringtone_name",String(file.name));}catch(_){}return getRingtoneInfo();}
+  async function resetRingtone(){stopIncomingRingtone();const database=await openRingtoneDatabase();await new Promise((resolve,reject)=>{const transaction=database.transaction(RINGTONE_STORE_NAME,"readwrite");transaction.objectStore(RINGTONE_STORE_NAME).delete("custom");transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error||new Error("Could not reset the ringtone."));transaction.onabort=()=>reject(transaction.error||new Error("Resetting the ringtone was cancelled."));}).finally(()=>database.close());try{localStorage.removeItem("wa_call_ringtone_name");}catch(_){}return getRingtoneInfo();}
+  function getRingtoneInfo(){let name="Built-in loud ringtone";try{name=localStorage.getItem("wa_call_ringtone_name")||name;}catch(_){}return{name,custom:name!=="Built-in loud ringtone",volume:getRingtoneVolume()};}
+  function getRingtoneVolume(){try{const value=Number(localStorage.getItem("wa_call_ringtone_volume"));return Number.isFinite(value)&&value>=0&&value<=100?value:100;}catch(_){return 100;}}
+  function setRingtoneVolume(value){const volume=Math.max(0,Math.min(100,Number(value)||0));try{localStorage.setItem("wa_call_ringtone_volume",String(volume));}catch(_){}if(ringtoneAudio)ringtoneAudio.volume=volume/100;return volume;}
+  function createBuiltInRingtone(){if(builtInRingtoneBlob)return builtInRingtoneBlob;const sampleRate=22050,duration=3.2,sampleCount=Math.floor(sampleRate*duration),dataLength=sampleCount*2,buffer=new ArrayBuffer(44+dataLength),view=new DataView(buffer);const write=(offset,value)=>{for(let i=0;i<value.length;i++)view.setUint8(offset+i,value.charCodeAt(i));};write(0,"RIFF");view.setUint32(4,36+dataLength,true);write(8,"WAVE");write(12,"fmt ");view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true);view.setUint32(24,sampleRate,true);view.setUint32(28,sampleRate*2,true);view.setUint16(32,2,true);view.setUint16(34,16,true);write(36,"data");view.setUint32(40,dataLength,true);for(let i=0;i<sampleCount;i++){const t=i/sampleRate,phase=t%duration,pulseStart=phase<0.46?0:phase>=0.66&&phase<1.12?0.66:-1;let sample=0;if(pulseStart>=0){const edge=phase-pulseStart,envelope=Math.max(0,Math.min(1,edge/0.018,(0.46-edge)/0.018));sample=(Math.sin(2*Math.PI*440*t)*0.46+Math.sin(2*Math.PI*480*t)*0.46)*envelope*0.94;}view.setInt16(44+i*2,Math.round(Math.max(-1,Math.min(1,sample))*32767),true);}builtInRingtoneBlob=new Blob([buffer],{type:"audio/wav"});return builtInRingtoneBlob;}
+  async function attemptRingtonePlayback(blob,token){const url=URL.createObjectURL(blob),audio=new Audio(url);audio.loop=true;audio.preload="auto";audio.volume=getRingtoneVolume()/100;ringtoneAudio=audio;ringtoneObjectUrl=url;try{await audio.play();if(token!==ringtoneRequestId)return false;return true;}catch(_){if(ringtoneAudio===audio)ringtoneAudio=null;if(ringtoneObjectUrl===url)ringtoneObjectUrl="";try{audio.pause();audio.removeAttribute("src");audio.load();}catch(_){}URL.revokeObjectURL(url);return false;}}
+  async function startIncomingRingtone(options={}){if(ringtoneAudio&&!ringtoneAudio.paused)return true;if(ringtoneStartPromise)return ringtoneStartPromise;const token=++ringtoneRequestId;ringtoneWanted=true;ringtoneStartPromise=(async()=>{let saved=null;try{saved=await getSavedRingtone();}catch(error){console.warn("Could not read custom ringtone:",error&&error.message||error);}if(token!==ringtoneRequestId||(!options.preview&&(!activeCall||phase!=="incoming")))return false;if(saved&&saved.blob){if(await attemptRingtonePlayback(saved.blob,token)){ringtoneWanted=false;return true;}if(token!==ringtoneRequestId)return false;}const played=await attemptRingtonePlayback(createBuiltInRingtone(),token);if(token===ringtoneRequestId)ringtoneWanted=!played;return played;})().finally(()=>{if(token===ringtoneRequestId)ringtoneStartPromise=null;});return ringtoneStartPromise;}
+  function stopIncomingRingtone(){ringtoneRequestId++;ringtoneWanted=false;ringtoneStartPromise=null;if(previewRingtoneTimer!==null)clearTimeout(previewRingtoneTimer);previewRingtoneTimer=null;const audio=ringtoneAudio,url=ringtoneObjectUrl;ringtoneAudio=null;ringtoneObjectUrl="";if(audio){try{audio.pause();audio.removeAttribute("src");audio.load();}catch(_){}}if(url){try{URL.revokeObjectURL(url);}catch(_){}}}
+  async function previewRingtone(){if(phase==="incoming")return startIncomingRingtone();stopIncomingRingtone();const played=await startIncomingRingtone({preview:true});if(played)previewRingtoneTimer=setTimeout(()=>{previewRingtoneTimer=null;if(phase==="idle")stopIncomingRingtone();},7000);return played;}
+  document.addEventListener("pointerdown",()=>{if(phase==="incoming"&&ringtoneWanted)void startIncomingRingtone();},true);
   try{
     const params=new URLSearchParams(window.location.search);
     if(params.get("waPushKind")==="call"&&params.get("waCallId")){
@@ -32,7 +47,7 @@
       try{const registration=await navigator.serviceWorker.ready;if(await registration.pushManager.getSubscription())return;}catch(_){}
     }
     const video=call.media_type==="video";
-    const options={body:(video?"Video":"Voice")+" call · Tap to open the call screen",icon:"/icon-192.svg",badge:"/icon-192.svg",tag:"wa-call-"+String(call.id),renotify:true,requireInteraction:true,data:{kind:"call",callId:String(call.id),chatId:String(call.caller_id),url:"/?waCallId="+encodeURIComponent(String(call.id))},actions:[{action:"accept",title:"Accept"},{action:"decline",title:"Decline"}]};
+    const options={body:(video?"Incoming video call":"Incoming voice call")+" · Answer or decline to respond",icon:"/icon-192.svg",badge:"/icon-192.svg",tag:"wa-call-"+String(call.id),renotify:true,requireInteraction:true,silent:false,vibrate:[1200,350,1200,350,1600],data:{kind:"call",callId:String(call.id),chatId:String(call.caller_id),url:"/?waCallId="+encodeURIComponent(String(call.id))},actions:[{action:"accept",title:"Accept"},{action:"decline",title:"Decline"}]};
     if("serviceWorker" in navigator)void navigator.serviceWorker.ready.then(registration=>registration.showNotification("Incoming call · "+(peer.name||peer.username||"Contact"),options)).catch(()=>{});
     else try{new Notification("Incoming call · "+(peer.name||peer.username||"Contact"),options);}catch(_){}
   }
@@ -65,7 +80,7 @@
     if(activeCall)return;
     peer=peer||{id:row.caller_id,username:"contact",name:"Contact"};
     activeCall=Object.assign({},row,{direction:"incoming",peer});
-    incomingOffer=null;phase="incoming";renderCallOverlay();runPendingNotificationAction();
+    incomingOffer=null;phase="incoming";void startIncomingRingtone();renderCallOverlay();runPendingNotificationAction();
     try{if(navigator.vibrate)navigator.vibrate([180,80,180]);}catch(_){}
     ringTimer=setTimeout(()=>{if(activeCall&&activeCall.id===row.id&&phase==="incoming")void declineCall(true);},45000);
   }
@@ -94,6 +109,7 @@
   }
   function cleanupLocal() {
     clearTimers();
+    stopIncomingRingtone();
     if(pc){try{pc.ontrack=null;pc.onicecandidate=null;pc.onconnectionstatechange=null;pc.close();}catch(_){}}
     pc=null;
     if(localStream)localStream.getTracks().forEach(t=>{try{t.stop();}catch(_){}});
@@ -114,7 +130,7 @@
     if(incoming){
       const waiting=!incomingOffer;
       if(!activeCall.notificationShown){activeCall.notificationShown=true;void notifyIncomingCall(activeCall,peer);}
-      host.innerHTML="<section class='wa-incoming-call-banner' role='alert' aria-label='Incoming "+(video?"video":"voice")+" call'><span class='wa-incoming-call-avatar'>"+esc(peer.avatar||String(peer.name||peer.username||"U").slice(0,2).toUpperCase())+"</span><span class='wa-incoming-call-copy'><strong>"+esc(peer.name||peer.username||"Contact")+"</strong><small>"+(video?"Incoming video call":"Incoming voice call")+(waiting?" · connecting…":"")+"</small></span><button class='wa-incoming-decline' type='button' data-wa-call='decline' aria-label='Decline call'>Decline</button><button class='wa-incoming-accept' type='button' data-wa-call='accept' aria-label='Accept call' "+(waiting?"disabled":"")+">"+(waiting?"Connecting…":"Accept")+"</button></section>";
+      host.innerHTML="<section class='wa-incoming-call-banner' role='alert' aria-label='Incoming "+(video?"video":"voice")+" call'><span class='wa-incoming-call-avatar'>"+esc(peer.avatar||String(peer.name||peer.username||"U").slice(0,2).toUpperCase())+"</span><span class='wa-incoming-call-copy'><strong>"+esc(peer.name||peer.username||"Contact")+"</strong><small>"+(video?"Incoming video call":"Incoming voice call")+(waiting?" · waiting for caller connection":"")+"</small></span><button class='wa-incoming-decline' type='button' data-wa-call='decline' aria-label='Decline call'>Decline</button><button class='wa-incoming-accept' type='button' data-wa-call='accept' aria-label='Accept call'>Accept</button></section>";
       return;
     }
     host.innerHTML="<div class='wa-call-backdrop wa-call-fullscreen'><section class='wa-call-window "+(video?"video-call":"audio-call")+"' role='dialog' aria-modal='true' aria-label='"+(video?"Video call":"Voice call")+"'>"+
@@ -281,7 +297,7 @@
     if(!current||!current.isSupabase||!signal||!client||signal.to_user_id!==current.id||seenSignals.has(signal.id))return;
     seenSignals.add(signal.id);
     if(activeCall&&activeCall.id===signal.call_id&&activeCall.direction==="incoming"&&signal.kind==="offer"){
-      incomingOffer=signal;renderCallOverlay();runPendingNotificationAction();return;
+      incomingOffer=signal;void startIncomingRingtone();renderCallOverlay();runPendingNotificationAction();return;
     }
     if(!activeCall||activeCall.id!==signal.call_id){
       if(signal.kind==="offer"){
@@ -292,7 +308,7 @@
         const profileResult=await client.from("aeroshell_profiles").select("id,username,display_name,avatar_data").eq("id",data.caller_id).maybeSingle();
         const peer=profileResult.data||{id:data.caller_id,username:"contact"};
         activeCall=Object.assign({},data,{direction:"incoming",peer:{id:peer.id,username:peer.username,name:peer.display_name||peer.username,avatarData:peer.avatar_data||""}});
-        incomingOffer=signal;phase="incoming";renderCallOverlay();runPendingNotificationAction();
+        incomingOffer=signal;phase="incoming";void startIncomingRingtone();renderCallOverlay();runPendingNotificationAction();
         ringTimer=setTimeout(()=>{if(activeCall&&activeCall.id===data.id&&phase==="incoming")void declineCall(true);},45000);
       }else{
         const list=pendingSignals.get(signal.call_id)||[];list.push(signal);pendingSignals.set(signal.call_id,list);
@@ -313,6 +329,8 @@
   }
   async function acceptCall(){
     if(!activeCall||phase!=="incoming"||busy)return;
+    if(!incomingOffer){pendingNotificationAction={kind:"call",callId:String(activeCall.id),action:"accept"};renderCallOverlay("Waiting for the caller to connect…");return;}
+    stopIncomingRingtone();
     const current=me(),client=db(),call=activeCall;busy=true;
     if(ringTimer!==null)clearTimeout(ringTimer);ringTimer=null;
     callSetupTimer=setTimeout(()=>{if(activeCall&&activeCall.id===call.id&&phase!=="connected")void endCall("Call setup timed out. Check microphone permission, relay and internet, then try again.");},40000);
@@ -424,6 +442,11 @@
   },true);
   window.WhatsAppCalls={
     subscribe,
+    setCustomRingtone,
+    resetRingtone,
+    previewRingtone,
+    getRingtoneInfo,
+    setRingtoneVolume,
     start:(person,type)=>startCall(person,type==="video"?"video":"audio"),
     openPicker,
     accept:()=>acceptCall(),

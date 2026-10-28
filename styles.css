@@ -517,3 +517,17 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:
 .message-meta .message-read-status svg{fill:none!important;stroke:currentColor!important;stroke-linecap:round;stroke-linejoin:round}
 .message-meta .message-read-status.is-delivered,.message-meta .message-read-status.is-delivered svg{color:#7a8b91!important}
 .message-meta .message-read-status.is-read,.message-meta .message-read-status.is-read svg{color:#078ee8!important}
+
+/* Incoming-call ringtone settings. */
+.wa-ringtone-current{display:flex;align-items:center;gap:13px;margin:14px 0 18px;padding:14px;border:1px solid #dce8e3;border-radius:14px;background:#f4faf7}
+.wa-ringtone-current-icon{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;border-radius:50%;background:#d9fdd3;color:#006b55}
+.wa-ringtone-current-icon svg{width:21px;height:21px}
+.wa-ringtone-current>span:last-child{display:flex;min-width:0;flex-direction:column;gap:4px}
+.wa-ringtone-current small{color:#667781;font-size:11px}
+.wa-ringtone-current strong{overflow-wrap:anywhere;font-size:14px;font-weight:650}
+.wa-ringtone-volume-field label{display:flex;justify-content:space-between;gap:12px}
+.wa-ringtone-volume-field input[type=range]{width:100%;accent-color:#00a884}
+.wa-ringtone-volume-field small{display:block;color:#667781;font-size:11px;line-height:1.5}
+.theme-dark .wa-ringtone-current{border-color:#344740;background:#202c27}
+.theme-dark .wa-ringtone-current strong{color:#e9edef}
+@media(max-width:520px){.wa-ringtone-current{padding:11px}.wa-ringtone-volume-field{padding-left:0;padding-right:0}}

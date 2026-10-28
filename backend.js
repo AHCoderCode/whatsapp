@@ -422,7 +422,6 @@
       }
     }catch(_){}
     setTimeout(()=>{if(bridge.promptNotificationSetup)void bridge.promptNotificationSetup();},650);
-    setTimeout(()=>{if(bridge.promptNotificationSetup)void bridge.promptNotificationSetup();},650);
   }
   async function signUp(form){
     if(!db)return showError("signup","The secure backend did not load. Refresh the page and check your internet connection.");

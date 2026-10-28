@@ -46,10 +46,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261028h");
-  includes(files.sw, "whatsapp-final-20261028h");
-  includes(files.manifest, "whatsapp-final-20261028h");
-  includes(files.sw, "whatsapp-final-shell-v37");
+  includes(files.html, "whatsapp-final-20261028i");
+  includes(files.sw, "whatsapp-final-20261028i");
+  includes(files.manifest, "whatsapp-final-20261028i");
+  includes(files.sw, "whatsapp-final-shell-v38");
 });
 check("legacy ESC compatibility aliases exist as browser globals", () => {
   includes(files.html, "var ESC = window.ESC = window.ESC || function");
@@ -147,6 +147,35 @@ check("backend defines the attachment escaping helper used before voice playback
   includes(files.backend, 'const esc = value => bridge.escapeHTML(String(value == null ? "" : value));');
   includes(files.backend, 'name=esc(message.attachmentName||"Attachment")');
 });
+
+check("incoming call ringtones support a persistent custom MP3 and a loud built-in tone", () => {
+  includes(files.app, '["phone","Ringtone","Choose a built-in tone or select an MP3 for incoming calls.","ringer"]');
+  includes(files.app, "id='wa-ringtone-file-input'");
+  includes(files.app, "data-action='preview-ringtone'");
+  includes(files.app, "data-action='select-ringtone-file'");
+  includes(files.calls, 'indexedDB.open(RINGTONE_DB_NAME,1)');
+  includes(files.calls, 'async function setCustomRingtone(file)');
+  includes(files.calls, 'function createBuiltInRingtone()');
+  includes(files.calls, 'function stopIncomingRingtone()');
+  includes(files.calls, 'setRingtoneVolume,');
+});
+check("incoming calls start ringing and the top Accept action queues until the offer arrives", () => {
+  includes(files.calls, 'void startIncomingRingtone();');
+  includes(files.calls, 'pendingNotificationAction={kind:"call",callId:String(activeCall.id),action:"accept"}');
+  includes(files.calls, "data-wa-call='accept' aria-label='Accept call'>Accept</button>");
+  assert.ok(!files.calls.includes('(waiting?"disabled":"")'), "Accept must remain available while the caller prepares the offer");
+  includes(files.calls, 'stopIncomingRingtone();');
+});
+check("call notifications request an audible, vibrating alert and show actionable details", () => {
+  includes(files.sw, 'silent: false');
+  includes(files.sw, 'vibrate: kind === "call"');
+  includes(files.sw, 'actions: kind === "call"');
+  includes(files.calls, 'vibrate:[1200,350,1200,350,1600]');
+});
+check("notification onboarding prompt is only scheduled once per hydration", () => {
+  assert.equal((files.backend.match(/promptNotificationSetup\(\);\},650/g)||[]).length, 1);
+});
+
 check("voice notes use inline audio playback", () => {
   includes(files.backend, "wa-inline-voice-audio");
   includes(files.backend, "createSignedUrl(message.attachmentPath,120)");
