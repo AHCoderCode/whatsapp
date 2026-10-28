@@ -46,10 +46,16 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261028o");
-  includes(files.sw, "whatsapp-final-20261028o");
-  includes(files.manifest, "whatsapp-final-20261028o");
-  includes(files.sw, "whatsapp-final-shell-v44");
+  includes(files.html, "whatsapp-final-20261028q");
+  includes(files.sw, "whatsapp-final-20261028q");
+  includes(files.manifest, "whatsapp-final-20261028q");
+  includes(files.sw, "whatsapp-final-shell-v46");
+});
+check("hidden call pages show a fallback if Web Push is delayed", () => {
+  includes(files.calls, 'const tag="wa-call-"+String(call.id);');
+  includes(files.calls, "registration.getNotifications({tag})");
+  includes(files.calls, "renotify:false");
+  excludes(files.calls, 'if(await registration.pushManager.getSubscription())return;');
 });
 check("legacy ESC compatibility aliases exist as browser globals", () => {
   includes(files.html, "var ESC = window.ESC = window.ESC || function");

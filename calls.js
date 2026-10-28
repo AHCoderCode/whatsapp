@@ -86,13 +86,26 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     const settings=bridge.getSettings?.()||{};
     if(!call||!peer||settings.callNotifications===false||typeof Notification==="undefined"||Notification.permission!=="granted")return;
     if(document.visibilityState==="visible"&&document.hasFocus())return;
-    if("serviceWorker" in navigator&&"PushManager" in window){
-      try{const registration=await navigator.serviceWorker.ready;if(await registration.pushManager.getSubscription())return;}catch(_){}
-    }
+    const tag="wa-call-"+String(call.id);
     const video=call.media_type==="video";
-    const options={body:(video?"Incoming video call":"Incoming voice call")+" · Answer or decline to respond",icon:"/icon-192.svg",badge:"/icon-192.svg",tag:"wa-call-"+String(call.id),renotify:true,requireInteraction:true,silent:false,vibrate:[1200,350,1200,350,1600],data:{kind:"call",callId:String(call.id),chatId:String(call.caller_id),url:"/?waCallId="+encodeURIComponent(String(call.id))},actions:[{action:"accept",title:"Accept"},{action:"decline",title:"Decline"}]};
-    if("serviceWorker" in navigator)void navigator.serviceWorker.ready.then(registration=>registration.showNotification("Incoming call · "+(peer.name||peer.username||"Contact"),options)).catch(()=>{});
-    else try{new Notification("Incoming call · "+(peer.name||peer.username||"Contact"),options);}catch(_){}
+    const title="Incoming call · "+(peer.name||peer.username||"Contact");
+    const options={body:(video?"Incoming video call":"Incoming voice call")+" · Answer or decline to respond",icon:"/icon-192.svg",badge:"/icon-192.svg",tag,renotify:false,requireInteraction:true,silent:false,vibrate:[1200,350,1200,350,1600],data:{kind:"call",callId:String(call.id),chatId:String(call.caller_id),url:"/?waCallId="+encodeURIComponent(String(call.id))},actions:[{action:"accept",title:"Accept"},{action:"decline",title:"Decline"}]};
+    // A Web Push subscription does not prove that the push has already reached
+    // this device. When Realtime delivers the call while this page is hidden,
+    // show a same-tag fallback unless the service worker already displayed it.
+    // This closes the gap where an existing subscription suppressed the only
+    // in-page fallback even though the OS notification had not appeared yet.
+    if("serviceWorker" in navigator){
+      void navigator.serviceWorker.ready.then(async registration=>{
+        try{
+          if(typeof registration.getNotifications==="function"){
+            const existing=await registration.getNotifications({tag});
+            if(existing.length)return;
+          }
+        }catch(_){}
+        await registration.showNotification(title,options);
+      }).catch(error=>console.warn("[calls] Local background call-alert fallback failed:",error&&error.message||error));
+    }else try{new Notification(title,options);}catch(_){}
   }
   function runPendingNotificationAction(){
     const pending=pendingNotificationAction;
