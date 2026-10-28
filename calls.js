@@ -15,14 +15,44 @@
   let activeCall=null, phase="idle", pc=null, localStream=null, remoteStream=null;
   let incomingOffer=null, callChannel=null, channelUser="", pendingSignals=new Map(), seenSignals=new Set();
   let callTimer=null, ringTimer=null, callStart=0, elapsed=0, muted=false, cameraOff=false, busy=false;
-  function notifyIncomingCall(call,peer){
-    const settings=window.waAppBridge?.getSettings?.()||{};
+  let pendingNotificationAction=null;
+  try{
+    const params=new URLSearchParams(window.location.search);
+    if(params.get("waPushKind")==="call"&&params.get("waCallId")){
+      pendingNotificationAction={kind:"call",callId:String(params.get("waCallId")),action:params.get("waPushAction")||"open"};
+      params.delete("waPushKind");params.delete("waCallId");params.delete("waPushAction");
+      history.replaceState(history.state,"",location.pathname+(params.toString()?"?"+params.toString():"")+location.hash);
+    }
+  }catch(_){}
+  async function notifyIncomingCall(call,peer){
+    const settings=bridge.getSettings?.()||{};
     if(!call||!peer||settings.callNotifications===false||typeof Notification==="undefined"||Notification.permission!=="granted")return;
     if(document.visibilityState==="visible"&&document.hasFocus())return;
+    if("serviceWorker" in navigator&&"PushManager" in window){
+      try{const registration=await navigator.serviceWorker.ready;if(await registration.pushManager.getSubscription())return;}catch(_){}
+    }
     const video=call.media_type==="video";
-    const options={body:(video?"Video":"Voice")+" call · Tap to open the call screen",icon:"/icon-192.svg",badge:"/icon-192.svg",tag:"wa-call-"+String(call.id),renotify:true,requireInteraction:true,data:{kind:"call",callId:String(call.id),url:"/"},actions:[{action:"accept",title:"Open call"},{action:"decline",title:"Dismiss"}]};
+    const options={body:(video?"Video":"Voice")+" call · Tap to open the call screen",icon:"/icon-192.svg",badge:"/icon-192.svg",tag:"wa-call-"+String(call.id),renotify:true,requireInteraction:true,data:{kind:"call",callId:String(call.id),chatId:String(call.caller_id),url:"/?waCallId="+encodeURIComponent(String(call.id))},actions:[{action:"accept",title:"Accept"},{action:"decline",title:"Decline"}]};
     if("serviceWorker" in navigator)void navigator.serviceWorker.ready.then(registration=>registration.showNotification("Incoming call · "+(peer.name||peer.username||"Contact"),options)).catch(()=>{});
     else try{new Notification("Incoming call · "+(peer.name||peer.username||"Contact"),options);}catch(_){}
+  }
+  function runPendingNotificationAction(){
+    const pending=pendingNotificationAction;
+    if(!pending||pending.kind!=="call"||!activeCall||activeCall.direction!=="incoming")return;
+    if(pending.callId&&String(pending.callId)!==String(activeCall.id))return;
+    if(pending.action==="accept"){
+      if(phase!=="incoming"||!incomingOffer)return;
+      pendingNotificationAction=null;void acceptCall();return;
+    }
+    if(pending.action==="decline"){
+      pendingNotificationAction=null;void declineCall(false);return;
+    }
+    if(pending.action==="open")pendingNotificationAction=null;
+  }
+  function handleNotificationAction(data){
+    if(!data||data.kind!=="call")return;
+    pendingNotificationAction={kind:"call",callId:String(data.callId||""),action:data.action||"open"};
+    runPendingNotificationAction();
   }
   async function showIncomingCallRecord(row){
     const current=me(),client=db();
@@ -35,7 +65,7 @@
     if(activeCall)return;
     peer=peer||{id:row.caller_id,username:"contact",name:"Contact"};
     activeCall=Object.assign({},row,{direction:"incoming",peer});
-    incomingOffer=null;phase="incoming";renderCallOverlay();
+    incomingOffer=null;phase="incoming";renderCallOverlay();runPendingNotificationAction();
     try{if(navigator.vibrate)navigator.vibrate([180,80,180]);}catch(_){}
     ringTimer=setTimeout(()=>{if(activeCall&&activeCall.id===row.id&&phase==="incoming")void declineCall(true);},45000);
   }
@@ -66,7 +96,7 @@
     const status=notice||(incoming?"Incoming "+(video?"video":"voice")+" call":phase==="outgoing"?"Calling @"+(peer.username||peer.name||"contact")+"…":phase==="connecting"?"Connecting through the secure relay…":phase==="connected"?formatTime(elapsed):"Preparing call…");
     if(incoming){
       const waiting=!incomingOffer;
-      if(!activeCall.notificationShown){activeCall.notificationShown=true;notifyIncomingCall(activeCall,peer);}
+      if(!activeCall.notificationShown){activeCall.notificationShown=true;void notifyIncomingCall(activeCall,peer);}
       host.innerHTML="<section class='wa-incoming-call-banner' role='alert' aria-label='Incoming "+(video?"video":"voice")+" call'><span class='wa-incoming-call-avatar'>"+esc(peer.avatar||String(peer.name||peer.username||"U").slice(0,2).toUpperCase())+"</span><span class='wa-incoming-call-copy'><strong>"+esc(peer.name||peer.username||"Contact")+"</strong><small>"+(video?"Incoming video call":"Incoming voice call")+(waiting?" · connecting…":"")+"</small></span><button class='wa-incoming-decline' type='button' data-wa-call='decline' aria-label='Decline call'>Decline</button><button class='wa-incoming-accept' type='button' data-wa-call='accept' aria-label='Accept call' "+(waiting?"disabled":"")+">"+(waiting?"Connecting…":"Accept")+"</button></section>";
       return;
     }
@@ -199,6 +229,9 @@
       const grantedStream=await userMedia(mediaType==="video");
       if(!activeCall||activeCall.id!==newId){grantedStream.getTracks().forEach(track=>track.stop());return;}
       localStream=grantedStream;
+      void client.functions.invoke("whatsapp-push",{body:{action:"notify-call",callId:newId}})
+        .then(({error})=>{if(error)console.warn("Background call notification request failed:",error.message||error);})
+        .catch(error=>console.warn("Background call notification request failed:",error));
       const servers=await relayServers(data.id);
       if(!activeCall||activeCall.id!==newId)return;
       makePeer(activeCall,servers);
@@ -218,7 +251,7 @@
     if(!current||!current.isSupabase||!signal||!client||signal.to_user_id!==current.id||seenSignals.has(signal.id))return;
     seenSignals.add(signal.id);
     if(activeCall&&activeCall.id===signal.call_id&&activeCall.direction==="incoming"&&signal.kind==="offer"){
-      incomingOffer=signal;renderCallOverlay();return;
+      incomingOffer=signal;renderCallOverlay();runPendingNotificationAction();return;
     }
     if(!activeCall||activeCall.id!==signal.call_id){
       if(signal.kind==="offer"){
@@ -229,7 +262,7 @@
         const profileResult=await client.from("aeroshell_profiles").select("id,username,display_name,avatar_data").eq("id",data.caller_id).maybeSingle();
         const peer=profileResult.data||{id:data.caller_id,username:"contact"};
         activeCall=Object.assign({},data,{direction:"incoming",peer:{id:peer.id,username:peer.username,name:peer.display_name||peer.username,avatarData:peer.avatar_data||""}});
-        incomingOffer=signal;phase="incoming";renderCallOverlay();
+        incomingOffer=signal;phase="incoming";renderCallOverlay();runPendingNotificationAction();
         ringTimer=setTimeout(()=>{if(activeCall&&activeCall.id===data.id&&phase==="incoming")void declineCall(true);},45000);
       }else{
         const list=pendingSignals.get(signal.call_id)||[];list.push(signal);pendingSignals.set(signal.call_id,list);
@@ -355,6 +388,7 @@
     openPicker,
     accept:()=>acceptCall(),
     decline:()=>declineCall(false),
+    handleNotificationAction,
     cleanup:()=>{cleanupLocal();if(callChannel&&db())void db().removeChannel(callChannel);callChannel=null;channelUser="";},
     getPhase:()=>phase
   };
