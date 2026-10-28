@@ -1790,6 +1790,11 @@ function openSharedItemsDialog(chat,kind) {
     }
   };
 
+  // Compatibility for previously rendered callbacks; new code uses scoped helpers.
+  window.ESC = window.ESC || esc;
+  window.Escape = window.Escape || window.ESC;
+  window.icon = window.icon || ((name, cls) => icon(name, cls));
+
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.addEventListener("message", event => {
       const data=event.data||{};

@@ -46,12 +46,34 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261028e");
-  includes(files.sw, "whatsapp-final-20261028e");
-  includes(files.manifest, "whatsapp-final-20261028e");
-  includes(files.sw, "whatsapp-final-shell-v34");
+  includes(files.html, "whatsapp-final-20261028f");
+  includes(files.sw, "whatsapp-final-20261028f");
+  includes(files.manifest, "whatsapp-final-20261028f");
+  includes(files.sw, "whatsapp-final-shell-v35");
 });
-check("legacy ESC compatibility alias exists", () => includes(files.html, "window.ESC=window.ESC||function"));
+check("legacy ESC compatibility alias exists", () => {
+  includes(files.html, "window.ESC=window.ESC||function");
+  includes(files.app, "window.ESC = window.ESC || esc");
+  includes(files.app, "window.icon = window.icon || ((name, cls) => icon(name, cls))");
+});
+check("optional feed failures cannot hide direct chats", () => {
+  includes(files.backend, "if(profileResult.error)throw profileResult.error;");
+  includes(files.backend, 'console.warn("Optional WhatsApp data could not load ("+label+"):"');
+  includes(files.backend, "const relations=requestResult.error?[]:(requestResult.data||[]);");
+  includes(files.backend, "const directMessagePeers=");
+});
+check("voice recorder exposes explicit discard/send and live audio levels", () => {
+  includes(files.backend, "data-wa-recording-action='cancel'");
+  includes(files.backend, "data-wa-recording-action='send'");
+  includes(files.backend, "createMediaStreamSource(recorderStream).connect(recorderAnalyser)");
+  includes(files.backend, 'if(stopReason==="cancel"){say("Voice message discarded.");return;}');
+  includes(files.css, ".wa-recording-bar{");
+  includes(files.css, ".wa-recording-waveform i.active");
+});
+check("incoming read receipts update visible blue ticks immediately", () => {
+  includes(files.backend, 'table:"aeroshell_message_reads"},event=>{');
+  includes(files.backend, 'if(message)message.status="read"');
+});
 check("settings startup uses querySelectorAll for its forEach loop", () => {
   const line = files.app.split(String.fromCharCode(10)).find(line => line.includes("#app-screen input,#app-screen textarea,[contenteditable='true']"));
   assert.ok(line, "applySettings field selector is present");

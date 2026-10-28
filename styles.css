@@ -494,3 +494,21 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:
 .wa-empty-actions .primary-button,.wa-empty-actions .secondary-button{min-width:126px;min-height:40px;border-radius:11px;font-weight:650}
 @media(max-width:480px){.wa-empty-actions{gap:8px}.wa-empty-actions .primary-button,.wa-empty-actions .secondary-button{flex:1;min-width:0}}
 .theme-dark .wa-empty-actions .secondary-button{border-color:#3a4b45;background:#202c27;color:#e9edef}
+
+/* Voice-note capture strip: discard, live waveform, elapsed time and explicit send. */
+.wa-recording-bar{position:relative;display:grid;grid-template-columns:42px 52px minmax(0,1fr) 42px;align-items:center;gap:10px;min-width:0;padding:9px 14px;background:#fff;border-top:1px solid #e5ece8;flex:0 0 auto;z-index:2}
+.wa-recording-cancel,.wa-recording-send{display:grid;place-items:center;width:38px;height:38px;min-width:38px;border:0;border-radius:50%;cursor:pointer;transition:background .15s ease,transform .15s ease}
+.wa-recording-cancel{background:#fbe9e9;color:#bd3541}
+.wa-recording-send{background:#00a884;color:#fff}
+.wa-recording-cancel:hover,.wa-recording-send:hover{transform:translateY(-1px);filter:brightness(.97)}
+.wa-recording-cancel svg,.wa-recording-send svg{width:19px;height:19px}
+.wa-recording-time{font-variant-numeric:tabular-nums;font-size:13px;font-weight:600;color:#d73547;text-align:center}
+.wa-recording-waveform{height:38px;min-width:0;display:flex;align-items:center;justify-content:space-between;gap:3px;overflow:hidden}
+.wa-recording-waveform i{display:block;flex:1 1 2px;min-width:2px;max-width:5px;height:6px;border-radius:4px;background:#b9dacf;transition:height .07s linear,background .07s linear}
+.wa-recording-waveform i.active{background:#00a884}
+.wa-recording-cancel:focus-visible,.wa-recording-send:focus-visible{outline:2px solid #008069;outline-offset:2px}
+.theme-dark .wa-recording-bar{background:#202c33;border-color:#344740}
+.theme-dark .wa-recording-time{color:#ff8590}
+.theme-dark .wa-recording-waveform i{background:#385a50}
+.theme-dark .wa-recording-waveform i.active{background:#00a884}
+@media(max-width:420px){.wa-recording-bar{grid-template-columns:38px 46px minmax(0,1fr) 38px;gap:7px;padding:8px 9px}.wa-recording-cancel,.wa-recording-send{width:36px;height:36px;min-width:36px}.wa-recording-waveform{gap:2px}}

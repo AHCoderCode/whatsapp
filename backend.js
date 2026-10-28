@@ -182,7 +182,17 @@
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"aeroshell_messages"},e=>insertMessageIntoUI(e.new))
       .on("postgres_changes",{event:"DELETE",schema:"public",table:"aeroshell_messages"},()=>void loadData(true))
       .on("postgres_changes",{event:"*",schema:"public",table:"aeroshell_friend_requests"},()=>void loadData(true))
-      .on("postgres_changes",{event:"INSERT",schema:"public",table:"aeroshell_message_reads"},()=>void loadData(true))
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"aeroshell_message_reads"},event=>{
+        const row=event&&event.new,me=getUser(),s=appState();
+        if(row&&me&&row.user_id&&row.user_id!==me.id&&s&&Array.isArray(s.chats)){
+          for(const chat of s.chats){
+            const message=(chat.messages||[]).find(item=>String(item.id)===String(row.message_id)&&item.from==="me");
+            if(message)message.status="read";
+          }
+          bridge.renderSidebar();bridge.renderMain();
+        }
+        void loadData(true);
+      })
       .on("postgres_changes",{event:"*",schema:"public",table:"aeroshell_message_reactions"},()=>void loadData(true))
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"whatsapp_polls"},()=>void loadData(true))
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"whatsapp_events"},()=>void loadData(true))
@@ -216,15 +226,23 @@
         db.from("whatsapp_communities").select("id,name,description,created_by,created_at").order("created_at",{ascending:false}).limit(100),
         db.from("whatsapp_community_members").select("community_id,user_id,role").eq("user_id",me.id)
       ]);
-      for(const result of [profileResult,requestResult,membershipResult,messageResult,statusResult,channelResult,channelPostResult,followResult,communityResult,communityMembershipResult])if(result.error)throw result.error;
+      if(profileResult.error)throw profileResult.error;
       if(!profileResult.data)throw new Error("Your profile is missing. Sign out and create a new account after applying the Supabase profile migration.");
+      // Failures in optional feeds should not hide the user's direct-message list.
+      for(const [label,result] of [
+        ["contact requests",requestResult],["group memberships",membershipResult],["messages",messageResult],
+        ["statuses",statusResult],["channels",channelResult],["channel posts",channelPostResult],
+        ["channel follows",followResult],["communities",communityResult],["community memberships",communityMembershipResult]
+      ])if(result&&result.error)console.warn("Optional WhatsApp data could not load ("+label+"):",result.error.message||result.error);
       signedProfile=profileResult.data;
       const self=mapProfile(profileResult.data);
       me.name=self.name;me.phone=self.phone;me.about=self.about;me.avatarData=self.avatarData;
-      const relations=requestResult.data||[];
-      const friends=Array.from(new Set(relations.filter(r=>r.status==="accepted").map(r=>r.requester_id===me.id?r.recipient_id:r.requester_id)));
-      const memberships=membershipResult.data||[], groupIds=Array.from(new Set(memberships.map(r=>r.group_id)));
-      const relatedIds=Array.from(new Set(friends.concat(relations.flatMap(r=>[r.requester_id,r.recipient_id]).filter(id=>id!==me.id))));
+      const relations=requestResult.error?[]:(requestResult.data||[]);
+      const directMessageRows=messageResult.error?[]:(messageResult.data||[]);
+      const directMessagePeers=directMessageRows.filter(row=>!row.group_id).map(row=>row.sender_id===me.id?row.recipient_id:row.sender_id).filter(id=>id&&id!==me.id);
+      const friends=Array.from(new Set(relations.filter(r=>r.status==="accepted").map(r=>r.requester_id===me.id?r.recipient_id:r.requester_id).concat(directMessagePeers)));
+      const memberships=membershipResult.error?[]:(membershipResult.data||[]), groupIds=Array.from(new Set(memberships.map(r=>r.group_id)));
+      const relatedIds=Array.from(new Set(friends.concat(directMessagePeers,relations.flatMap(r=>[r.requester_id,r.recipient_id]).filter(id=>id!==me.id))));
       let groups=[],roster=[],groupMessages=[];
       if(groupIds.length){
         const [g,m,gm]=await Promise.all([
@@ -232,21 +250,27 @@
           db.from("aeroshell_group_members").select("group_id,user_id,role").in("group_id",groupIds),
           db.from("aeroshell_messages").select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms,reply_to_message_id,forwarded_from_message_id").in("group_id",groupIds).order("created_at",{ascending:true}).limit(800)
         ]);
-        if(g.error)throw g.error;if(m.error)throw m.error;if(gm.error)throw gm.error;
-        groups=g.data||[];roster=m.data||[];groupMessages=gm.data||[];
+        if(g.error)console.warn("Group list could not be loaded:",g.error.message||g.error);
+        if(m.error)console.warn("Group members could not be loaded:",m.error.message||m.error);
+        if(gm.error)console.warn("Group messages could not be loaded:",gm.error.message||gm.error);
+        groups=g.error?[]:(g.data||[]);roster=m.error?[]:(m.data||[]);groupMessages=gm.error?[]:(gm.data||[]);
         relatedIds.push(...roster.map(r=>r.user_id).filter(id=>id!==me.id));
       }
       const uniqueIds=Array.from(new Set(relatedIds)).filter(id=>id!==me.id);
       let profileRows=[];
       if(uniqueIds.length){
         const pr=await db.from("aeroshell_profiles").select("id,username,display_name,about,custom_number,avatar_data,created_at").in("id",uniqueIds);
-        if(pr.error)throw pr.error;profileRows=pr.data||[];
+        if(pr.error)console.warn("Some contact profiles could not be loaded:",pr.error.message||pr.error);
+        profileRows=pr.error?[]:(pr.data||[]);
       }
       const mapped=[self].concat(profileRows.map(mapProfile).filter(Boolean));
       const profileById=new Map(mapped.map(p=>[p.id,p]));
       const chats=friends.map(id=>{
-        const p=profileById.get(id);return p?Object.assign({},p,{id:p.id,backendId:p.id,type:"person",messages:[],attachments:[],unread:0,time:"",preview:"",lastMessageType:"text",archived:false,locked:false,participants:[]}):null;
-      }).filter(Boolean);
+        const p=profileById.get(id);
+        return p
+          ? Object.assign({},p,{id:p.id,backendId:p.id,type:"person",messages:[],attachments:[],unread:0,time:"",preview:"",lastMessageType:"text",archived:false,locked:false,participants:[]})
+          : {id,backendId:id,type:"person",name:"Contact",username:"",phone:"",about:"Available",avatar:"C",avatarColor:colorFor(id),avatarData:"",messages:[],attachments:[],unread:0,time:"",preview:"",lastMessageType:"text",archived:false,locked:false,participants:[]};
+      });
       const roleByGroup=new Map(memberships.map(x=>[x.group_id,x.role])),counts=new Map();
       roster.forEach(r=>counts.set(r.group_id,(counts.get(r.group_id)||0)+1));
       for(const g of groups)chats.push({id:g.id,backendId:g.id,groupId:g.id,type:"group",name:g.name,username:"",phone:"",about:"",avatar:initials(g.name),avatarColor:colorFor(g.name),avatarData:g.avatar_data||"",messages:[],attachments:[],unread:0,time:"",preview:"Group conversation",lastMessageType:"text",archived:false,locked:false,participants:roster.filter(m=>m.group_id===g.id).map(m=>profileById.get(m.user_id)).filter(Boolean),memberCount:counts.get(g.id)||1,groupRole:roleByGroup.get(g.id)||"member",createdBy:g.created_by});
@@ -467,9 +491,68 @@
 
   const ATTACHMENT_BUCKET = "master-chat-attachments";
   let recorder = null, recorderStream = null, recorderChunks = [], recorderStartedAt = 0, recorderChatId = null, recorderStopReason = "";
+  let recorderAudioContext=null,recorderAnalyser=null,recorderAnimationFrame=0,recorderUiTimer=null;
   function currentSelectedChat() {
     const selected = bridge.getCurrentChat();
     return selected && selected.id ? selected : null;
+  }
+  function stopRecordingVisualizer(){
+    if(recorderAnimationFrame)cancelAnimationFrame(recorderAnimationFrame);
+    recorderAnimationFrame=0;recorderAnalyser=null;
+    if(recorderUiTimer!==null)clearInterval(recorderUiTimer);
+    recorderUiTimer=null;
+    const context=recorderAudioContext;recorderAudioContext=null;
+    if(context&&context.state!=="closed")void context.close().catch(()=>{});
+  }
+  function resetRecordingUI(){
+    stopRecordingVisualizer();
+    const bar=$("#wa-recording-bar");if(bar)bar.remove();
+    const button=$(".send-button"),input=$("#message-input");
+    if(button){
+      button.classList.remove("recording");button.hidden=false;
+      const hasText=!!(input&&input.value.trim());
+      button.innerHTML=bridge.icon(hasText?"send":"mic");
+      button.title=hasText?"Send message":"Record voice message";
+      button.setAttribute("aria-label",hasText?"Send message":"Record voice message");
+    }
+    if(input){input.disabled=false;input.placeholder="Type a message";}
+  }
+  function showRecordingBar(){
+    const form=$("#message-form");if(!form)return;
+    const bars=Array.from({length:28},(_,i)=>"<i style='height:"+(5+((i*7+3)%17))+"px'></i>").join("");
+    form.insertAdjacentHTML("beforebegin",
+      "<div class='wa-recording-bar' id='wa-recording-bar' role='status' aria-live='polite'>"+
+      "<button type='button' class='wa-recording-cancel' data-wa-recording-action='cancel' aria-label='Discard voice message' title='Delete recording'>"+bridge.icon("trash")+"</button>"+
+      "<span class='wa-recording-time' id='wa-recording-time'>00:00</span>"+
+      "<div class='wa-recording-waveform' id='wa-recording-waveform' aria-label='Live recording audio levels'>"+bars+"</div>"+
+      "<button type='button' class='wa-recording-send' data-wa-recording-action='send' aria-label='Send voice message' title='Send voice message'>"+bridge.icon("send")+"</button>"+
+      "</div>");
+    recorderUiTimer=setInterval(()=>{
+      const timer=$("#wa-recording-time");if(!timer)return;
+      const seconds=Math.max(0,Math.floor((Date.now()-recorderStartedAt)/1000));
+      timer.textContent=String(Math.floor(seconds/60)).padStart(2,"0")+":"+String(seconds%60).padStart(2,"0");
+    },200);
+    try{
+      const AudioContextCtor=window.AudioContext||window.webkitAudioContext;
+      if(!AudioContextCtor||!recorderStream)return;
+      recorderAudioContext=new AudioContextCtor();
+      recorderAnalyser=recorderAudioContext.createAnalyser();recorderAnalyser.fftSize=64;
+      recorderAudioContext.createMediaStreamSource(recorderStream).connect(recorderAnalyser);
+      const samples=new Uint8Array(recorderAnalyser.frequencyBinCount);
+      const tick=()=>{
+        const active=$("#wa-recording-waveform");
+        if(!active||!recorderAnalyser)return;
+        recorderAnalyser.getByteFrequencyData(samples);
+        Array.from(active.children).forEach((bar,index)=>{
+          const level=samples[index%samples.length]||0;
+          bar.style.height=Math.max(4,Math.round(4+(level/255)*27))+"px";
+          bar.classList.toggle("active",level>28);
+        });
+        recorderAnimationFrame=requestAnimationFrame(tick);
+      };
+      if(recorderAudioContext.state==="suspended")void recorderAudioContext.resume().catch(()=>{});
+      tick();
+    }catch(error){console.warn("Live recording waveform is unavailable:",error&&error.message||error);}
   }
   async function markAllRead() {
     const me=getUser(),s=appState();
@@ -583,7 +666,7 @@
     const me=getUser(),chat=currentSelectedChat();
     if(!me||!me.isSupabase)return say("Sign in to record and send a voice note.");
     if(!chat)return say("Open a conversation first.");
-    if(recorder)return stopVoiceRecording();
+    if(recorder)return stopVoiceRecording("send");
     if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==="undefined")return say("Voice notes are not supported by this browser. Try the latest Chrome, Edge or Safari over HTTPS.");
     try{
       recorderStream=await navigator.mediaDevices.getUserMedia({audio:true});
@@ -597,7 +680,7 @@
       recorder.ondataavailable=event=>{if(event.data&&event.data.size)recorderChunks.push(event.data);};
       recorder.onerror=()=>{recorderStopReason="error";try{if(recorder&&recorder.state!=="inactive")recorder.stop();}catch(_){};};
       recorder.onstop=()=>{
-        const activeRecorder=recorder;
+        const activeRecorder=recorder,stopReason=recorderStopReason;
         const blobType=(activeRecorder&&activeRecorder.mimeType)||mimeType||"audio/webm";
         const duration=Math.max(1,Math.min(120000,Date.now()-recorderStartedAt));
         const blob=new Blob(recorderChunks,{type:blobType});
@@ -605,36 +688,38 @@
         const stillSameChat=currentSelectedChat()&&String(currentSelectedChat().id)===String(recorderChatId);
         if(recorderStream)recorderStream.getTracks().forEach(t=>t.stop());
         recorderStream=null;recorder=null;recorderChunks=[];
-        const button=$(".send-button"), input=$("#message-input");
-        if(button){button.classList.remove("recording");button.innerHTML=bridge.icon("mic");button.title="Record voice message";button.setAttribute("aria-label","Record voice message");}
-        if(input){input.disabled=false;input.placeholder="Type a message";}
-        if(recorderStopReason==="error"){say("Voice recording failed.");return;}
+        resetRecordingUI();recorderStopReason="";
+        if(stopReason==="cancel"){say("Voice message discarded.");return;}
+        if(stopReason==="error"){say("Voice recording failed.");return;}
         if(!stillSameChat){say("Voice note cancelled because the conversation changed.");return;}
+        if(!blob.size){say("No audio was captured. Record a voice message and try again.");return;}
         void uploadStoredAttachment(blob,{type:"voice",name:"voice-note."+ext,mime:blobType,durationMs:duration});
       };
       recorder.start(250);
       const button=$(".send-button"),input=$("#message-input");
-      if(button){button.classList.add("recording");button.innerHTML="■";button.title="Stop recording and send";button.setAttribute("aria-label","Stop recording and send voice message");}
-      if(input){input.disabled=true;input.placeholder="Recording… tap the red square to send";}
-      say("Recording voice message. Tap the red button to send; the maximum length is two minutes.");
+      showRecordingBar();
+      if(button){button.classList.add("recording");button.hidden=true;}
+      if(input){input.disabled=true;input.placeholder="Recording… use the voice bar to discard or send";}
+      say("Recording voice message. Use the bar to discard or send; the maximum length is two minutes.");
       window.waVoiceLimit=setTimeout(()=>{if(recorder&&recorder.state!=="inactive"){recorderStopReason="limit";stopVoiceRecording();say("Two-minute recording limit reached.");}},120000);
     }catch(error){
       if(recorderStream)recorderStream.getTracks().forEach(t=>t.stop());
-      recorderStream=null;recorder=null;
+      recorderStream=null;recorder=null;recorderChunks=[];recorderStopReason="";
+      resetRecordingUI();
       say(error&&error.name==="NotAllowedError"?"Microphone permission was denied. Allow microphone access in your browser settings and try again.":safeError(error,"Could not start voice recording."));
     }
   }
-  function stopVoiceRecording(){
+  function stopVoiceRecording(reason){
+    if(reason&&!recorderStopReason)recorderStopReason=reason;
+    else if(!recorderStopReason)recorderStopReason="send";
     if(window.waVoiceLimit){clearTimeout(window.waVoiceLimit);window.waVoiceLimit=null;}
     if(recorder&&recorder.state!=="inactive"){try{recorder.stop();}catch(_){cleanupRecorder();}}
   }
   function cleanupRecorder(){
     if(window.waVoiceLimit){clearTimeout(window.waVoiceLimit);window.waVoiceLimit=null;}
     if(recorderStream)recorderStream.getTracks().forEach(t=>t.stop());
-    recorderStream=null;recorder=null;recorderChunks=[];
-    const button=$(".send-button"),input=$("#message-input");
-    if(button){button.classList.remove("recording");button.innerHTML=bridge.icon("mic");button.title="Record voice message";}
-    if(input){input.disabled=false;input.placeholder="Type a message";}
+    recorderStream=null;recorder=null;recorderChunks=[];recorderStopReason="";
+    resetRecordingUI();
   }
   async function deleteOrHideMessage(){
     const me=getUser(),s=appState(),chat=currentSelectedChat(),ref=s&&s.lastContextMessage;
@@ -1238,6 +1323,16 @@
     event.preventDefault();event.stopImmediatePropagation();
     const file=target.files[0];target.value="";
     void uploadStoredAttachment(file,{type:"file",name:file.name,mime:file.type||"application/octet-stream"});
+  },true);
+  document.addEventListener("click",event=>{
+    const control=event.target.closest("[data-wa-recording-action]");
+    if(!control||!getUser()||!getUser().isSupabase)return;
+    event.preventDefault();event.stopImmediatePropagation();
+    if(control.dataset.waRecordingAction==="cancel"){
+      recorderStopReason="cancel";stopVoiceRecording("cancel");
+    }else if(control.dataset.waRecordingAction==="send"){
+      stopVoiceRecording("send");
+    }
   },true);
   document.addEventListener("click",event=>{
     const button=event.target.closest(".send-button");
