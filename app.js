@@ -68,9 +68,9 @@
       ["keyboard","Enter is send","Press Enter to send messages.","toggle"]
     ],
     notifications:[
-      ["bell","Messages","Message notifications and sounds.","button"],
-      ["users","Groups","Group notifications and sounds.","button"],
-      ["phone","Calls","Ringtone and call notifications.","button"],
+      ["bell","Messages","Show device notifications for incoming messages.","toggle"],
+      ["users","Groups","Show device notifications for group messages.","toggle"],
+      ["phone","Calls","Show device notifications for incoming calls.","toggle"],
       ["sparkles","Reaction notifications","Show notifications when someone reacts to messages.","toggle"]
     ],
     personalization:[
@@ -114,6 +114,16 @@
   function esc(value) {
     return String(value == null ? "" : value).replace(/[&<>"']/g, ch => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[ch]));
   }
+  function linkifyText(value) {
+    const safe=esc(value);
+    return safe.replace(/(?:https?:\/\/|www\.)[^\s<]+/gi,match=>{
+      let url=match,suffix="";
+      while(/[.,!?;:)]$/.test(url)){suffix=url.slice(-1)+suffix;url=url.slice(0,-1);}
+      if(!url)return match;
+      const href=/^https?:\/\//i.test(url)?url:"https://"+url;
+      return "<a class='message-link' href='"+href+"' target='_blank' rel='noopener noreferrer'>"+url+"</a>"+suffix;
+    });
+  }
   function uid(prefix) { return (prefix || "id") + "_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2,8); }
   function normalizeUsername(value) { return String(value || "").trim().toLowerCase().replace(/^@/, ""); }
   function normalizePhone(value) { return String(value || "").replace(/\D/g, ""); }
@@ -150,7 +160,7 @@
       backendStatuses:[],backendChannels:[],backendChannelPosts:[],backendCommunities:[],
       communities:[],
       channels:[],
-      settings:{dark:false,wallpaper:"default",readReceipts:true,keepArchived:true,enterToSend:true,mediaVisibility:true,appLock:false,reduceMotion:false,keyboardNav:true,highContrast:false,spellcheck:true,reactionNotifications:true,securityNotifications:true},
+      settings:{dark:false,wallpaper:"default",readReceipts:true,keepArchived:true,enterToSend:true,mediaVisibility:true,appLock:false,reduceMotion:false,keyboardNav:true,highContrast:false,spellcheck:true,reactionNotifications:true,securityNotifications:true,messageNotifications:false,groupNotifications:false,callNotifications:false},
       starredMessages:[],
       blocked:[],
       archived:[],
@@ -360,8 +370,10 @@
     $$(".rail-button[data-view],.mobile-tab[data-view]").forEach(el=>el.classList.toggle("active",el.dataset.view===view && !(view==="archived" || view==="locked")));
   }
   function updateMobileMode() {
-    const isMobile = window.matchMedia("(max-width:700px)").matches;
+    const isLandscapePhone = window.matchMedia("(max-height:520px) and (orientation:landscape) and (pointer:coarse)").matches;
+    const isMobile = window.matchMedia("(max-width:700px)").matches || isLandscapePhone;
     const mainVisible = selectedChatId!==null || view!=="chats";
+    app.classList.toggle("mobile-landscape",isLandscapePhone);
     app.classList.toggle("mobile-open",isMobile && mainVisible);
     app.classList.toggle("mobile-section-open",isMobile && selectedChatId===null && view!=="chats");
     app.classList.toggle("mobile-conversation-open",isMobile && selectedChatId!==null);
@@ -388,7 +400,7 @@
       const e=message.event,date=new Date(e.startsAt),valid=!Number.isNaN(date.getTime()),going=e.myResponse==="going";
       return "<div class='wa-event-card'><span class='wa-event-kicker'>EVENT</span><strong>"+esc(e.title)+"</strong><span class='wa-event-date'>"+esc(valid?date.toLocaleString():"Date unavailable")+"</span><small>"+Number(e.total||0)+" going"+(Number(e.interested||0)?" · "+Number(e.interested)+" interested":"")+"</small><button type='button' class='primary-button wa-event-rsvp "+(going?"going":"")+"' data-action='event-rsvp' data-event-id='"+esc(e.id)+"'>"+(going?"Going ✓ · Cancel RSVP":"I'm going")+"</button></div>";
     })() : "";
-    const textBody = message.poll || message.event || isVoiceAttachment ? "" : esc(message.text);
+    const textBody = message.poll || message.event || isVoiceAttachment ? "" : linkifyText(message.text);
     const replyQuote = message.replyTo ? "<button type='button' class='message-reply-quote' data-action='jump-to-reply' data-reply-target-id='" + esc(message.replyTo.id) + "'><span class='message-reply-quote-icon'>" + icon("reply") + "</span><span class='message-reply-quote-copy'><strong>" + esc(message.replyTo.sender || "Replied message") + "</strong><span>" + esc(message.replyTo.text || "Message") + "</span></span></button>" : "";
     const forwardedLabel = message.forwarded ? "<span class='forwarded-label'>" + icon("forward") + " Forwarded</span>" : "";
     const selected = selectedMessage && String(selectedMessage.id) === String(message.id) && String(selectedMessage.chatId) === String(chat.id) ? " message-selected" : "";
@@ -507,8 +519,27 @@
     const a=document.createElement("a");a.href=url;a.download=filename;a.click();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
+  async function requestNotificationPermission(settingKey) {
+    if(typeof Notification==="undefined"){state.settings[settingKey]=false;saveState();renderSettings();toast("This browser does not support device notifications.");return false;}
+    let permission=Notification.permission;
+    if(permission==="default"){try{permission=await Notification.requestPermission();}catch(_){permission="denied";}}
+    if(permission!=="granted"){state.settings[settingKey]=false;saveState();renderSettings();toast("Notifications are blocked. Allow them in browser or device settings, then try again.");return false;}
+    saveState();renderSettings();
+    try{
+      if("serviceWorker" in navigator){const registration=await navigator.serviceWorker.ready;await registration.showNotification("WhatsApp notifications enabled",{body:"Notifications are ready while this app is connected.",icon:"/icon-192.svg",badge:"/icon-192.svg",tag:"wa-notifications-enabled"});}
+      else new Notification("WhatsApp notifications enabled",{body:"Notifications are ready while this app is connected."});
+    }catch(_){}
+    toast("Device notifications enabled.");return true;
+  }
   function handleSettingOption(title) {
-    if(title==="Theme"){state.settings.dark=!state.settings.dark;saveState();applySettings();renderSettings();toast("Theme updated locally.");return;}
+    if(title==="Theme"){state.settings.dark=!state.settings.dark;saveState();applySettings();renderSettings();toast("Theme updated.");return;}
+    const settingByTitle={"Read receipts":"readReceipts","Keep chats archived":"keepArchived","Enter is send":"enterToSend","Media visibility":"mediaVisibility","App lock":"appLock","Reduce motion":"reduceMotion","Keyboard navigation":"keyboardNav","High contrast":"highContrast","Spell check":"spellcheck","Reaction notifications":"reactionNotifications","Security notifications":"securityNotifications","Messages":"messageNotifications","Groups":"groupNotifications","Calls":"callNotifications"};
+    if(settingByTitle[title]){
+      const key=settingByTitle[title];state.settings[key]=!state.settings[key];saveState();applySettings();renderSettings();
+      if(["messageNotifications","groupNotifications","callNotifications"].includes(key)&&state.settings[key])void requestNotificationPermission(key);
+      else toast(title+" updated.");
+      return;
+    }
     if(title==="Chat wallpaper"){chooseWallpaperDialog();return;}
     if(title==="Request account info"||title==="Chat backup"){
       downloadLocalJson(title==="Chat backup"?"whatsapp-demo-chat-backup.json":"whatsapp-demo-account-info.json",title==="Chat backup"?{profile:state.profile,chats:state.chats,requests:state.requests,settings:state.settings}:{profile:state.profile,account:{username:currentUser.username,phone:currentUser.phone,createdAt:currentUser.createdAt},localDataOnly:true});
@@ -554,7 +585,7 @@
     if(settingsTab==="account")content="<div class='settings-summary'>"+avatarHTML(state.profile)+"<div><h4>"+esc(state.profile.name)+"</h4><p>@"+esc(state.profile.username)+" · "+esc(state.profile.phone)+"</p></div></div>";
     content+="<div class='section-card'>"+options.map(opt=>{
       let side="";
-      const settingMap={"Read receipts":"readReceipts","Keep chats archived":"keepArchived","Enter is send":"enterToSend","Media visibility":"mediaVisibility","App lock":"appLock","Reduce motion":"reduceMotion","Keyboard navigation":"keyboardNav","High contrast":"highContrast","Spell check":"spellcheck","Reaction notifications":"reactionNotifications","Security notifications":"securityNotifications"};
+      const settingMap={"Read receipts":"readReceipts","Keep chats archived":"keepArchived","Enter is send":"enterToSend","Media visibility":"mediaVisibility","App lock":"appLock","Reduce motion":"reduceMotion","Keyboard navigation":"keyboardNav","High contrast":"highContrast","Spell check":"spellcheck","Reaction notifications":"reactionNotifications","Security notifications":"securityNotifications","Messages":"messageNotifications","Groups":"groupNotifications","Calls":"callNotifications"};
       if(opt[3]==="toggle" || settingMap[opt[1]]) {const key=settingMap[opt[1]]||opt[1];const on=!!state.settings[key];side="<button class='toggle "+(on?"on":"")+"' data-setting='"+esc(key)+"' aria-pressed='"+(on?"true":"false")+"' aria-label='Toggle "+esc(opt[1])+"'></button>";}
       else if(opt[3]==="toggle-theme")side="<button class='toggle "+(state.settings.dark?"on":"")+"' data-setting='dark' aria-pressed='"+(state.settings.dark?"true":"false")+"' aria-label='Toggle dark mode'></button>";
       else if(opt[3]==="wallpaper")side="<button class='secondary-button' data-action='wallpaper'>Change</button>";
@@ -1056,10 +1087,6 @@ function openSharedItemsDialog(chat,kind) {
     if(action==="new-chat"){createNewChatDialog();return;}
     if(action==="new-group"){createGroupDialog();return;}
     if(action==="new-community"){createCommunityDialog();return;}
-    if(action==="broadcast-list"||action==="linked-devices"||action==="mark-all-read"||action==="install-app"||action==="go-archived"||action==="go-channels"||action==="go-calls"||action==="new-voice-call"||action==="new-video-call"){
-      handleAction(action,{dataset:{}});
-      return;
-    }
     if(action==="broadcast-list"){createBroadcastDialog();return;}
     if(action==="linked-devices"){
       openDialog("Linked devices","<div class='linked-device-card'>"+icon("monitor")+"<div><strong>This device</strong><span>Current browser session</span><small>Devices are managed independently in this app. No other linked sessions are available to display.</small></div><span class='linked-device-current'>Active</span></div><p class='screen-description'>This panel shows this app's current frontend device; it does not link this account to the official WhatsApp service.</p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
@@ -1168,7 +1195,10 @@ function openSharedItemsDialog(chat,kind) {
     if(t.dataset.setting){
       const key=t.dataset.setting;
       if(key==="dark")state.settings.dark=!state.settings.dark;else state.settings[key]=!state.settings[key];
-      saveState();applySettings();renderSettings();toast("Setting updated locally.");return;
+      saveState();applySettings();renderSettings();
+      if(["messageNotifications","groupNotifications","callNotifications"].includes(key)&&state.settings[key])void requestNotificationPermission(key);
+      else toast("Setting updated.");
+      return;
     }
     if(t.dataset.wallpaper){
       state.settings.wallpaper=t.dataset.wallpaper;saveState();closeDialog();applySettings();renderMain();toast("Wallpaper updated.");return;
@@ -1351,6 +1381,7 @@ function openSharedItemsDialog(chat,kind) {
   document.addEventListener("change",event=>{
     const t=event.target;
     if(t.id==="profile-photo-input" && t.files && t.files[0]){
+      if(currentUser&&currentUser.isSupabase){t.value="";return;}
       const file=t.files[0];
       if(!file.type.startsWith("image/")){toast("Choose an image file.");t.value="";return;}
       if(file.size>2*1024*1024){toast("Choose an image smaller than 2 MB for this local demo.");t.value="";return;}
@@ -1651,6 +1682,7 @@ function openSharedItemsDialog(chat,kind) {
     icon: (name) => icon(name),
     avatarHTML: (person) => avatarHTML(person),
     escapeHTML: (value) => esc(value),
+    getSettings: () => state && state.settings || {},
     updateBackendProfile: (profile) => {
       if (!currentUser || !state) return;
       currentUser.name = profile.name || currentUser.name;
@@ -1662,5 +1694,16 @@ function openSharedItemsDialog(chat,kind) {
     }
   };
 
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("message", event => {
+      const data=event.data||{};
+      if(data.type==="whatsapp-notification-action"){
+        if(data.kind==="call"){
+          if(data.action==="accept")window.WhatsAppCalls?.accept?.();
+          else if(data.action==="decline")window.WhatsAppCalls?.decline?.();
+        }else if(data.chatId&&window.waAppBridge)window.waAppBridge.selectChat(data.chatId);
+      }
+    });
+  }
   init();
 })();
