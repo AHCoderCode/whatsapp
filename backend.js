@@ -13,6 +13,7 @@
   const usernamePattern = /^[a-z0-9_]{3,20}$/;
   let signedProfile = null, liveChannel = null, liveUserId = "", people = new Map(), activeChannelId = "";
   let busy = false, loading = false, refreshQueued = false, searchTimer = null, searchCounter = 0;
+  let deviceHeartbeatTimer = null, deviceSyncIdentity = "";
 
   const getUser = () => bridge.getCurrentUser();
   const appState = () => bridge.getState();
@@ -344,6 +345,7 @@
     const sessionUser=Object.assign({},authUser,{isSupabase:true});
     bridge.setBackendUser(sessionUser,data);
     await loadData(false);
+    try{if(!(await registerCurrentDevice()))return;}catch(deviceError){console.warn("Could not register linked device:",deviceError&&deviceError.message||deviceError);}
     // Notification clicks can open a fresh tab; wait for authenticated chat data before routing.
     try{
       const params=new URLSearchParams(location.search);
@@ -832,6 +834,88 @@
     }catch(error){say(safeError(error,"Could not update community membership."));}
   }
 
+  function createDeviceKey(){
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g,character=>{
+      const random=Math.random()*16|0;
+      return (character==="x"?random:(random&3|8)).toString(16);
+    });
+  }
+  function getDeviceKey(username){
+    const keyName="wa_linked_device_key_"+String(username||"").toLowerCase();
+    try{
+      let key=localStorage.getItem(keyName);
+      if(!key){key=crypto.randomUUID?crypto.randomUUID():createDeviceKey();localStorage.setItem(keyName,key);}
+      return key;
+    }catch(_){return createDeviceKey();}
+  }
+  function getDeviceName(){
+    const ua=String(navigator.userAgent||"");
+    const os=/Android/i.test(ua)?"Android":/iPhone|iPad|iPod/i.test(ua)?"iOS":/Windows/i.test(ua)?"Windows":/Mac OS|Macintosh/i.test(ua)?"macOS":/Linux/i.test(ua)?"Linux":"Browser";
+    const browser=/Edg\//i.test(ua)?"Edge":/Firefox\//i.test(ua)?"Firefox":/OPR\//i.test(ua)?"Opera":/Chrome\//i.test(ua)?"Chrome":/Safari\//i.test(ua)?"Safari":"Browser";
+    return (os+" · "+browser).slice(0,80);
+  }
+  async function registerCurrentDevice(){
+    const me=getUser();
+    if(!db||!me||!me.isSupabase)return true;
+    const deviceKey=getDeviceKey(me.username),identity=me.id+":"+deviceKey;
+    if(deviceSyncIdentity===identity&&deviceHeartbeatTimer!==null)return true;
+    if(deviceHeartbeatTimer!==null)clearInterval(deviceHeartbeatTimer);
+    const payload={user_id:me.id,device_key:deviceKey,device_name:getDeviceName(),user_agent:String(navigator.userAgent||"").slice(0,300),last_seen_at:new Date().toISOString()};
+    const {data,error}=await db.from("whatsapp_linked_devices").upsert(payload,{onConflict:"user_id,device_key"}).select("id,revoked_at").single();
+    if(error)throw error;
+    if(data&&data.revoked_at){
+      say("This browser session was signed out from Linked devices.");
+      if(window.waBackendLogout)await window.waBackendLogout();
+      return false;
+    }
+    deviceSyncIdentity=identity;
+    deviceHeartbeatTimer=setInterval(async()=>{
+      const current=getUser();
+      if(!current||!current.isSupabase||current.id!==me.id)return;
+      try{
+        const {data:row,error:updateError}=await db.from("whatsapp_linked_devices").update({last_seen_at:new Date().toISOString()}).eq("user_id",me.id).eq("device_key",deviceKey).select("id,revoked_at").maybeSingle();
+        if(updateError||!row)return;
+        if(row.revoked_at){
+          clearInterval(deviceHeartbeatTimer);deviceHeartbeatTimer=null;deviceSyncIdentity="";
+          say("This device was signed out from another session.");
+          if(window.waBackendLogout)await window.waBackendLogout();
+        }
+      }catch(_){}
+    },60000);
+    return true;
+  }
+  async function openLinkedDevices(){
+    const me=getUser();
+    if(!me||!me.isSupabase)return say("Sign in to manage this account's linked browser sessions.");
+    try{
+      await registerCurrentDevice();
+      const {data,error}=await db.from("whatsapp_linked_devices").select("id,device_key,device_name,created_at,last_seen_at,revoked_at").eq("user_id",me.id).is("revoked_at",null).order("last_seen_at",{ascending:false}).limit(30);
+      if(error)throw error;
+      const currentKey=getDeviceKey(me.username);
+      const rows=(data||[]).map(device=>{
+        const active=String(device.device_key)===String(currentKey);
+        const seen=new Date(device.last_seen_at||device.created_at);
+        const lastSeen=Number.isNaN(seen.getTime())?"Unknown":seen.toLocaleString();
+        return "<div class='linked-device-card'>"+icon("monitor")+"<div><strong>"+esc(device.device_name||"Browser")+(active?" · This device":"")+"</strong><span>"+(active?"Current signed-in browser":"Linked browser session")+"</span><small>Last active: "+esc(lastSeen)+"</small></div><button class='danger-button' data-action='revoke-linked-device' data-device-key='"+esc(device.device_key)+"'>"+(active?"Sign out":"Sign out")+"</button></div>";
+      }).join("");
+      bridge.openDialog("Linked devices","<p class='screen-description'>These are browser sessions signed into this app account. Signing one out marks that session for revocation; it checks the change during its next active sync.</p><div class='wa-linked-device-list'>"+(rows||"<div class='empty-state'>No linked browser sessions are registered yet.</div>")+"</div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");
+    }catch(error){say(safeError(error,"Could not load linked browser devices."));}
+  }
+  async function revokeLinkedDevice(deviceKey){
+    const me=getUser();
+    if(!me||!me.isSupabase||!deviceKey)return;
+    try{
+      const {data,error}=await db.from("whatsapp_linked_devices").update({revoked_at:new Date().toISOString()}).eq("user_id",me.id).eq("device_key",deviceKey).is("revoked_at",null).select("device_key").maybeSingle();
+      if(error)throw error;
+      if(!data)throw new Error("That device is no longer linked.");
+      const own=String(deviceKey)===String(getDeviceKey(me.username));
+      bridge.closeDialog();
+      if(own){say("Signing out this device.");if(window.waBackendLogout)await window.waBackendLogout();return;}
+      say("Device sign-out requested. It will sign out when it next syncs.");
+      await openLinkedDevices();
+    }catch(error){say(safeError(error,"Could not sign out that device."));}
+  }
+
   function openChannel(channelId){
     const me=getUser(),s=appState();
     const channel=(s&&s.backendChannels||[]).find(c=>String(c.id)===String(channelId));
@@ -996,6 +1080,12 @@
     const action=target.dataset.action||"",menuAction=target.dataset.menuAction||"",dialogAction=target.dataset.dialogAction||"",me=getUser();
     if(me&&me.isSupabase&&action==="status-preview"){
       event.preventDefault();event.stopImmediatePropagation();openStatus(target.dataset.statusId);return;
+    }
+    if(me&&me.isSupabase&&(action==="linked-devices"||menuAction==="linked-devices")){
+      event.preventDefault();event.stopImmediatePropagation();void openLinkedDevices();return;
+    }
+    if(me&&me.isSupabase&&action==="revoke-linked-device"){
+      event.preventDefault();event.stopImmediatePropagation();void revokeLinkedDevice(target.dataset.deviceKey);return;
     }
     if(me&&me.isSupabase&&dialogAction==="publish-status"){
       event.preventDefault();event.stopImmediatePropagation();void publishStatus();return;
@@ -1168,6 +1258,7 @@
   },true);
   window.addEventListener("pagehide",()=>{if(recorder&&recorder.state!=="inactive")try{recorder.stop();}catch(_){}cleanupRecorder();},{once:true});
   window.waBackendLogout=async()=>{
+    if(deviceHeartbeatTimer!==null)clearInterval(deviceHeartbeatTimer);deviceHeartbeatTimer=null;deviceSyncIdentity="";
     if(liveChannel&&db)try{await db.removeChannel(liveChannel);}catch(_){}
     liveChannel=null;liveUserId="";if(window.WhatsAppCalls)window.WhatsAppCalls.cleanup();
     try{await db.auth.signOut();}catch(_){}
@@ -1180,7 +1271,8 @@
   bridge.hideBackendMessage=hideMessageForMe;bridge.deleteBackendMessage=deleteMessageForEveryone;bridge.forwardBackendMessage=forwardMessage;bridge.reactBackendMessage=toggleMessageReaction;
   window.waBackendEnablePush=enableDevicePush;
   window.waBackendUpdatePushPreferences=updateDevicePushPreferences;
-  window.waBackend={client:db,load:()=>loadData(false),safeError,searchPeople,sendMessage,hideMessageForMe,deleteMessageForEveryone,forwardMessage,toggleMessageReaction,markAllRead,enableDevicePush,updateDevicePushPreferences};
+  window.waBackendOpenLinkedDevices=openLinkedDevices;
+  window.waBackend={client:db,load:()=>loadData(false),safeError,searchPeople,sendMessage,hideMessageForMe,deleteMessageForEveryone,forwardMessage,toggleMessageReaction,markAllRead,enableDevicePush,updateDevicePushPreferences,openLinkedDevices,revokeLinkedDevice};
   function finishStartup(showAuth) {
     const root = $("#app-screen");
     const auth = $("#auth-screen");
