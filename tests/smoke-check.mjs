@@ -46,10 +46,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261028l");
-  includes(files.sw, "whatsapp-final-20261028l");
-  includes(files.manifest, "whatsapp-final-20261028l");
-  includes(files.sw, "whatsapp-final-shell-v41");
+  includes(files.html, "whatsapp-final-20261028m");
+  includes(files.sw, "whatsapp-final-20261028m");
+  includes(files.manifest, "whatsapp-final-20261028m");
+  includes(files.sw, "whatsapp-final-shell-v42");
 });
 check("legacy ESC compatibility aliases exist as browser globals", () => {
   includes(files.html, "var ESC = window.ESC = window.ESC || function");
@@ -148,14 +148,45 @@ check("backend defines the attachment escaping helper used before voice playback
   includes(files.backend, 'name=esc(message.attachmentName||"Attachment")');
 });
 
-check("message long-press waits two seconds and a held voice note cannot start playback", () => {
+check("message long-press is responsive and a held voice note cannot start playback", () => {
   includes(files.app, 'event.target.closest(".message-attachment-open.voice-message-open")');
-  includes(files.app, "},2000);");
+  includes(files.app, "},500);");
   includes(files.app, "let messageHoldTriggeredRow = null;");
   includes(files.app, "if(audio&&!audio.paused)audio.pause();");
   includes(files.app, "Run at document capture before backend.js handles a voice attachment click.");
   includes(files.app, "#message-selection-toolbar,#message-reaction-picker,#popup-menu,#dialog-backdrop");
   includes(files.app, "dismissMessageSelection(false);");
+});
+check("sent text messages can be edited and the UI displays an edited marker", () => {
+  includes(files.app, "data-dialog-action='save-edited-message'");
+  includes(files.app, 'action==="edit-message"');
+  includes(files.backend, "editBackendMessage=editMessage");
+  includes(files.backend, "edited_at:new Date().toISOString()");
+  includes(files.app, "message-edited-label");
+});
+check("pinning a message supports jumping to it and unpinning it", () => {
+  includes(files.app, 'action:"pin-message"');
+  includes(files.app, 'action==="pin-message"');
+  includes(files.app, 'action==="pinned-preview"');
+  includes(files.app, 'row.scrollIntoView({behavior:"smooth",block:"center"})');
+});
+check("videos can be uploaded and played in a private attachment preview", () => {
+  excludes(files.backend, "Video attachments are not enabled by the current secure storage policy");
+  includes(files.backend, 'mime.startsWith("video/")preview="<video');
+  includes(files.app, 'input.accept="image/*,video/*"');
+});
+check("poll and event workflows have local fallbacks as well as backend persistence", () => {
+  includes(files.app, "function sendLocalPoll()");
+  includes(files.app, "function sendLocalEvent()");
+  includes(files.app, "function voteLocalPoll(");
+  includes(files.app, "function respondLocalEvent(");
+  includes(files.backend, "async function sendPoll()");
+  includes(files.backend, "async function sendEvent()");
+});
+check("contact removal displays a warning and does not delete the person's account", () => {
+  includes(files.app, "This hides the contact and removes the conversation from this device only.");
+  includes(files.app, "It does not delete their account");
+  includes(files.app, "data-dialog-action='remove-contact-local'");
 });
 check("locked-screen call alerts repeat and delayed incoming calls are not dropped after 45 seconds", () => {
   includes(files.calls, "callPushReminderTimer");

@@ -393,12 +393,13 @@
     const outgoing = message.from==="me";
     const sender = !outgoing&&chat.type==="group" ? "<span class='message-sender'>" + esc(message.sender || "Group member") + "</span>" : "";
     const time = esc(message.time || "");
+    const edited = message.editedAt ? "<span class='message-edited-label' title='Message edited'>Edited</span>" : "";
     const reactions = message.reactions && message.reactions.length ? "<span class='reaction'>" + esc(message.reactions.join(" ")) + "</span>" : "";
     const isRead=message.status==="read";
     const checks = outgoing ? "<span class='message-read-status " + (isRead?"is-read":"is-delivered") + "' title='" + (isRead?"Read by recipient":"Sent") + "' aria-label='" + (isRead?"Read by recipient":"Sent") + "'>" + icon(isRead?"checks":"check") + "</span>" : "";
     const isVoiceAttachment = message.attachmentType==="voice" || message.messageType==="voice";
     const voiceBars = "<span class='voice-waveform' aria-hidden='true'>" + [9,15,11,19,13,22,10,16,7,18,12,21,9,15,6,13].map((height,index)=>"<i style='--wave-height:"+height+"px;--wave-index:"+index+"'></i>").join("") + "</span>";
-    const attachmentAction = message.attachmentPath ? "<button type='button' class='message-attachment-open "+(isVoiceAttachment?"voice-message-open":"")+"' data-action='open-attachment' data-message-id='" + esc(message.id) + "' aria-label='"+(isVoiceAttachment?"Play voice message":"Open attachment")+"'>" + (isVoiceAttachment?"<span class='voice-play-button'>"+icon("play")+"</span>"+voiceBars+"<span class='voice-message-copy'><strong>Voice message</strong><small>Tap to listen</small></span>":icon((message.attachmentMime||"").startsWith("image/")?"image":"file")+"<span>"+esc(message.attachmentName||"Open attachment")+"</span>") + "</button>" : "";
+    const attachmentAction = message.attachmentPath ? "<button type='button' class='message-attachment-open "+(isVoiceAttachment?"voice-message-open":"")+"' data-action='open-attachment' data-message-id='" + esc(message.id) + "' aria-label='"+(isVoiceAttachment?"Play voice message":"Open attachment")+"'>" + (isVoiceAttachment?"<span class='voice-play-button'>"+icon("play")+"</span>"+voiceBars+"<span class='voice-message-copy'><strong>Voice message</strong><small>Tap to listen</small></span>":icon((message.attachmentMime||"").startsWith("image/")?"image":(message.attachmentMime||"").startsWith("video/")?"video":(message.attachmentMime||"").startsWith("audio/")?"music":"file")+"<span>"+esc(message.attachmentName||"Open attachment")+"</span>") + "</button>" : "";
     const pollCard = message.poll ? (function(){
       const p=message.poll, options=Array.isArray(p.options)?p.options:[], counts=Array.isArray(p.counts)?p.counts:[];
       const total=counts.reduce((sum,count)=>sum+Number(count||0),0);
@@ -417,7 +418,7 @@
     const forwardedLabel = message.forwarded ? "<span class='forwarded-label'>" + icon("forward") + " Forwarded</span>" : "";
     const selected = selectedMessage && String(selectedMessage.id) === String(message.id) && String(selectedMessage.chatId) === String(chat.id) ? " message-selected" : "";
     const messageLabel = (outgoing ? "You: " : (chat.name || "Contact") + ": ") + String(message.text || message.attachmentName || "Message").slice(0,100);
-    return "<div class='message-row " + (outgoing?"outgoing":"incoming") + selected + "' data-message-id='" + esc(message.id) + "' tabindex='0' aria-label='" + esc(messageLabel) + "'><div class='message-bubble'>" + sender + forwardedLabel + replyQuote + "<span class='message-text'>" + textBody + "</span>" + pollCard + eventCard + attachmentAction + "<span class='message-meta'>" + time + checks + "</span>" + reactions + "</div></div>";
+    return "<div class='message-row " + (outgoing?"outgoing":"incoming") + selected + "' data-message-id='" + esc(message.id) + "' tabindex='0' aria-label='" + esc(messageLabel) + "'><div class='message-bubble'>" + sender + forwardedLabel + replyQuote + "<span class='message-text'>" + textBody + "</span>" + pollCard + eventCard + attachmentAction + "<span class='message-meta'>" + edited + time + checks + "</span>" + reactions + "</div></div>";
   }
   function syncMessageSelectionUI() {
     const bar = $("#message-selection-toolbar", main);
@@ -438,7 +439,7 @@
     if (!chat || !row) return;
     const message = chat.messages.find(m => String(m.id) === String(row.dataset.messageId));
     if (!message) return;
-    selectedMessage = { id:message.id, chatId:chat.id, text:String(message.text || ""), from:message.from, time:message.time || "", sender:message.sender || (message.from === "me" ? "You" : chat.name), attachmentName:message.attachmentName || "", replyTo:message.replyTo || null };
+    selectedMessage = { id:message.id, chatId:chat.id, text:String(message.text || ""), from:message.from, time:message.time || "", sender:message.sender || (message.from === "me" ? "You" : chat.name), attachmentName:message.attachmentName || "", attachmentPath:message.attachmentPath || "", attachmentType:message.attachmentType || "", messageType:message.messageType || "text", editedAt:message.editedAt || "", poll:message.poll || null, event:message.event || null, replyTo:message.replyTo || null };
     state.lastContextMessage = Object.assign({}, selectedMessage, { chatName:chat.name, avatar:chat.avatar });
     closePopup();
     syncMessageSelectionUI();
@@ -470,6 +471,13 @@
     const body = "<p class='screen-description'>Choose a contact or group to forward this message to.</p><div class='forward-message-preview'><span>" + icon("forward") + "</span><div><strong>Forwarded message</strong><p>" + esc(ref.text || ref.attachmentName || "Attachment") + "</p></div></div>" +
       (targets.length ? "<div class='forward-target-list'>" + targets.map(c => "<button type='button' class='forward-target' data-action='forward-message-to-chat' data-target-chat-id='" + esc(c.id) + "'>" + avatarHTML(c) + "<span><strong>" + esc(c.name || c.username || "Contact") + "</strong><small>" + (c.type === "group" ? "Group" : "@" + esc(c.username || "")) + "</small></span>" + icon("chevron") + "</button>").join("") + "</div>" : "<div class='empty-state'>You need an accepted contact or group before forwarding messages.</div>");
     openDialog("Forward message", body, "<button class='secondary-button' data-action='close-dialog'>Cancel</button>");
+  }
+  function showShareContactDialog(){
+    const chat=currentChat();
+    if(!chat){toast("Open a conversation first.");return;}
+    const contacts=(state.chats||[]).filter(c=>c.type==="person");
+    const body=contacts.length?("<p class='screen-description'>Choose an accepted contact to share in this conversation.</p><div class='forward-target-list'>"+contacts.map(c=>"<button type='button' class='forward-target' data-action='share-contact-to-chat' data-contact-id='"+esc(c.id)+"'>"+avatarHTML(c)+"<span><strong>"+esc(c.name||"Contact")+"</strong><small>@"+esc(c.username||"")+"</small></span>"+icon("chevron")+"</button>").join("")+"</div>"):"<div class='empty-state'>Add a contact first, then you can share their contact card here.</div>";
+    openDialog("Share contact",body,"<button class='secondary-button' data-action='close-dialog'>Cancel</button>");
   }
   function renderWelcome() {
     main.innerHTML = "<div class='welcome-pane'><div class='welcome-content'><svg class='welcome-art' viewBox='0 0 320 250' aria-hidden='true'><ellipse cx='161' cy='220' rx='112' ry='9' fill='#e0e6e8'/><path d='M61 142c-1-40 39-70 89-70 45 0 79 25 83 60 4 36-31 66-78 69l-30 24 4-26c-40-8-67-29-68-57Z' fill='#d9fdd3'/><path d='M76 139c0-30 31-54 71-54 40 0 72 24 72 54s-32 54-72 54c-10 0-20-1-29-4l-22 14 4-22c-15-10-24-24-24-42Z' fill='#25d366'/><path d='M128 114c-3-5-5-5-8-5s-7 3-8 7c-2 5 2 15 7 23 8 11 18 19 30 25 7 3 13 5 17 4 5-1 8-6 8-10 0-2-1-3-4-5l-10-5c-2-1-3 0-5 2l-4 5c-1 1-2 2-4 1-6-2-12-7-17-12-4-4-7-9-8-12 0-1 0-2 1-3l4-4c1-2 1-3 1-4l-4-7Z' fill='#fff'/></svg><h2>Messaging Web</h2><p>Send and receive messages with ease, right from your computer.</p><div class='welcome-divider'></div>"+((state&&Array.isArray(state.chats)&&state.chats.length===0)?"<div class='wa-empty-actions'><button class='primary-button' data-action='new-chat'>Find people</button><button class='secondary-button' data-action='new-group'>Create group</button></div>":"")+"<div class='welcome-caption'>" + icon("lock") + "<span>Your messages sync through the connected account backend</span></div></div><div class='welcome-footer'>" + icon("lock") + "<span>WhatsApp is an independent messaging app and is not connected to other messaging accounts</span></div></div>";
@@ -939,8 +947,16 @@
     if(action==="emoji")return ["😀","😂","🥹","😍","😊","😭","❤️","👍","🙏","🔥","🎉","✨","🙌","🤔","✅","💯"].map(e=>({icon:"smile",label:e,action:"emoji:"+e}));
     if(action==="more-lists")return[{icon:"new",label:"Create new list",action:"new-list"},{icon:"settings",label:"Manage lists",action:"manage-lists"}];
     if(action==="search-filters")return[{icon:"chat",label:"All chats",action:"filter-all"},{icon:"image",label:"Photos",action:"search-media"},{icon:"file",label:"Documents",action:"search-media"},{icon:"link",label:"Links",action:"search-media"}];
-    if(action==="pinned-menu")return[{icon:"pin",label:"View pinned messages",action:"pinned-preview"},{icon:"x",label:"Unpin message",action:"unpin-message"}];
-    if(action==="message-menu")return[{icon:"reply",label:"Reply",action:"reply-message"},{icon:"forward",label:"Forward",action:"forward-message"},{icon:"star",label:"Star message",action:"star-message"},{icon:"copy",label:"Copy text",action:"copy-message"},{icon:"trash",label:"Delete message",action:"delete-message",danger:true}];
+    if(action==="pinned-menu")return[{icon:"pin",label:"View pinned message",action:"pinned-preview"}].concat(chat&&chat.pinnedMessage?[{icon:"x",label:"Unpin message",action:"unpin-message"}]:[]);
+    if(action==="message-menu"){
+      const ref=state&&state.lastContextMessage;
+      const canEdit=!!(ref&&ref.from==="me"&&!(ref.attachmentPath||ref.attachmentName||ref.poll||ref.event)&&(!ref.messageType||ref.messageType==="text"));
+      const isPinned=!!(chat&&chat.pinnedMessage&&ref&&String(chat.pinnedMessage.id)===String(ref.id));
+      return [{icon:"reply",label:"Reply",action:"reply-message"},{icon:"forward",label:"Forward",action:"forward-message"}]
+        .concat(canEdit?[{icon:"edit",label:"Edit message",action:"edit-message"}]:[])
+        .concat([{icon:"pin",label:isPinned?"Unpin message":"Pin message",action:isPinned?"unpin-message":"pin-message"},
+          {icon:"star",label:"Star message",action:"star-message"},{icon:"copy",label:"Copy text",action:"copy-message"},{icon:"trash",label:"Delete message",action:"delete-message",danger:true}]);
+    }
     return[];
   }
   function createNewChatDialog() {
@@ -1143,6 +1159,23 @@ function openSharedItemsDialog(chat,kind) {
     if(action==="toggle-unread"){chat.unread=chat.unread?0:1;save();renderMain();toast(chat.unread?"Marked as unread":"Marked as read");return;}
     if(action==="toggle-favorite"){chat.favorite=!chat.favorite;save();renderMain();toast(chat.favorite?"Added to favorites":"Removed from favorites");return;}
     if(action==="toggle-pin"){chat.pinned=!chat.pinned;save();renderMain();toast(chat.pinned?"Chat pinned":"Chat unpinned");return;}
+    if(action==="pin-message"){
+      const ref=state&&state.lastContextMessage;
+      if(!chat||!ref||String(ref.chatId)!==String(chat.id)){toast("Select a message first.");return;}
+      chat.pinnedMessage={id:ref.id,text:String(ref.text||ref.attachmentName||"Message"),from:ref.from||"them"};
+      dismissMessageSelection(false);saveState();renderSidebar();renderMain();toast("Message pinned.");return;
+    }
+    if(action==="edit-message"){
+      const ref=state&&state.lastContextMessage;
+      if(!chat||!ref||String(ref.chatId)!==String(chat.id)){toast("Select a message first.");return;}
+      if(ref.from!=="me"||ref.attachmentPath||ref.attachmentName||ref.poll||ref.event||(ref.messageType&&ref.messageType!=="text")){
+        toast("Only your own text messages can be edited.");return;
+      }
+      dismissMessageSelection(true);
+      openDialog("Edit message","<div class='dialog-field'><label for='edit-message-text'>Message</label><textarea id='edit-message-text' rows='4' maxlength='2000' required>"+esc(ref.text||"")+"</textarea><small class='field-hint'>You can edit a message you sent, up to 2,000 characters.</small></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='save-edited-message'>Save changes</button>");
+      requestAnimationFrame(()=>{const field=$("#edit-message-text");if(field){field.focus();field.setSelectionRange(field.value.length,field.value.length);}});
+      return;
+    }
     if(action==="toggle-mute"){chat.muted=!chat.muted;save();renderMain();toast(chat.muted?"Notifications muted":"Notifications unmuted");return;}
     if(action==="toggle-archive"){chat.archived=!chat.archived;if(chat.archived&&chat.id===selectedChatId){selectedChatId=null;view="chats";}save();renderSidebar();renderMain();toast(chat.archived?"Chat archived":"Chat unarchived");return;}
     if(action==="lock-chat"||action==="toggle-lock"){chat.locked=!chat.locked;if(chat.locked&&!state.locked.includes(chat.id))state.locked.push(chat.id);else state.locked=state.locked.filter(x=>x!==chat.id);save();renderSidebar();renderMain();toast(chat.locked?"Chat locked in this preview":"Chat unlocked");return;}
@@ -1169,8 +1202,15 @@ function openSharedItemsDialog(chat,kind) {
       } else toast("Right-click a message to star it.");
       return;
     }
-    if(action==="pinned-preview"){toast(chat&&chat.pinnedMessage?"Pinned message: "+chat.pinnedMessage.text:"No pinned message.");return;}
-    if(action==="unpin-message"){if(chat)chat.pinnedMessage=null;save();renderMain();toast("Pinned message removed.");return;}
+    if(action==="pinned-preview"){
+      const pinned=chat&&chat.pinnedMessage;
+      if(!pinned){toast("No pinned message.");return;}
+      const row=pinned.id&&$(".message-row",main).find(node=>String(node.dataset.messageId)===String(pinned.id));
+      if(row){row.scrollIntoView({behavior:"smooth",block:"center"});row.classList.add("reply-target-flash");setTimeout(()=>row.classList.remove("reply-target-flash"),1400);toast("Jumped to pinned message.");}
+      else toast("Pinned message: "+String(pinned.text||"Message"));
+      return;
+    }
+    if(action==="unpin-message"){if(chat)chat.pinnedMessage=null;saveState();renderMain();toast("Pinned message removed.");return;}
     if(action==="reply-message"){
       const ref=state.lastContextMessage;
       if(!ref||!chat){toast("Select a message to reply to.");return;}
@@ -1220,13 +1260,53 @@ function openSharedItemsDialog(chat,kind) {
     saveState();renderSidebar();renderMain();
     requestAnimationFrame(()=>{const sc=$("#message-scroll");if(sc)sc.scrollTop=sc.scrollHeight;});
   }
+  function sendLocalPoll(){
+    const chat=currentChat();if(!chat){toast("Open a conversation before creating a poll.");return;}
+    const question=String($("#poll-question")?.value||"").trim().slice(0,240);
+    const options=String($("#poll-options")?.value||"").split(/\r?\n/).map(value=>value.trim()).filter(Boolean).slice(0,10);
+    if(!question){toast("Enter a poll question.");return;}
+    if(new Set(options).size<2||options.length<2){toast("Add at least two different poll options.");return;}
+    if(new Set(options).size!==options.length){toast("Poll options must be unique.");return;}
+    if(options.some(value=>value.length>120)){toast("Each poll option must be 120 characters or fewer.");return;}
+    const message={id:uid("msg"),from:"me",text:"📊 Poll: "+question,time:nowTime(),date:dayLabel(),status:"sent",messageType:"text",poll:{id:uid("poll"),question,options,counts:options.map(()=>0),myVote:null}};
+    chat.messages.push(message);chat.preview=message.text;chat.time="Now";chat.lastOutgoing=true;
+    saveState();closeDialog();renderSidebar();renderMain();toast("Poll added to this conversation.");
+  }
+  function voteLocalPoll(pollId,optionIndex){
+    const chat=currentChat(),index=Number(optionIndex);
+    const message=chat&&(chat.messages||[]).find(item=>item.poll&&String(item.poll.id)===String(pollId));
+    if(!message||!Number.isInteger(index)||index<0||index>=message.poll.options.length){toast("This poll is no longer available.");return;}
+    const poll=message.poll;poll.counts=Array.isArray(poll.counts)?poll.counts:poll.options.map(()=>0);
+    if(typeof poll.myVote==="number"&&poll.myVote!==index)poll.counts[poll.myVote]=Math.max(0,Number(poll.counts[poll.myVote]||0)-1);
+    if(poll.myVote===index){poll.counts[index]=Math.max(0,Number(poll.counts[index]||0)-1);poll.myVote=null;}
+    else{poll.counts[index]=Number(poll.counts[index]||0)+1;poll.myVote=index;}
+    saveState();renderMain();
+  }
+  function sendLocalEvent(){
+    const chat=currentChat();if(!chat){toast("Open a conversation before creating an event.");return;}
+    const title=String($("#event-name")?.value||"").trim().slice(0,120),date=String($("#event-date")?.value||"").trim(),time=String($("#event-time")?.value||"").trim();
+    if(!title){toast("Enter an event name.");return;}
+    if(!date||!time){toast("Choose both a date and a time.");return;}
+    const start=new Date(date+"T"+time);if(Number.isNaN(start.getTime())){toast("Choose a valid date and time.");return;}
+    const message={id:uid("msg"),from:"me",text:"📅 Event: "+title,time:nowTime(),date:dayLabel(),status:"sent",messageType:"text",event:{id:uid("event"),title,startsAt:start.toISOString(),total:0,interested:0,myResponse:null}};
+    chat.messages.push(message);chat.preview=message.text;chat.time="Now";chat.lastOutgoing=true;
+    saveState();closeDialog();renderSidebar();renderMain();toast("Event added to this conversation.");
+  }
+  function respondLocalEvent(eventId){
+    const chat=currentChat(),message=chat&&(chat.messages||[]).find(item=>item.event&&String(item.event.id)===String(eventId));
+    if(!message){toast("This event is no longer available.");return;}
+    const event=message.event;
+    if(event.myResponse==="going"){event.myResponse=null;event.total=Math.max(0,Number(event.total||0)-1);toast("Your RSVP was cancelled.");}
+    else{event.myResponse="going";event.total=Number(event.total||0)+1;toast("You are going to this event.");}
+    saveState();renderMain();
+  }
   function handleAction(action,el) {
     const chat=findChat(el.dataset.chatId)||currentChat();
     if(action==="rename-contact" && chat && chat.type==="person"){
       openDialog("Rename contact","<p class='screen-description'>This name is saved on this device only.</p><div class='dialog-field'><label for='contact-alias-name'>Contact name</label><input id='contact-alias-name' maxlength='60' value='"+esc(chat.name)+"' autocomplete='off'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='save-contact-name' data-chat-id='"+esc(chat.id)+"'>Save name</button>");return;
     }
     if(action==="remove-contact" && chat && chat.type==="person"){
-      openDialog("Remove contact?","<p class='screen-description'>This front-end-only action removes the conversation from this device. It does not delete the server-side friend relationship or hide this account on another device.</p>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='danger-button' data-dialog-action='remove-contact-local' data-chat-id='"+esc(chat.id)+"'>Remove from this device</button>");return;
+      openDialog("Remove contact?","<p class='screen-description'>This hides the contact and removes the conversation from this device only. It does not delete their account or erase the other person's chat. You can send a new contact request later.</p>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='danger-button' data-dialog-action='remove-contact-local' data-chat-id='"+esc(chat.id)+"'>Remove contact</button>");return;
     }
     if(action==="new-chat"){createNewChatDialog();return;}
     if(action==="new-group"){createGroupDialog();return;}
@@ -1268,7 +1348,7 @@ function openSharedItemsDialog(chat,kind) {
     if(action==="copy-phone"){copyText(state.profile.phone);return;}
     if(action==="copy-username"){copyText("@"+state.profile.username);return;}
     if(action==="change-profile-photo"){const input=$("#profile-photo-input");if(input)input.click();return;}
-    if(action==="camera"){handleAction("new-status",el);return;}
+    if(action==="camera"){const input=$("#attachment-input");if(input){input.accept="image/*,video/*";input.setAttribute("capture","environment");input.click();}return;}
     if(action==="new-status"){openDialog("New status","<div class='dialog-field'><label for='status-text'>Type a status update</label><textarea id='status-text' rows='3' maxlength='700' placeholder='What’s on your mind?'></textarea></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='publish-status'>Share status</button>");return;}
     if(action==="status-preview"){toast("Status viewer preview.");return;}
     if(action==="new-call"){openPopup(el,[{icon:"phone",label:"New voice call",action:"new-voice-call"},{icon:"video",label:"New video call",action:"new-video-call"}],null);return;}
@@ -1286,16 +1366,29 @@ function openSharedItemsDialog(chat,kind) {
     if(action==="search-media"){toast("Media search UI preview.");return;}
     if(action==="new-list"){openDialog("Create chat list","<div class='dialog-field'><label for='list-name'>List name</label><input id='list-name' maxlength='30' placeholder='Create a list'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='create-list'>Create</button>");return;}
     if(action==="manage-lists"){openDialog("Manage lists",state.customLists.length?state.customLists.map(l=>"<div class='setting-row'>"+icon("chat")+"<span class='setting-copy'><span class='setting-title'>"+esc(l.name)+"</span></span><button class='secondary-button' data-action='remove-list' data-list-id='"+esc(l.id)+"'>Remove</button></div>").join(""):"<div class='empty-state'>No custom lists yet.</div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;}
-    if(action==="toggle-favorite"||action==="toggle-unread"||action==="toggle-pin"||action==="toggle-mute"||action==="toggle-archive"||action==="lock-chat"||action==="toggle-lock"||action==="delete-chat"||action==="clear-chat"||action==="chat-info"||action==="chat-search"||action==="search-in-chat"||action==="disappearing"||action==="block-chat"||action==="report-chat"||action==="select-messages"||action==="star-message"||action==="pinned-preview"||action==="unpin-message"||action==="reply-message"||action==="forward-message"||action==="copy-message"||action==="delete-message"||action==="voice-call"||action==="video-call"||action==="shared-media"||action==="shared-links"||action==="shared-documents"||action==="edit-group"||action==="edit-group-description"||action==="edit-contact-about"||action==="copy-chat-phone"||action==="copy-chat-username"){useAction(action,chat);return;}
-    if(action==="attachment-preview"||action==="share-contact"){toast("This item is a local frontend preview.");return;}
-    if(action==="pick-file"){const input=$("#attachment-input");if(input){input.accept="*/*";input.click();}return;}
-    if(action==="pick-image"){const input=$("#attachment-input");if(input){input.accept="image/*";input.click();}return;}
-    if(action==="create-poll"){openDialog("Create poll","<div class='dialog-field'><label for='poll-question'>Question</label><input id='poll-question' placeholder='Ask a question'></div><div class='dialog-field'><label for='poll-options'>Options (one per line)</label><textarea id='poll-options' rows='4' placeholder='Option 1&#10;Option 2'></textarea></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='send-poll'>Add poll</button>");return;}
-    if(action==="create-event"){openDialog("Create event","<div class='dialog-field'><label for='event-name'>Event name</label><input id='event-name' placeholder='Event name'></div><div class='dialog-field'><label for='event-date'>Date</label><input id='event-date' type='date'></div><div class='dialog-field'><label for='event-time'>Time</label><input id='event-time' type='time'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='send-event'>Add event</button>");return;}
+    if(action==="toggle-favorite"||action==="toggle-unread"||action==="toggle-pin"||action==="toggle-mute"||action==="toggle-archive"||action==="lock-chat"||action==="toggle-lock"||action==="delete-chat"||action==="clear-chat"||action==="chat-info"||action==="chat-search"||action==="search-in-chat"||action==="disappearing"||action==="block-chat"||action==="report-chat"||action==="select-messages"||action==="star-message"||action==="pinned-preview"||action==="unpin-message"||action==="pin-message"||action==="edit-message"||action==="reply-message"||action==="forward-message"||action==="copy-message"||action==="delete-message"||action==="voice-call"||action==="video-call"||action==="shared-media"||action==="shared-links"||action==="shared-documents"||action==="edit-group"||action==="edit-group-description"||action==="edit-contact-about"||action==="copy-chat-phone"||action==="copy-chat-username"){useAction(action,chat);return;}
+    if(action==="attachment-preview"){toast("This item is a local frontend preview.");return;}
+    if(action==="share-contact"){showShareContactDialog();return;}
+    if(action==="share-contact-to-chat"){
+      const contact=(state.chats||[]).find(c=>String(c.id)===String(el.dataset.contactId)&&c.type==="person");
+      if(!contact){toast("That contact is no longer available.");return;}
+      const card="👤 Contact card\nName: "+String(contact.name||"Contact")+"\nUsername: @"+String(contact.username||"")+(contact.phone?"\nIn-app number: "+String(contact.phone):"");
+      closeDialog();
+      if(currentUser&&currentUser.isSupabase&&window.waAppBridge&&window.waAppBridge.sendBackendMessage){
+        void window.waAppBridge.sendBackendMessage(card).then(()=>toast("Contact card sent.")).catch(error=>toast("Could not share contact: "+String(error&&error.message||"Unknown error")));
+      }else{sendMessage(card);toast("Contact card sent in this local chat.");}
+      return;
+    }
+    if(action==="pick-file"){const input=$("#attachment-input");if(input){input.accept="*/*";input.removeAttribute("capture");input.click();}return;}
+    if(action==="pick-image"){const input=$("#attachment-input");if(input){input.accept="image/*,video/*";input.removeAttribute("capture");input.click();}return;}
+    if(action==="create-poll"){openDialog("Create poll","<div class='dialog-field'><label for='poll-question'>Question</label><input id='poll-question' maxlength='240' placeholder='Ask a question'></div><div class='dialog-field'><label for='poll-options'>Options (one per line)</label><textarea id='poll-options' rows='4' placeholder='Option 1&#10;Option 2'></textarea><small class='field-hint'>Add 2–10 different options.</small></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='send-poll'>Add poll</button>");return;}
+    if(action==="create-event"){openDialog("Create event","<div class='dialog-field'><label for='event-name'>Event name</label><input id='event-name' maxlength='120' placeholder='Event name'></div><div class='dialog-field'><label for='event-date'>Date</label><input id='event-date' type='date'></div><div class='dialog-field'><label for='event-time'>Time</label><input id='event-time' type='time'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='send-event'>Add event</button>");return;}
     if(action==="edit-profile"){editProfileDialog();return;}
     if(action==="edit-about"){editAboutDialog();return;}
     if(action==="wallpaper"){chooseWallpaperDialog();return;}
     if(action==="status-preview"){toast("Status viewer preview.");return;}
+    if(action==="vote-poll"){voteLocalPoll(el.dataset.pollId,el.dataset.optionIndex);return;}
+    if(action==="event-rsvp"){respondLocalEvent(el.dataset.eventId);return;}
     if(action==="toggle-unread"||action==="toggle-favorite")return;
     if(action==="not-ready"){toast("This control is part of the frontend preview.");return;}
     toast("This control is available as a frontend interaction.");
@@ -1312,7 +1405,7 @@ function openSharedItemsDialog(chat,kind) {
       handleAction(action,{dataset:{}});
       return;
     }
-    const mapped=["open-chat","toggle-unread","toggle-favorite","toggle-pin","toggle-mute","toggle-archive","lock-chat","toggle-lock","delete-chat","clear-chat","chat-info","chat-search","search-in-chat","disappearing","block-chat","report-chat","select-messages","star-message","pinned-preview","unpin-message","reply-message","forward-message","copy-message","delete-message","voice-call","video-call","shared-media","shared-links","shared-documents","rename-contact","remove-contact","edit-group","edit-group-description","edit-contact-about","copy-chat-phone","copy-chat-username"];
+    const mapped=["open-chat","toggle-unread","toggle-favorite","toggle-pin","toggle-mute","toggle-archive","lock-chat","toggle-lock","delete-chat","clear-chat","chat-info","chat-search","search-in-chat","disappearing","block-chat","report-chat","select-messages","star-message","pinned-preview","unpin-message","pin-message","edit-message","reply-message","forward-message","copy-message","delete-message","voice-call","video-call","shared-media","shared-links","shared-documents","rename-contact","remove-contact","edit-group","edit-group-description","edit-contact-about","copy-chat-phone","copy-chat-username"];
     if(mapped.includes(action)){useAction(action,chat||currentChat());return;}
     if(action==="new-group"){createGroupDialog();return;}
     if(action==="new-community"){createCommunityDialog();return;}
@@ -1365,6 +1458,38 @@ function openSharedItemsDialog(chat,kind) {
     }
     if(t.dataset.dialogAction){
       const action=t.dataset.dialogAction;
+      if(action==="send-poll"){
+        if(currentUser&&currentUser.isSupabase){toast("The secure poll service is still processing this request.");return;}
+        sendLocalPoll();return;
+      }
+      if(action==="send-event"){
+        if(currentUser&&currentUser.isSupabase){toast("The secure event service is still processing this request.");return;}
+        sendLocalEvent();return;
+      }
+      if(action==="save-edited-message"){
+        const ref=state&&state.lastContextMessage;
+        const updated=String($("#edit-message-text")?.value||"").trim();
+        if(!ref||ref.from!=="me"){toast("Only your own message can be edited.");return;}
+        if(!updated){toast("A message cannot be empty.");return;}
+        if(updated.length>2000){toast("Messages are limited to 2,000 characters.");return;}
+        const targetChat=(state.chats||[]).find(c=>String(c.id)===String(ref.chatId));
+        const run=async()=>{
+          try{
+            if(currentUser&&currentUser.isSupabase){
+              if(!window.waAppBridge||typeof window.waAppBridge.editBackendMessage!=="function")throw new Error("Message editing is not ready. Refresh the app and retry.");
+              await window.waAppBridge.editBackendMessage(ref.id,updated);
+            }else{
+              const message=targetChat&&(targetChat.messages||[]).find(m=>String(m.id)===String(ref.id));
+              if(!message||message.from!=="me")throw new Error("That message is no longer available to edit.");
+              message.text=updated;message.editedAt=new Date().toISOString();
+              if(targetChat.messages[targetChat.messages.length-1]===message)targetChat.preview=updated;
+              saveState();renderSidebar();renderMain();
+            }
+            closeDialog();dismissMessageSelection(false);toast("Message edited.");
+          }catch(error){toast("Could not edit message: "+String(error&&error.message||"Unknown error"));}
+        };
+        void run();return;
+      }
       if(action==="save-contact-name"){
         const target=findChat(t.dataset.chatId)||currentChat(),alias=String($("#contact-alias-name")?.value||"").trim().replace(/\s+/g," ");
         if(!target||!alias){toast("Enter a contact name.");return;}
@@ -1619,7 +1744,7 @@ function openSharedItemsDialog(chat,kind) {
       const audio=row.querySelector("audio.wa-inline-voice-audio");
       if(audio&&!audio.paused)audio.pause();
       selectMessageForActions(row);
-    },2000);
+    },500);
   },true);
   main.addEventListener("pointermove",event=>{
     if(!messageHoldTimer||!messageHoldStart)return;
@@ -1631,7 +1756,7 @@ function openSharedItemsDialog(chat,kind) {
   main.addEventListener("pointerup",stopMessageHold,true);
   main.addEventListener("pointercancel",stopMessageHold,true);
   // Run at document capture before backend.js handles a voice attachment click.
-  // This ensures releasing a two-second hold selects the note instead of playing it.
+  // This ensures releasing a long hold selects the note instead of playing it.
   document.addEventListener("click",event=>{
     if(!messageHoldTriggered)return;
     const row=event.target.closest(".message-row");
