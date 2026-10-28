@@ -555,15 +555,20 @@
       toast(title+" updated.");
       return;
     }
-    if(title==="Chat wallpaper"){chooseWallpaperDialog();return;}
+    if(title==="Chat wallpaper"||title==="Wallpaper"){chooseWallpaperDialog();return;}
     if(title==="Request account info"||title==="Chat backup"){
       downloadLocalJson(title==="Chat backup"?"whatsapp-demo-chat-backup.json":"whatsapp-demo-account-info.json",title==="Chat backup"?{profile:state.profile,chats:state.chats,requests:state.requests,settings:state.settings}:{profile:state.profile,account:{username:currentUser.username,phone:currentUser.phone,createdAt:currentUser.createdAt},localDataOnly:true});
       toast("Local JSON export downloaded.");return;
     }
     if(title==="Manage storage"||title==="Manage media"||title==="Network usage"){
       const size=new Blob([JSON.stringify(state)]).size;
-      const message=title==="Network usage"?"Network requests: 0. All app state is stored locally.":title==="Manage media"?"Local attachments: "+state.chats.reduce((sum,c)=>sum+(c.attachments||[]).length,0):"Estimated local demo data: "+Math.round(size/1024)+" KB.";
-      openDialog(title,"<p class='screen-description'>"+esc(message)+"</p><p class='screen-description'>This report describes local browser data, not your account's server-side storage.</p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
+      const mediaCount=state.chats.reduce((sum,c)=>sum+(c.attachments||[]).length+(c.messages||[]).filter(m=>m.attachmentPath||m.attachmentId).length,0);
+      const message=title==="Network usage"
+        ?"Connection: "+(navigator.onLine?"Online":"Offline")+". The app does not currently measure total network bytes."
+        :title==="Manage media"
+          ?"Media references in loaded chats: "+mediaCount+". Private server attachments remain in Supabase Storage; this screen does not delete remote media."
+          :"Estimated currently loaded app data: "+Math.round(size/1024)+" KB. This is an in-memory estimate, not a Supabase storage quota.";
+      openDialog(title,"<p class='screen-description'>"+esc(message)+"</p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
     }
     if(title==="Change number"){
       openDialog("Change custom number","<p class='screen-description'>Choose a unique in-app ID. It is not a real phone number.</p><div class='dialog-field'><label for='new-custom-number'>Custom number after +990</label><input id='new-custom-number' inputmode='numeric' value='"+esc(state.profile.phone.replace("+990 ",""))+"'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='save-custom-number'>Save number</button>");return;
@@ -587,8 +592,36 @@
       const colors=[["Green","#00a884"],["Blue","#1677d2"],["Purple","#7952b3"],["Teal","#008c8c"]];
       openDialog(title,colors.map(c=>"<button class='setting-row' data-dialog-action='save-accent' data-accent-name='"+esc(c[0])+"' data-accent-color='"+esc(c[1])+"'><span class='row-icon' style='color:"+esc(c[1])+"'>"+icon("palette")+"</span><span class='setting-copy'><span class='setting-title'>"+esc(c[0])+"</span></span>"+icon((state.settings.accent||"Green")===c[0]?"check":"circle")+"</button>").join(""),"<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
     }
-    if(["Messages","Groups","Calls","Media auto-download","Spell check","Help center","Contact us","Terms and privacy policy","App info","Two-step verification","Security notifications","Disappearing messages","Wallpaper"].includes(title)){
-      openDialog(title,"<p class='screen-description'>This option is represented in the frontend demo. No remote account or device setting will be changed.</p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
+    if(title==="Media auto-download"){
+      const current=state.settings.mediaAutoDownload||"Wi-Fi and mobile data";
+      const values=["Wi-Fi and mobile data","Wi-Fi only","Never"];
+      openDialog("Media auto-download","<p class='screen-description'>Choose your preferred download policy for supported attachments. This preference is stored on this browser.</p>"+values.map(value=>"<button class='setting-row' data-dialog-action='save-media-auto-download' data-media-policy='"+esc(value)+"'><span class='setting-copy'><span class='setting-title'>"+esc(value)+"</span></span>"+icon(current===value?"check":"circle")+"</button>").join(""),"<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
+    }
+    if(title==="Help center"){
+      openDialog("Help center","<p class='screen-description'>This independent messaging app uses its own account directory. For sign-in, messaging, privacy, or calling bugs, open the repository issue tracker.</p><p><a href='https://github.com/AHCoderCode/whatsapp/issues/new' target='_blank' rel='noopener noreferrer'>Report an issue on GitHub</a></p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
+    }
+    if(title==="Contact us"){
+      openDialog("Contact support","<p class='screen-description'>This app does not currently have a built-in support inbox. Use the public issue tracker to report a problem, with private information removed.</p><p><a href='https://github.com/AHCoderCode/whatsapp/issues/new' target='_blank' rel='noopener noreferrer'>Open the issue tracker</a></p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
+    }
+    if(title==="Terms and privacy policy"){
+      openDialog("Privacy and data","<p class='screen-description'>This independent app stores account profiles, messages, contact requests, groups, statuses and attachments using its connected Supabase project. Browser preferences and contact aliases are stored locally. Device notifications require permission. Do not send sensitive information unless you understand this project's deployment and data practices.</p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
+    }
+    if(title==="App info"){
+      openDialog("App info","<p class='screen-description'><strong>WhatsApp-inspired web app</strong><br>Build: 2026.10.28<br>Installed web app · Service worker updates enabled</p><p class='screen-description'>This is an independent app and is not the official WhatsApp service.</p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
+    }
+    if(title==="Messages"||title==="Groups"||title==="Calls"){
+      const key={"Messages":"messageNotifications","Groups":"groupNotifications","Calls":"callNotifications"}[title];
+      state.settings[key]=!state.settings[key];saveState();applySettings();renderSettings();
+      if(state.settings[key])void requestNotificationPermission(key);
+      else if(window.waBackendUpdatePushPreferences)void window.waBackendUpdatePushPreferences(state.settings).catch(error=>console.warn("Push preferences could not sync:",error));
+      toast(title+" notifications "+(state.settings[key]?"enabled":"disabled")+".");return;
+    }
+    if(title==="Wallpaper"){chooseWallpaperDialog();return;}
+    if(title==="Spell check"){state.settings.spellcheck=!state.settings.spellcheck;saveState();applySettings();renderSettings();toast("Spell check "+(state.settings.spellcheck?"enabled":"disabled")+".");return;}
+    if(title==="Security notifications"){state.settings.securityNotifications=!state.settings.securityNotifications;saveState();renderSettings();toast("Security notification preference saved.");return;}
+    if(title==="Disappearing messages"){const chat=currentChat();if(chat){handleAction("disappearing",{});return;}openDialog("Disappearing messages","<p class='screen-description'>Open a conversation first to choose its disappearing-message timer.</p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;}
+    if(title==="Two-step verification"){
+      openDialog(title,"<p class='screen-description'>This app does not yet provide server-enforced two-step verification. A browser-only PIN is not account security, so this control does not claim to protect your account.</p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
     }
     if(title==="Enter is send"){state.settings.enterToSend=!state.settings.enterToSend;saveState();renderSettings();toast("Enter-to-send preference updated.");return;}
     toast(title+" is shown as a local frontend setting.");
@@ -605,6 +638,8 @@
       else if(opt[3]==="toggle-theme")side="<button class='toggle "+(state.settings.dark?"on":"")+"' data-setting='dark' aria-pressed='"+(state.settings.dark?"true":"false")+"' aria-label='Toggle dark mode'></button>";
       else if(opt[3]==="wallpaper")side="<button class='secondary-button' data-action='wallpaper'>Change</button>";
       else if(opt[3]==="button")side="<span class='end-icon'>"+icon("chevron")+"</span>";
+      else if(opt[1]==="Media auto-download")side="<span class='setting-side-label'>"+esc(state.settings.mediaAutoDownload||"Wi-Fi and mobile data")+"</span>";
+      else if(opt[1]==="App language")side="<span class='setting-side-label'>"+esc(state.settings.language||"English")+"</span>";
       else side="<span class='setting-side-label'>"+esc(opt[3]||"")+"</span>";
       return "<div class='setting-option' data-setting-option='"+esc(opt[1])+"' role='button' tabindex='0'><span class='row-icon'>"+icon(opt[0])+"</span><div class='setting-option-copy'><strong>"+esc(opt[1])+"</strong><span>"+esc(opt[2])+"</span></div>"+side+"</div>";
     }).join("")+"</div><p class='screen-description'>"+(currentUser&&currentUser.isSupabase?"Appearance and legacy privacy options are local preferences. Account profile changes, accepted contacts, groups and text messages use Supabase. Some older screens remain previews.":"Settings here change the local demo interface only. They do not change a remote account or device settings.")+"</p>";
@@ -736,9 +771,14 @@
     if(!state)return;
     app.classList.toggle("theme-dark",!!state.settings.dark);
     app.classList.toggle("reduce-motion",!!state.settings.reduceMotion);
+    app.classList.toggle("high-contrast",!!state.settings.highContrast);
+    app.classList.toggle("keyboard-nav",state.settings.keyboardNav!==false);
     document.querySelector('meta[name="theme-color"]').setAttribute("content",state.settings.dark?"#111b21":"#00a884");
     const conversation=main.querySelector(".conversation");
     if(conversation) conversation.style.background=state.settings.wallpaper==="plain"?"#ffffff":state.settings.wallpaper==="green"?"#dbeee5":"#efeae2";
+    $("#app-screen input,#app-screen textarea,[contenteditable='true']").forEach(field=>{
+      field.spellcheck=state.settings.spellcheck!==false;
+    });
   }
   function updateMobile() { updateMobileMode(); }
   function selectChat(id) {
@@ -1299,7 +1339,11 @@ function openSharedItemsDialog(chat,kind) {
         saveState();closeDialog();renderSettings();toast("Privacy preference saved locally.");return;
       }
       if(action==="save-language"){
-        state.settings.language=t.dataset.language;saveState();closeDialog();renderSettings();toast("Language preference saved. Full translation is not wired into this preview.");return;
+        state.settings.language=t.dataset.language;saveState();closeDialog();renderSettings();toast("Language preference saved. Interface labels remain in English where translations are unavailable.");return;
+      }
+      if(action==="save-media-auto-download"){
+        state.settings.mediaAutoDownload=t.dataset.mediaPolicy||"Wi-Fi and mobile data";
+        saveState();closeDialog();renderSettings();toast("Media auto-download preference saved.");return;
       }
       if(action==="save-accent"){
         state.settings.accent=t.dataset.accentName;document.documentElement.style.setProperty("--green",t.dataset.accentColor);saveState();closeDialog();renderSettings();toast("Accent color changed.");return;
