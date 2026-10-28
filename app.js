@@ -630,7 +630,18 @@
     const tab=settingsTabs.find(t=>t[0]===settingsTab)||settingsTabs[0];
     const options=settingDescriptions[settingsTab]||settingDescriptions.account;
     let content="";
-    if(settingsTab==="account")content="<div class='settings-summary'>"+avatarHTML(state.profile)+"<div><h4>"+esc(state.profile.name)+"</h4><p>@"+esc(state.profile.username)+" · "+esc(state.profile.phone)+"</p></div></div>";
+    if(settingsTab==="account"){
+      const profilePhoto=state.profile.avatarData
+        ? "<img src='"+esc(state.profile.avatarData)+"' alt='Profile photo'>"
+        : esc(state.profile.avatar||initials(state.profile.name));
+      content="<section class='wa-settings-profile-card'>"+
+        "<div class='wa-settings-profile-top'><button class='wa-settings-profile-photo' data-action='change-profile-photo' aria-label='Change profile photo'>"+profilePhoto+"<span class='wa-profile-camera'>"+icon("image")+"</span></button>"+
+        "<div class='wa-settings-profile-identity'><span class='wa-settings-kicker'>YOUR ACCOUNT</span><h4>"+esc(state.profile.name)+"</h4><p>@"+esc(state.profile.username)+"</p><button class='text-button' data-action='edit-profile'>Edit profile</button></div></div>"+
+        "<div class='wa-profile-fields'><button class='wa-profile-field' data-action='edit-profile'><span><small>Display name</small><strong>"+esc(state.profile.name||"Add your name")+"</strong></span>"+icon("edit")+"</button>"+
+        "<button class='wa-profile-field' data-action='edit-profile'><span><small>About</small><strong>"+esc(state.profile.about||"Add an About")+"</strong></span>"+icon("edit")+"</button>"+
+        "<button class='wa-profile-field' data-action='change-profile-photo'><span><small>Profile photo</small><strong>Change or upload photo</strong></span>"+icon("image")+"</button></div>"+
+        "<p class='wa-profile-helper'>Your profile changes are saved to your account and shared with contacts in this app.</p></section>";
+    }
     content+="<div class='section-card'>"+options.map(opt=>{
       let side="";
       const settingMap={"Read receipts":"readReceipts","Keep chats archived":"keepArchived","Enter is send":"enterToSend","Media visibility":"mediaVisibility","App lock":"appLock","Reduce motion":"reduceMotion","Keyboard navigation":"keyboardNav","High contrast":"highContrast","Spell check":"spellcheck","Reaction notifications":"reactionNotifications","Security notifications":"securityNotifications","Messages":"messageNotifications","Groups":"groupNotifications","Calls":"callNotifications"};
