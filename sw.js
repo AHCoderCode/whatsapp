@@ -1,4 +1,4 @@
-const CACHE_NAME = "whatsapp-final-shell-v47";
+const CACHE_NAME = "whatsapp-final-shell-v48";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -66,6 +66,19 @@ self.addEventListener("fetch", event => {
       .catch(() => caches.match(event.request).then(cached => cached || caches.match(url.pathname)))
   );
 });
+/* Correlate test-call delivery without exposing account data. This uses the
+   existing public publishable key, never a service-role credential. */
+const PUSH_RECEIPT_URL = "https://qoyqfmovzvtyvxutakym.supabase.co/functions/v1/whatsapp-push";
+const PUSH_RECEIPT_API_KEY = "sb_publishable_w59xgI2zOLJe2Hmx_PC4MQ_zDQ8g9hp";
+function reportCallTestReceipt(probeId, stage, errorText = "") {
+  return fetch(PUSH_RECEIPT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "apikey": PUSH_RECEIPT_API_KEY },
+    body: JSON.stringify({ action: "push-receipt", probeId, stage, error: String(errorText || "").slice(0, 240) }),
+    cache: "no-store"
+  }).then(response => response.ok).catch(() => false);
+}
+
 /* Web Push notification display. */
 self.addEventListener("push", event => {
   let payload = {};
@@ -89,11 +102,26 @@ self.addEventListener("push", event => {
       ? [{ action: "accept", title: "Accept" }, { action: "decline", title: "Decline" }]
       : kind === "call" ? [] : [{ action: "open", title: "Open chat" }]
   };
+  const probeId = kind === "call" && data.test === true && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(data.probeId || ""))
+    ? String(data.probeId) : "";
   event.waitUntil((async () => {
-    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    // A stale "focused" state must never suppress an incoming-call system alert.
-    if (kind !== "call" && clients.some(client => client.visibilityState === "visible" && client.focused)) return;
-    await self.registration.showNotification(title, options);
+    // Report receipt alongside display; never make the alert wait for a network
+    // request. The server records if this worker received the push and whether
+    // showNotification() resolved or threw.
+    const receivedReceipt = probeId ? reportCallTestReceipt(probeId, "received") : Promise.resolve(false);
+    try {
+      const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      // A stale "focused" state must never suppress an incoming-call system alert.
+      if (kind !== "call" && clients.some(client => client.visibilityState === "visible" && client.focused)) {
+        await receivedReceipt;
+        return;
+      }
+      await self.registration.showNotification(title, options);
+      if (probeId) await Promise.allSettled([receivedReceipt, reportCallTestReceipt(probeId, "shown")]);
+      else await receivedReceipt;
+    } catch (error) {
+      if (probeId) await Promise.allSettled([receivedReceipt, reportCallTestReceipt(probeId, "error", error && error.message || error)]);
+    }
   })());
 });
 

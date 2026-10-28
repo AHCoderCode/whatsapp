@@ -397,8 +397,36 @@ async function notifyCall(userId: string, body: any) {
   return result;
 }
 
+async function recordPushReceipt(body: any) {
+  const probeId = String(body?.probeId || "");
+  const stage = String(body?.stage || "");
+  if (!uuidPattern.test(probeId) || !["received", "shown", "error"].includes(stage)) return { ok: false };
+  const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const patch: Record<string, unknown> = {};
+  if (stage === "received") patch.push_event_received_at = new Date().toISOString();
+  if (stage === "shown") patch.notification_api_resolved_at = new Date().toISOString();
+  if (stage === "error") patch.notification_error = clean(body?.error || "Notification display failed.", 240);
+  const { data, error } = await admin.from("whatsapp_push_diagnostics")
+    .update(patch).eq("probe_id", probeId).gt("created_at", cutoff)
+    .select("probe_id").maybeSingle();
+  if (error) throw error;
+  if (!data) return { ok: false };
+  console.info("[whatsapp-push] Background call-test receipt: " + JSON.stringify({
+    probeId, stage, accepted: true, hasDisplayError: stage === "error"
+  }));
+  return { ok: true };
+}
+
 async function testCallPush(userId: string, requestedDelaySeconds: unknown = 0) {
   const delaySeconds = Math.max(0, Math.min(10, Math.floor(Number(requestedDelaySeconds) || 0)));
+  const probeId = crypto.randomUUID();
+  const { error: cleanupError } = await admin.from("whatsapp_push_diagnostics")
+    .delete().lt("created_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
+  if (cleanupError) console.warn("[whatsapp-push] Could not prune old diagnostics:", clean(cleanupError.message, 160));
+  const { error: insertError } = await admin.from("whatsapp_push_diagnostics")
+    .insert({ probe_id: probeId, user_id: userId });
+  if (insertError) throw insertError;
+
   // Let the signed-in user switch apps before dispatch, so this test checks the
   // real service-worker/OS background delivery path rather than foreground UI.
   if (delaySeconds > 0) {
@@ -410,7 +438,7 @@ async function testCallPush(userId: string, requestedDelaySeconds: unknown = 0) 
     title: "WhatsApp call alert test",
     body: "Background call alert test. Check sound, vibration and lock-screen display.",
     tag: "wa-call-test-" + Date.now().toString(36),
-    data: { kind: "call", test: true, url: "/" }
+    data: { kind: "call", test: true, probeId, url: "/" }
   };
   const [webResult, androidResult] = await Promise.all([
     sendPushToUsers([userId], "calls_enabled", pushPayload, 300),
@@ -422,9 +450,15 @@ async function testCallPush(userId: string, requestedDelaySeconds: unknown = 0) 
     failed: Number(webResult.failed || 0) + Number(androidResult.failed || 0),
     subscriptions: Number(webResult.subscriptions || 0) + Number(androidResult.subscriptions || 0),
     web: webResult,
-    android: androidResult
+    android: androidResult,
+    diagnosticId: probeId
   };
+  const { error: updateError } = await admin.from("whatsapp_push_diagnostics")
+    .update({ provider_sent: result.sent > 0, provider_sent_at: result.sent > 0 ? new Date().toISOString() : null })
+    .eq("probe_id", probeId);
+  if (updateError) console.error("[whatsapp-push] Could not update diagnostic provider status:", clean(updateError.message, 160));
   console.info("[whatsapp-push] Background call-test result: " + JSON.stringify({
+    probeId,
     delaySeconds,
     sent: result.sent,
     stale: result.stale,
@@ -440,10 +474,20 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return response({ error: "Method not allowed." }, 405);
   if (!admin) return response({ error: "The push service is missing its Supabase server key." }, 503);
-  const user = await authenticate(req);
-  if (!user) return response({ error: "Sign in before using device notifications." }, 401);
   const body = await readBody(req);
   if (!body || typeof body.action !== "string") return response({ error: "Invalid request." }, 400);
+  // The random, short-lived probeId is a one-test capability. It lets the
+  // service worker acknowledge receipt without putting any account token in push data.
+  if (body.action === "push-receipt") {
+    try {
+      return response(await recordPushReceipt(body));
+    } catch (error: any) {
+      console.error("[whatsapp-push] Push receipt update failed:", clean(error?.message || error, 180));
+      return response({ ok: false }, 500);
+    }
+  }
+  const user = await authenticate(req);
+  if (!user) return response({ error: "Sign in before using device notifications." }, 401);
   try {
     if (body.action === "public-key") {
       const config = await getVapidConfig();
