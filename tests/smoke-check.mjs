@@ -153,7 +153,7 @@ check("message long-press waits two seconds and a held voice note cannot start p
   includes(files.app, "},2000);");
   includes(files.app, "let messageHoldTriggeredRow = null;");
   includes(files.app, "if(audio&&!audio.paused)audio.pause();");
-  includes(files.app, "intercept a held voice-note release before backend playback");
+  includes(files.app, "Run at document capture before backend.js handles a voice attachment click.");
   includes(files.app, "#message-selection-toolbar,#message-reaction-picker,#popup-menu,#dialog-backdrop");
   includes(files.app, "dismissMessageSelection(false);");
 });
