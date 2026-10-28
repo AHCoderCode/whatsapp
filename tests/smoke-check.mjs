@@ -119,7 +119,10 @@ check("poll and event messages also trigger background notifications", () => {
   const count = files.backend.split('dispatchServerPush("notify-message"').length - 1;
   assert.ok(count >= 5, "text, forwarded, attachment/voice, poll and event messages should trigger push");
   includes(files.backend, 'say("Poll sent.');
-  includes(files.backend, 'say("Event sent.');
+  const eventStart = files.backend.indexOf("async function sendEvent");
+  const eventEnd = files.backend.indexOf("async function respondToEvent", eventStart);
+  assert.ok(eventStart >= 0 && eventEnd > eventStart, "event-send handler must exist");
+  includes(files.backend.slice(eventStart, eventEnd), 'dispatchServerPush("notify-message",{messageId:message.id})');
 });
 check("push Edge Function authenticates users and validates message ownership", () => {
   includes(files.push, "admin.auth.getUser(token)");
