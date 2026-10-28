@@ -113,7 +113,10 @@ check("incoming calls have an early top banner with accept/decline", () => {
   includes(files.calls, "data-wa-call='decline'");
 });
 check("call row is created before asking for microphone or camera permission", () => {
-  assert.ok(files.calls.indexOf('from("aeroshell_calls").insert') < files.calls.indexOf('await userMedia(mediaType==="video")'));
+  const start = files.calls.indexOf("async function startCall");
+  const insert = files.calls.indexOf('from("aeroshell_calls").insert', start);
+  const mediaPrompt = files.calls.indexOf('await userMedia(mediaType==="video")', start);
+  assert.ok(start >= 0 && insert > start && mediaPrompt > insert);
 });
 check("call notification action can be queued until offer arrives", () => {
   includes(files.calls, "runPendingNotificationAction");
