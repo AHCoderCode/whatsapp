@@ -147,3 +147,6 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Firebase Android client configuration (supply locally; never commit it)
+android-native/app/google-services.json

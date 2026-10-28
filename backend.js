@@ -101,6 +101,38 @@
       callNotifications:!!settings.callNotifications
     };
   }
+
+  async function registerNativeAndroidPushToken(token, settings=appState()?.settings||{}){
+    const cleanToken=String(token||"").trim();
+    if(cleanToken.length<20||cleanToken.length>4096||/\s/.test(cleanToken))throw new Error("The native Android push token is invalid.");
+    window.__waNativeFCMToken=cleanToken;
+    const me=getUser();
+    if(!db||!me||!me.isSupabase)return false;
+    const {error}=await db.functions.invoke("whatsapp-push",{
+      body:{action:"register-android-token",token:cleanToken,settings:normalizePushSettings(settings)}
+    });
+    if(error)throw new Error(error.message||"Could not register native Android call alerts.");
+    return true;
+  }
+  async function unregisterNativeAndroidPushToken(token){
+    const cleanToken=String(token||window.__waNativeFCMToken||"").trim();
+    const me=getUser();
+    if(!db||!me||!me.isSupabase||!cleanToken)return false;
+    const {error}=await db.functions.invoke("whatsapp-push",{
+      body:{action:"unregister-android-token",token:cleanToken}
+    });
+    if(error)throw new Error(error.message||"Could not unregister the native Android push token.");
+    return true;
+  }
+  window.waBackendRegisterAndroidPushToken=registerNativeAndroidPushToken;
+  window.onWhatsAppNativePushToken=function(token){
+    const cleanToken=String(token||"").trim();
+    if(!cleanToken)return;
+    window.__waNativeFCMToken=cleanToken;
+    void registerNativeAndroidPushToken(cleanToken,appState()?.settings||{}).catch(error=>{
+      console.warn("Native Android push token will retry after sign-in or refresh:",error&&error.message||error);
+    });
+  };
   function vapidKeyToBytes(value){
     const base64=String(value||"").replace(/-/g,"+").replace(/_/g,"/");
     const raw=atob(base64+"=".repeat((4-base64.length%4)%4));
@@ -122,15 +154,25 @@
     return true;
   }
   async function updateDevicePushPreferences(settings=appState()?.settings||{}){
-    if(!db||!("serviceWorker" in navigator)||!("PushManager" in window))return false;
-    const registration=await navigator.serviceWorker.ready;
-    const subscription=await registration.pushManager.getSubscription();
-    if(!subscription)return false;
-    const {error}=await db.functions.invoke("whatsapp-push",{
-      body:{action:"preferences",endpoint:subscription.endpoint,settings:normalizePushSettings(settings)}
-    });
-    if(error)throw error;
-    return true;
+    if(!db)return false;
+    let updated=false;
+    if("serviceWorker" in navigator&&"PushManager" in window){
+      const registration=await navigator.serviceWorker.ready;
+      const subscription=await registration.pushManager.getSubscription();
+      if(subscription){
+        const {error}=await db.functions.invoke("whatsapp-push",{
+          body:{action:"preferences",endpoint:subscription.endpoint,settings:normalizePushSettings(settings)}
+        });
+        if(error)throw error;
+        updated=true;
+      }
+    }
+    const nativeToken=String(window.__waNativeFCMToken||"").trim();
+    if(nativeToken&&getUser()?.isSupabase){
+      await registerNativeAndroidPushToken(nativeToken,settings);
+      updated=true;
+    }
+    return updated;
   }
   function dispatchServerPush(action,payload){
     if(!db||!getUser()?.isSupabase)return;
@@ -419,6 +461,13 @@
     bridge.setBackendUser(sessionUser,data);
     await loadData(false);
     try{if(!(await registerCurrentDevice()))return;}catch(deviceError){console.warn("Could not register linked device:",deviceError&&deviceError.message||deviceError);}
+    // Native Android passes its FCM token to the page. Register after the signed-in
+    // Supabase user has been restored so each push token belongs to the correct account.
+    const nativeToken=String(window.__waNativeFCMToken||"").trim();
+    if(nativeToken){
+      try{await registerNativeAndroidPushToken(nativeToken,appState()?.settings||{});}
+      catch(nativeError){console.warn("Could not register native Android push token:",nativeError&&nativeError.message||nativeError);}
+    }
     // Notification clicks can open a fresh tab; wait for authenticated chat data before routing.
     try{
       const params=new URLSearchParams(location.search);
@@ -1425,6 +1474,8 @@
     if(presenceChannel&&db)try{await db.removeChannel(presenceChannel);}catch(_){}
     presenceChannel=null;presenceUserId="";
     liveChannel=null;liveUserId="";if(window.WhatsAppCalls)window.WhatsAppCalls.cleanup();
+    const nativeToken=String(window.__waNativeFCMToken||"").trim();
+    if(nativeToken)try{await unregisterNativeAndroidPushToken(nativeToken);}catch(error){console.warn("Could not unregister native Android push token:",error&&error.message||error);}
     try{await db.auth.signOut();}catch(_){}
     const root=$("#app-screen"),auth=$("#auth-screen");if(root)root.classList.add("hidden");if(auth)auth.classList.remove("hidden");
     try{localStorage.removeItem("wa_frontend_session_v2");}catch(_){}

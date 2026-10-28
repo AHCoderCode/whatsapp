@@ -319,6 +319,12 @@ check("call notification action can be queued until offer arrives", () => {
   includes(files.calls, "runPendingNotificationAction");
   includes(files.calls, "handleNotificationAction");
 });
+check("native Android FCM token registration is authenticated and preference-aware", () => {
+  includes(files.backend, 'action:"register-android-token"');
+  includes(files.backend, "window.waBackendRegisterAndroidPushToken=registerNativeAndroidPushToken");
+  includes(files.backend, "unregister-android-token");
+  includes(files.backend, "window.__waNativeFCMToken");
+});
 check("background call-test diagnostics record service-worker receipt and display stages", () => {
   includes(files.sw, 'reportCallTestReceipt(probeId, "received")');
   includes(files.sw, 'reportCallTestReceipt(probeId, "shown")');
