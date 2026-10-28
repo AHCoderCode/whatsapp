@@ -294,10 +294,34 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       activeCall=Object.assign({},data,{direction:"outgoing",peer:person});
       renderCallOverlay("Calling @"+(person.username||person.name)+"…");
       ringTimer=null; // Keep the call active until either side ends it.
-      // Notify subscribed devices as soon as the ringing row exists, not after camera/mic permission.
-      void client.functions.invoke("whatsapp-push",{body:{action:"notify-call",callId:newId}})
-        .then(({error})=>{if(error)console.warn("Background call notification request failed:",error.message||error);})
-        .catch(error=>console.warn("Background call notification request failed:",error));
+      // Complete the server-side push before media permission can fail and
+      // end the call row. This is the alert path used while the recipient is
+      // using another app, where page audio is not reliable.
+      try{
+        const pushResult=await withCallTimeout(
+          client.functions.invoke("whatsapp-push",{body:{action:"notify-call",callId:newId}}),
+          6000,
+          "Background call alert dispatch timed out."
+        );
+        if(pushResult.error)throw pushResult.error;
+        const delivery=pushResult.data||{};
+        const subscriptions=Number(delivery.subscriptions||0);
+        const sent=Number(delivery.sent||0);
+        const failed=Number(delivery.failed||0);
+        if(sent<1){
+          const message=subscriptions<1
+            ?"The call is ringing, but the other device has no enabled call-alert subscription. Open WhatsApp there and enable Settings → Notifications → Calls."
+            :"The call is ringing, but the background alert could not be delivered. Check notifications and internet on the receiving phone.";
+          console.warn("Background call alert was not accepted:",delivery);
+          say(message);
+        }else if(failed>0){
+          console.warn("Some background call alerts failed:",delivery);
+        }
+      }catch(pushError){
+        console.warn("Initial background call alert dispatch failed:",pushError&&pushError.message||pushError);
+        say("The call is trying to connect, but its background notification could not be confirmed. Check Calls notifications on the receiving phone.");
+      }
+      if(!activeCall||activeCall.id!==newId)return;
       startCallPushReminders(newId,client);
       const grantedStream=await userMediaWithTimeout(mediaType==="video",20000);
       if(!activeCall||activeCall.id!==newId){grantedStream.getTracks().forEach(track=>track.stop());return;}

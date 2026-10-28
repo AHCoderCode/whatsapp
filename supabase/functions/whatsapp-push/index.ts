@@ -107,7 +107,7 @@ async function sendPushToUsers(
   payload: any,
   ttl: number
 ) {
-  if (!admin || !userIds.length) return { sent: 0, stale: 0 };
+  if (!admin || !userIds.length) return { sent: 0, stale: 0, failed: 0, subscriptions: 0 };
   const config = await getVapidConfig();
   webPush.setVapidDetails(config.subject, config.vapid_public_key, config.vapid_private_key);
   let query = admin.from("whatsapp_push_subscriptions")
@@ -145,7 +145,7 @@ async function sendPushToUsers(
     }
   });
   await Promise.allSettled(jobs);
-  return { sent, stale, failed };
+  return { sent, stale, failed, subscriptions: subscriptions.length };
 }
 
 async function notifyMessage(userId: string, body: any) {

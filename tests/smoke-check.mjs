@@ -46,10 +46,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261028n");
-  includes(files.sw, "whatsapp-final-20261028n");
-  includes(files.manifest, "whatsapp-final-20261028n");
-  includes(files.sw, "whatsapp-final-shell-v43");
+  includes(files.html, "whatsapp-final-20261028o");
+  includes(files.sw, "whatsapp-final-20261028o");
+  includes(files.manifest, "whatsapp-final-20261028o");
+  includes(files.sw, "whatsapp-final-shell-v44");
 });
 check("legacy ESC compatibility aliases exist as browser globals", () => {
   includes(files.html, "var ESC = window.ESC = window.ESC || function");
@@ -195,6 +195,8 @@ check("locked-screen call alerts repeat and delayed incoming calls are not dropp
   includes(files.calls, "callPushReminderTimer");
   includes(files.calls, "},12000);");
   includes(files.calls, 'body:{action:"notify-call",callId:expectedId}');
+  includes(files.calls, "await withCallTimeout(");
+  includes(files.calls, "Background call alert dispatch timed out.");
   excludes(files.calls, "Date.now()-Date.parse(row.created_at)>45000");
   excludes(files.calls, "Date.now()-Date.parse(data.created_at)>45000");
   excludes(files.calls, "Date.now()-Date.parse(call.created_at)>45000");
@@ -318,6 +320,8 @@ check("background call alerts always show, retry transient push errors, and can 
   includes(files.push, "attempt < 2");
   includes(files.push, "urgency: preferenceColumn === \"calls_enabled\" ? \"high\" : \"normal\"");
   includes(files.push, "Background call-alert test.");
+  includes(files.push, "subscriptions: subscriptions.length");
+  includes(files.app, "If it appeared silently, set WhatsApp/Chrome notifications to Alerting with sound");
   includes(files.app, '["phone","Test call alert"');
   includes(files.app, 'if(title==="Test call alert")');
   includes(files.backend, "window.waBackendTestCallPush=testCallPush;");
