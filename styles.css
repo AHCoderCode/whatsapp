@@ -415,3 +415,31 @@ button,input,textarea,select{max-width:100%}
 .message-meta .message-read-status.is-read,.message-meta .message-read-status.is-read svg{color:#078ee8;}
 .wa-call-control svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
 .wa-call-control.decline svg{transform:rotate(135deg);}
+
+/* Touch interaction polish: remove browser-blue tap/selection flashes while keeping keyboard focus visible. */
+*,*::before,*::after{-webkit-tap-highlight-color:transparent}
+body,body *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+input,textarea,[contenteditable="true"]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
+button:focus:not(:focus-visible),[role="button"]:focus:not(:focus-visible){outline:none!important;box-shadow:none!important}
+button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:focus-visible{outline:2px solid #00a884;outline-offset:2px}
+::selection{background:rgba(0,168,132,.2);color:inherit}
+.message-text{white-space:pre-wrap;overflow-wrap:anywhere}
+.message-link{color:#027eb5;text-decoration:underline;text-underline-offset:2px}
+.wa-inline-voice-audio{display:block;width:min(285px,100%);max-width:100%;height:36px;margin:7px 0 2px;border-radius:18px}
+.wa-incoming-call-banner{position:fixed;z-index:1000010;top:max(10px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:min(620px,calc(100% - 24px));min-height:76px;display:flex;align-items:center;gap:12px;padding:12px 14px;background:#fff;border:1px solid #d8e5df;border-radius:18px;box-shadow:0 10px 36px rgba(17,35,29,.24);color:#111b21}
+.wa-incoming-call-avatar{width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;border-radius:50%;background:#d9fdd3;color:#006b55;font-weight:700}
+.wa-incoming-call-copy{display:flex;flex:1;min-width:0;flex-direction:column;gap:4px}
+.wa-incoming-call-copy strong{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wa-incoming-call-copy small{font-size:12px;color:#667781}
+.wa-incoming-call-banner button{min-height:38px;padding:0 14px;border:0;border-radius:22px;font-size:12px;font-weight:600;line-height:1.2;cursor:pointer}
+.wa-incoming-decline{background:#fbe8e7;color:#b42318}
+.wa-incoming-accept{background:#008f70;color:#fff}
+.wa-incoming-accept:disabled{opacity:.62;cursor:wait}
+@media(max-width:480px){.wa-incoming-call-banner{gap:7px;padding:10px}.wa-incoming-call-avatar{width:38px;height:38px;flex-basis:38px}.wa-incoming-call-banner button{padding:0 10px;min-height:36px}}
+/* Landscape touch phones can exceed a desktop-width breakpoint: focus the active conversation. */
+.app-screen.mobile-landscape.mobile-conversation-open .chat-sidebar{display:none!important}
+.app-screen.mobile-landscape.mobile-conversation-open .main-pane{display:flex!important;flex:1 1 100%;width:100%;min-width:0}
+.app-screen.mobile-landscape .mobile-nav{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));height:48px}
+.app-screen.mobile-landscape .mobile-tab{min-width:0;padding:3px}
+.app-screen.mobile-landscape.mobile-conversation-open .app-workspace{height:calc(100% - 48px - env(safe-area-inset-bottom))}
+.app-screen.mobile-landscape .conversation{min-height:0;height:100%}
