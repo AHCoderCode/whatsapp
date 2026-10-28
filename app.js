@@ -533,19 +533,26 @@
     if(permission==="default"){try{permission=await Notification.requestPermission();}catch(_){permission="denied";}}
     if(permission!=="granted"){state.settings[settingKey]=false;saveState();renderSettings();toast("Notifications are blocked. Allow them in browser or device settings, then try again.");return false;}
     saveState();renderSettings();
+    let backgroundPushReady=false;
+    if(window.waBackendEnablePush){
+      try{backgroundPushReady=await window.waBackendEnablePush(state.settings);}catch(error){console.warn("Background push registration failed:",error&&error.message||error);}
+    }
     try{
-      if("serviceWorker" in navigator){const registration=await navigator.serviceWorker.ready;await registration.showNotification("WhatsApp notifications enabled",{body:"Notifications are ready while this app is connected.",icon:"/icon-192.svg",badge:"/icon-192.svg",tag:"wa-notifications-enabled"});}
-      else new Notification("WhatsApp notifications enabled",{body:"Notifications are ready while this app is connected."});
+      if("serviceWorker" in navigator){const registration=await navigator.serviceWorker.ready;await registration.showNotification("WhatsApp notifications enabled",{body:backgroundPushReady?"Background notifications are registered for this device.":"Notifications are enabled while the app is connected.",icon:"/icon-192.svg",badge:"/icon-192.svg",tag:"wa-notifications-enabled"});}
+      else new Notification("WhatsApp notifications enabled",{body:"Notifications are enabled while the app is connected."});
     }catch(_){}
-    toast("Device notifications enabled.");return true;
+    toast(backgroundPushReady?"Device and background notifications enabled.":"Browser notifications enabled. Background delivery is unavailable until push registration succeeds on this signed-in device.");return true;
   }
   function handleSettingOption(title) {
     if(title==="Theme"){state.settings.dark=!state.settings.dark;saveState();applySettings();renderSettings();toast("Theme updated.");return;}
     const settingByTitle={"Read receipts":"readReceipts","Keep chats archived":"keepArchived","Enter is send":"enterToSend","Media visibility":"mediaVisibility","App lock":"appLock","Reduce motion":"reduceMotion","Keyboard navigation":"keyboardNav","High contrast":"highContrast","Spell check":"spellcheck","Reaction notifications":"reactionNotifications","Security notifications":"securityNotifications","Messages":"messageNotifications","Groups":"groupNotifications","Calls":"callNotifications"};
     if(settingByTitle[title]){
       const key=settingByTitle[title];state.settings[key]=!state.settings[key];saveState();applySettings();renderSettings();
-      if(["messageNotifications","groupNotifications","callNotifications"].includes(key)&&state.settings[key])void requestNotificationPermission(key);
-      else toast(title+" updated.");
+      if(["messageNotifications","groupNotifications","callNotifications"].includes(key)){
+        if(state.settings[key])void requestNotificationPermission(key);
+        else if(window.waBackendUpdatePushPreferences)void window.waBackendUpdatePushPreferences(state.settings).catch(error=>console.warn("Push preferences could not sync:",error));
+      }
+      toast(title+" updated.");
       return;
     }
     if(title==="Chat wallpaper"){chooseWallpaperDialog();return;}
@@ -1204,8 +1211,11 @@ function openSharedItemsDialog(chat,kind) {
       const key=t.dataset.setting;
       if(key==="dark")state.settings.dark=!state.settings.dark;else state.settings[key]=!state.settings[key];
       saveState();applySettings();renderSettings();
-      if(["messageNotifications","groupNotifications","callNotifications"].includes(key)&&state.settings[key])void requestNotificationPermission(key);
-      else toast("Setting updated.");
+      if(["messageNotifications","groupNotifications","callNotifications"].includes(key)){
+        if(state.settings[key])void requestNotificationPermission(key);
+        else if(window.waBackendUpdatePushPreferences)void window.waBackendUpdatePushPreferences(state.settings).catch(error=>console.warn("Push preferences could not sync:",error));
+      }
+      toast("Setting updated.");
       return;
     }
     if(t.dataset.wallpaper){
