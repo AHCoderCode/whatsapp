@@ -46,10 +46,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261028g");
-  includes(files.sw, "whatsapp-final-20261028g");
-  includes(files.manifest, "whatsapp-final-20261028g");
-  includes(files.sw, "whatsapp-final-shell-v36");
+  includes(files.html, "whatsapp-final-20261028h");
+  includes(files.sw, "whatsapp-final-20261028h");
+  includes(files.manifest, "whatsapp-final-20261028h");
+  includes(files.sw, "whatsapp-final-shell-v37");
 });
 check("legacy ESC compatibility aliases exist as browser globals", () => {
   includes(files.html, "var ESC = window.ESC = window.ESC || function");
@@ -142,6 +142,10 @@ check("URLs in messages are safely linkified", () => {
   includes(files.app, "function linkifyText(value)");
   includes(files.app, "rel='noopener noreferrer'");
   includes(files.app, "linkifyText(message.text)");
+});
+check("backend defines the attachment escaping helper used before voice playback", () => {
+  includes(files.backend, 'const esc = value => bridge.escapeHTML(String(value == null ? "" : value));');
+  includes(files.backend, 'name=esc(message.attachmentName||"Attachment")');
 });
 check("voice notes use inline audio playback", () => {
   includes(files.backend, "wa-inline-voice-audio");
