@@ -90,6 +90,18 @@
       messageType:row.message_type||"text",voiceDurationMs:Number(row.voice_duration_ms||0),
       replyToId:row.reply_to_message_id||null,forwardedFromId:row.forwarded_from_message_id||null,forwarded:!!row.forwarded_from_message_id};
   }
+  function notifyIncomingMessage(chat,message){
+    const settings=appState()?.settings||{};
+    if(!chat||!message||chat.muted||typeof Notification==="undefined"||Notification.permission!=="granted")return;
+    const key=chat.type==="group"?"groupNotifications":"messageNotifications";
+    if(settings[key]===false)return;
+    if(document.visibilityState==="visible"&&document.hasFocus()&&String(bridge.getSelectedChatId?.()||"")===String(chat.id))return;
+    const title=chat.type==="group"?(chat.name+" · "+(message.sender||"New message")):(chat.name||"New message");
+    const body=String(message.text||(message.attachmentType==="voice"?"🎤 Voice message":message.attachmentName?"📎 "+message.attachmentName:"New attachment")).slice(0,180);
+    const options={body,icon:"/icon-192.svg",badge:"/icon-192.svg",tag:"wa-message-"+String(chat.id),renotify:true,data:{kind:"message",chatId:String(chat.id),url:"/"}};
+    if("serviceWorker" in navigator)void navigator.serviceWorker.ready.then(registration=>registration.showNotification(title,options)).catch(()=>{try{new Notification(title,options);}catch(_){}});
+    else try{new Notification(title,options);}catch(_){}
+  }
   function insertMessageIntoUI(row) {
     const me=getUser(), s=appState();
     if(!me||!me.isSupabase||!s||!row)return;
@@ -98,6 +110,7 @@
     if(!chat){void loadData(true);return;}
     if(chat.messages.some(m=>String(m.id)===String(row.id)))return;
     const msg=localMessage(row,me,chat);
+    if(msg.from==="them")notifyIncomingMessage(chat,msg);
     if(msg.replyToId){
       const quoted=chat.messages.find(m=>String(m.id)===String(msg.replyToId));
       if(quoted)msg.replyTo={id:quoted.id,text:quoted.text||quoted.attachmentName||"Attachment",sender:quoted.from==="me"?"You":(quoted.sender||chat.name)};
@@ -125,7 +138,7 @@
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"whatsapp_events"},()=>void loadData(true))
       .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_poll_votes"},()=>void loadData(true))
       .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_event_rsvps"},()=>void loadData(true))
-      .on("postgres_changes",{event:"UPDATE",schema:"public",table:"aeroshell_profiles",filter:"id=eq."+userId},()=>void loadData(true))
+      .on("postgres_changes",{event:"UPDATE",schema:"public",table:"aeroshell_profiles"},()=>void loadData(true))
       .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_statuses"},()=>void loadData(true))
       .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_channels"},()=>void loadData(true))
       .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_channel_posts"},()=>void loadData(true))
@@ -413,8 +426,9 @@
     return list.length;
   }
   async function markReadForChat(chat) {
-    const me=getUser();
+    const me=getUser(),settings=appState()?.settings||{};
     if(!me||!me.isSupabase||!chat||!Array.isArray(chat.messages))return;
+    if(settings.readReceipts===false)return;
     const pending=chat.messages.filter(m=>m.from==="them"&&!m.read&&m.id&&/^[0-9a-f-]{36}$/i.test(String(m.id)));
     if(!pending.length)return;
     try{
@@ -476,19 +490,31 @@
     }
   }
   async function openAttachment(messageId) {
-    const me=getUser(), s=appState();
+    const me=getUser(),s=appState();
     if(!me||!me.isSupabase||!s)return;
     const chat=(s.chats||[]).find(c=>(c.messages||[]).some(m=>String(m.id)===String(messageId)));
     const message=chat&&(chat.messages||[]).find(m=>String(m.id)===String(messageId));
     if(!message||!message.attachmentPath)return say("The attachment is not available in this chat.");
+    const isVoice=message.attachmentType==="voice"||message.messageType==="voice";
+    const button=Array.from(document.querySelectorAll("[data-action='open-attachment']")).find(el=>String(el.dataset.messageId)===String(messageId));
+    if(isVoice&&button){
+      const existing=button.parentElement?.querySelector("audio.wa-inline-voice-audio");
+      if(existing){if(existing.paused)void existing.play().catch(()=>say("Tap the audio play control to start playback."));else existing.pause();return;}
+    }
     try{
       const {data,error}=await db.storage.from(ATTACHMENT_BUCKET).createSignedUrl(message.attachmentPath,120);
       if(error||!data||!data.signedUrl)throw error||new Error("Could not create a private attachment link.");
-      const url=esc(data.signedUrl),name=esc(message.attachmentName||"Attachment"),mime=String(message.attachmentMime||"");
-      let preview="";
-      if(mime.startsWith("image/"))preview="<img class='wa-attachment-preview' src='"+url+"' alt='"+name+"'>";
-      else if(mime.startsWith("audio/"))preview="<audio class='wa-attachment-audio' controls preload='none' src='"+url+"'></audio>";
-      bridge.openDialog("Shared attachment","<div class='wa-attachment-dialog'>"+preview+"<p>"+name+"</p><a class='primary-button' href='"+url+"' target='_blank' rel='noopener noreferrer'>Open / download attachment</a><small>This private link expires in about two minutes.</small></div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");
+      const url=String(data.signedUrl),name=esc(message.attachmentName||"Attachment"),mime=String(message.attachmentMime||"");
+      if(isVoice&&button){
+        const audio=document.createElement("audio");audio.className="wa-inline-voice-audio";audio.controls=true;audio.preload="none";audio.src=url;audio.setAttribute("aria-label","Voice message playback");
+        button.insertAdjacentElement("afterend",audio);
+        try{await audio.play();}catch(_){}
+        return;
+      }
+      const safeUrl=esc(url);let preview="";
+      if(mime.startsWith("image/"))preview="<img class='wa-attachment-preview' src='"+safeUrl+"' alt='"+name+"'>";
+      else if(mime.startsWith("audio/"))preview="<audio class='wa-attachment-audio' controls preload='none' src='"+safeUrl+"'></audio>";
+      bridge.openDialog("Shared attachment","<div class='wa-attachment-dialog'>"+preview+"<p>"+name+"</p><a class='primary-button' href='"+safeUrl+"' target='_blank' rel='noopener noreferrer'>Open / download attachment</a><small>This private link expires in about two minutes.</small></div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");
     }catch(error){say(safeError(error,"This private attachment could not be opened."));}
   }
   async function startVoiceRecording() {
