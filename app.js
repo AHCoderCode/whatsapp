@@ -33,6 +33,7 @@
   let messageHoldRow = null;
   let messageHoldStart = null;
   let messageHoldTriggered = false;
+  let messageHoldTriggeredRow = null;
   let messageReactionPickerOpen = false;
   let forwardDraft = null;
   const settingsTabs = [
@@ -1594,14 +1595,31 @@ function openSharedItemsDialog(chat,kind) {
   document.addEventListener("click",event=>{
     const menu=$("#popup-menu");
     if(menu&&!menu.contains(event.target)&&!event.target.closest("[data-action]"))closePopup();
+    // Outside taps dismiss the selected message. Keep the action toolbar,
+    // reaction picker, and their menus interactive.
+    if(!selectedMessage)return;
+    if(event.target.closest("#message-selection-toolbar,#message-reaction-picker,#popup-menu,#dialog-backdrop"))return;
+    const row=event.target.closest(".message-row");
+    if(row&&String(row.dataset.messageId)===String(selectedMessage.id)&&String(selectedMessage.chatId)===String(currentChat()?.id))return;
+    dismissMessageSelection(false);
   });
   main.addEventListener("pointerdown",event=>{
+    if(messageHoldTriggered){messageHoldTriggered=false;messageHoldTriggeredRow=null;}
     const row=event.target.closest(".message-row");
-    if(!row||event.target.closest("button,a,input,textarea,select"))return;
+    const voiceButton=event.target.closest(".message-attachment-open.voice-message-open");
+    // Voice bubbles are buttons for tap-to-play, but a long press selects
+    // them instead. Their release click is blocked at document capture.
+    if(!row||(event.target.closest("button,a,input,textarea,select")&&!voiceButton))return;
     if(event.pointerType==="mouse"&&event.button!==0)return;
     clearTimeout(messageHoldTimer);
     messageHoldRow=row;messageHoldStart={x:event.clientX,y:event.clientY};
-    messageHoldTimer=setTimeout(()=>{if(!messageHoldRow)return;messageHoldTriggered=true;selectMessageForActions(messageHoldRow);},520);
+    messageHoldTimer=setTimeout(()=>{
+      if(messageHoldRow!==row)return;
+      messageHoldTriggered=true;messageHoldTriggeredRow=row;
+      const audio=row.querySelector("audio.wa-inline-voice-audio");
+      if(audio&&!audio.paused)audio.pause();
+      selectMessageForActions(row);
+    },2000);
   },true);
   main.addEventListener("pointermove",event=>{
     if(!messageHoldTimer||!messageHoldStart)return;
@@ -1612,9 +1630,18 @@ function openSharedItemsDialog(chat,kind) {
   const stopMessageHold=()=>{if(messageHoldTimer){clearTimeout(messageHoldTimer);messageHoldTimer=null;}messageHoldRow=null;messageHoldStart=null;};
   main.addEventListener("pointerup",stopMessageHold,true);
   main.addEventListener("pointercancel",stopMessageHold,true);
-  main.addEventListener("click",event=>{
-    if(messageHoldTriggered&&event.target.closest(".message-row")){
-      event.preventDefault();event.stopImmediatePropagation();messageHoldTriggered=false;
+  // Run at document capture before backend.js handles a voice attachment click.
+  // This ensures releasing a two-second hold selects the note instead of playing it.
+  document.addEventListener("click",event=>{
+    if(!messageHoldTriggered)return;
+    const row=event.target.closest(".message-row");
+    if(row&&row===messageHoldTriggeredRow){
+      event.preventDefault();event.stopImmediatePropagation();
+      messageHoldTriggered=false;messageHoldTriggeredRow=null;
+    }else{
+      // Some mobile browsers omit the synthetic click after a long press.
+      // Let the next normal outside tap pass through and dismiss the selection.
+      messageHoldTriggered=false;messageHoldTriggeredRow=null;
     }
   },true);
   async function applySelectedMessageReaction(emoji) {
@@ -1662,6 +1689,9 @@ function openSharedItemsDialog(chat,kind) {
     const row=event.target.closest(".message-row");
     if(!row)return;
     event.preventDefault();
+    // Touch-first browsers may fire contextmenu before the requested two-second
+    // hold finishes. Keep desktop right-click, and use the pointer timer on phones.
+    if(window.matchMedia("(pointer: coarse)").matches)return;
     selectMessageForActions(row);
   });
   window.addEventListener("resize",updateMobile);

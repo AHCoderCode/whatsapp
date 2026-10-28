@@ -46,10 +46,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261028k");
-  includes(files.sw, "whatsapp-final-20261028k");
-  includes(files.manifest, "whatsapp-final-20261028k");
-  includes(files.sw, "whatsapp-final-shell-v40");
+  includes(files.html, "whatsapp-final-20261028l");
+  includes(files.sw, "whatsapp-final-20261028l");
+  includes(files.manifest, "whatsapp-final-20261028l");
+  includes(files.sw, "whatsapp-final-shell-v41");
 });
 check("legacy ESC compatibility aliases exist as browser globals", () => {
   includes(files.html, "var ESC = window.ESC = window.ESC || function");
@@ -148,6 +148,25 @@ check("backend defines the attachment escaping helper used before voice playback
   includes(files.backend, 'name=esc(message.attachmentName||"Attachment")');
 });
 
+check("message long-press waits two seconds and a held voice note cannot start playback", () => {
+  includes(files.app, 'event.target.closest(".message-attachment-open.voice-message-open")');
+  includes(files.app, "},2000);");
+  includes(files.app, "let messageHoldTriggeredRow = null;");
+  includes(files.app, "if(audio&&!audio.paused)audio.pause();");
+  includes(files.app, "intercept a held voice-note release before backend playback");
+  includes(files.app, "#message-selection-toolbar,#message-reaction-picker,#popup-menu,#dialog-backdrop");
+  includes(files.app, "dismissMessageSelection(false);");
+});
+check("locked-screen call alerts repeat and delayed incoming calls are not dropped after 45 seconds", () => {
+  includes(files.calls, "callPushReminderTimer");
+  includes(files.calls, "},12000);");
+  includes(files.calls, 'body:{action:"notify-call",callId:expectedId}');
+  excludes(files.calls, "Date.now()-Date.parse(row.created_at)>45000");
+  excludes(files.calls, "Date.now()-Date.parse(data.created_at)>45000");
+  excludes(files.calls, "Date.now()-Date.parse(call.created_at)>45000");
+  includes(files.sw, "requireInteraction: kind === \"call\"");
+  includes(files.sw, "silent: false");
+});
 check("incoming call ringtones support a persistent custom MP3 and a loud built-in tone", () => {
   includes(files.app, '["phone","Ringtone","Choose a built-in tone or select an MP3 for incoming calls.","ringer"]');
   includes(files.app, "id='wa-ringtone-file-input'");

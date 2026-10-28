@@ -14,7 +14,7 @@
   };
   let activeCall=null, phase="idle", pc=null, localStream=null, remoteStream=null;
   let incomingOffer=null, callChannel=null, channelUser="", pendingSignals=new Map(), seenSignals=new Set();
-  let callTimer=null, ringTimer=null, callSetupTimer=null, callStart=0, elapsed=0, muted=false, cameraOff=false, speakerOn=true, busy=false;
+  let callTimer=null, ringTimer=null, callSetupTimer=null, callPushReminderTimer=null, callStart=0, elapsed=0, muted=false, cameraOff=false, speakerOn=true, busy=false;
   let pendingNotificationAction=null;
 const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
   let ringtoneAudio=null,ringtoneObjectUrl="",ringtoneRequestId=0,ringtoneWanted=false,ringtoneStartPromise=null,previewRingtoneTimer=null,builtInRingtoneBlob=null;
@@ -74,7 +74,6 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
   async function showIncomingCallRecord(row){
     const current=me(),client=db();
     if(!current||!client||!row||row.callee_id!==current.id||row.status!=="ringing"||row.group_call_id||activeCall)return;
-    if(Date.now()-Date.parse(row.created_at)>45000)return;
     let peer=(appState()?.chats||[]).find(person=>String(person.id)===String(row.caller_id));
     if(!peer){
       try{const result=await client.from("aeroshell_profiles").select("id,username,display_name,avatar_data").eq("id",row.caller_id).maybeSingle();const p=result.data;if(p)peer={id:p.id,username:p.username,name:p.display_name||p.username,avatarData:p.avatar_data||""};}catch(_){}
@@ -107,7 +106,32 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     if(ringTimer!==null)clearTimeout(ringTimer);
     if(callTimer!==null)clearInterval(callTimer);
     if(callSetupTimer!==null)clearTimeout(callSetupTimer);
-    ringTimer=null;callTimer=null;callSetupTimer=null;
+    if(callPushReminderTimer!==null)clearInterval(callPushReminderTimer);
+    ringTimer=null;callTimer=null;callSetupTimer=null;callPushReminderTimer=null;
+  }
+  function startCallPushReminders(callId,client){
+    if(callPushReminderTimer!==null)clearInterval(callPushReminderTimer);
+    const expectedId=String(callId);
+    let requestRunning=false;
+    callPushReminderTimer=setInterval(async()=>{
+      const call=activeCall;
+      if(!call||call.direction!=="outgoing"||String(call.id)!==expectedId||call.status!=="ringing"||phase==="connected"||phase==="connecting"||phase==="idle"){
+        if(callPushReminderTimer!==null)clearInterval(callPushReminderTimer);
+        callPushReminderTimer=null;
+        return;
+      }
+      if(requestRunning)return;
+      requestRunning=true;
+      try{
+        const {data,error}=await client.functions.invoke("whatsapp-push",{body:{action:"notify-call",callId:expectedId}});
+        if(error)console.warn("Repeated call alert could not be sent:",error.message||error);
+        if(data&&(data.reason==="call-not-active"||(Number(data.sent||0)===0&&Number(data.failed||0)===0&&Number(data.stale||0)===0&&!data.reason))){
+          if(callPushReminderTimer!==null)clearInterval(callPushReminderTimer);
+          callPushReminderTimer=null;
+        }
+      }catch(error){console.warn("Repeated call alert request failed:",error&&error.message||error);}
+      finally{requestRunning=false;}
+    },12000);
   }
   function cleanupLocal() {
     clearTimers();
@@ -274,6 +298,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       void client.functions.invoke("whatsapp-push",{body:{action:"notify-call",callId:newId}})
         .then(({error})=>{if(error)console.warn("Background call notification request failed:",error.message||error);})
         .catch(error=>console.warn("Background call notification request failed:",error));
+      startCallPushReminders(newId,client);
       const grantedStream=await userMediaWithTimeout(mediaType==="video",20000);
       if(!activeCall||activeCall.id!==newId){grantedStream.getTracks().forEach(track=>track.stop());return;}
       localStream=grantedStream;
@@ -305,7 +330,6 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       if(signal.kind==="offer"){
         const {data,error}=await client.from("aeroshell_calls").select("id,caller_id,callee_id,status,created_at,media_type,group_call_id").eq("id",signal.call_id).eq("callee_id",current.id).eq("status","ringing").maybeSingle();
         if(error||!data||data.group_call_id)return;
-        if(Date.now()-Date.parse(data.created_at)>45000){await client.from("aeroshell_calls").update({status:"rejected"}).eq("id",data.id).eq("status","ringing");return;}
         if(activeCall)return;
         const profileResult=await client.from("aeroshell_profiles").select("id,username,display_name,avatar_data").eq("id",data.caller_id).maybeSingle();
         const peer=profileResult.data||{id:data.caller_id,username:"contact"};
@@ -401,7 +425,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       const {data,error}=await client.from("aeroshell_calls").select("id,caller_id,callee_id,status,created_at,media_type,group_call_id").eq("callee_id",current.id).eq("status","ringing").order("created_at",{ascending:false}).limit(5);
       if(error||!data)return;
       for(const call of data){
-        if(Date.now()-Date.parse(call.created_at)>45000||call.group_call_id)continue;
+        if(call.group_call_id)continue;
         const {data:offerRows}=await client.from("aeroshell_call_signals").select("id,call_id,from_user_id,to_user_id,kind,payload,created_at").eq("call_id",call.id).eq("to_user_id",current.id).eq("kind","offer").limit(1);
         if(offerRows&&offerRows[0])await receiveSignal(offerRows[0]);
       }
