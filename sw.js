@@ -1,19 +1,19 @@
-const CACHE_NAME = "whatsapp-final-shell-v29";
+const CACHE_NAME = "whatsapp-final-shell-v30";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/app.js?v=whatsapp-final-20261027p",
-  "/backend.js?v=whatsapp-final-20261027p",
-  "/calls.js?v=whatsapp-final-20261027p",
-  "/styles.css?v=whatsapp-final-20261027p",
-  "/manifest.webmanifest?v=whatsapp-final-20261027p",
-  "/whatsapp-favicon.svg?v=whatsapp-final-20261027p",
+  "/app.js?v=whatsapp-final-20261028a",
+  "/backend.js?v=whatsapp-final-20261028a",
+  "/calls.js?v=whatsapp-final-20261028a",
+  "/styles.css?v=whatsapp-final-20261028a",
+  "/manifest.webmanifest?v=whatsapp-final-20261028a",
+  "/whatsapp-favicon.svg?v=whatsapp-final-20261028a",
   "/icon.svg",
   "/icon-192.svg",
   "/icon-512.svg",
-  "/icon.svg?v=whatsapp-final-20261027p",
-  "/icon-192.svg?v=whatsapp-final-20261027p",
-  "/icon-512.svg?v=whatsapp-final-20261027p",
+  "/icon.svg?v=whatsapp-final-20261028a",
+  "/icon-192.svg?v=whatsapp-final-20261028a",
+  "/icon-512.svg?v=whatsapp-final-20261028a",
 ];
 
 self.addEventListener("install", event => {
@@ -65,4 +65,54 @@ self.addEventListener("fetch", event => {
       })
       .catch(() => caches.match(event.request).then(cached => cached || caches.match(url.pathname)))
   );
+});
+/* Web Push notification display. Background push still needs a configured push sender and subscriptions. */
+self.addEventListener("push", event => {
+  let payload = {};
+  try { payload = event.data ? event.data.json() : {}; }
+  catch (_) { payload = { body: event.data ? event.data.text() : "" }; }
+  const kind = payload.kind || (payload.data && payload.data.kind) || "message";
+  const data = Object.assign({ kind, url: "/" }, payload.data || {});
+  const title = payload.title || (kind === "call" ? "Incoming call" : "New message");
+  const options = {
+    body: payload.body || (kind === "call" ? "Someone is calling you." : "You received a new message."),
+    icon: payload.icon || "/icon-192.svg",
+    badge: "/icon-192.svg",
+    tag: payload.tag || ("wa-push-" + (data.callId || data.chatId || Date.now())),
+    renotify: true,
+    requireInteraction: kind === "call",
+    data,
+    actions: kind === "call"
+      ? [{ action: "accept", title: "Open call" }, { action: "decline", title: "Dismiss" }]
+      : [{ action: "open", title: "Open chat" }]
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  const data = event.notification.data || {};
+  const action = event.action || "open";
+  event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async clients => {
+    const client = clients.find(item => "focus" in item);
+    if (client) {
+      await client.focus();
+      client.postMessage({
+        type: "whatsapp-notification-action",
+        kind: data.kind,
+        chatId: data.chatId,
+        callId: data.callId,
+        action
+      });
+      return;
+    }
+    const opened = await self.clients.openWindow(data.url || "/");
+    if (opened) opened.postMessage({
+      type: "whatsapp-notification-action",
+      kind: data.kind,
+      chatId: data.chatId,
+      callId: data.callId,
+      action
+    });
+  }));
 });
