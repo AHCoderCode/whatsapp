@@ -138,12 +138,13 @@
       .then(({error})=>{if(error)console.warn("Background push request failed:",error.message||error);})
       .catch(error=>console.warn("Background push request failed:",error));
   }
-  async function testCallPush(delaySeconds=0){const me=getUser();if(!db||!me||!me.isSupabase)throw new Error("Sign in before testing background call alerts.");const delay=Math.max(0,Math.min(10,Math.floor(Number(delaySeconds)||0)));const {data,error}=await db.functions.invoke("whatsapp-push",{body:{action:"test-call-push",delaySeconds:delay}});if(error)throw new Error(error.message||"The background call alert test failed.");return data||{sent:0,stale:0,failed:0,subscriptions:0};}
+  async function testCallPush(delaySeconds=0){
     const me=getUser();
     if(!db||!me||!me.isSupabase)throw new Error("Sign in before testing background call alerts.");
-    const {data,error}=await db.functions.invoke("whatsapp-push",{body:{action:"test-call-push"}});
+    const delay=Math.max(0,Math.min(10,Math.floor(Number(delaySeconds)||0)));
+    const {data,error}=await db.functions.invoke("whatsapp-push",{body:{action:"test-call-push",delaySeconds:delay}});
     if(error)throw new Error(error.message||"The background call alert test failed.");
-    return data||{sent:0,stale:0,failed:0};
+    return data||{sent:0,stale:0,failed:0,subscriptions:0};
   }
   async function notifyIncomingMessage(chat,message){
     const settings=appState()?.settings||{};
