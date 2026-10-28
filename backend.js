@@ -1427,6 +1427,7 @@
     }
     if (boot) boot.hidden = true;
     if (document.body) document.body.classList.remove("wa-booting");
+    try { window.dispatchEvent(new Event("wa-startup-finished")); } catch (_) {}
   }
   async function bootstrap(){
     if(!db){
@@ -1435,9 +1436,9 @@
       return;
     }
     try{
-      const {data,error}=await db.auth.getSession();
+      const {data,error}=await withTimeout(db.auth.getSession(),12000,"Signing in took too long. Check your internet connection and try again.");
       if(error)throw error;
-      if(data&&data.session&&data.session.user)await hydrate(data.session.user);
+      if(data&&data.session&&data.session.user)await withTimeout(hydrate(data.session.user),18000,"WhatsApp took too long to load your chats. The app will open and you can retry.");
       const restored=!!(getUser()&&getUser().isSupabase);
       finishStartup(!restored);
       db.auth.onAuthStateChange((event,session)=>{

@@ -46,10 +46,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261028i");
-  includes(files.sw, "whatsapp-final-20261028i");
-  includes(files.manifest, "whatsapp-final-20261028i");
-  includes(files.sw, "whatsapp-final-shell-v38");
+  includes(files.html, "whatsapp-final-20261028j");
+  includes(files.sw, "whatsapp-final-20261028j");
+  includes(files.manifest, "whatsapp-final-20261028j");
+  includes(files.sw, "whatsapp-final-shell-v39");
 });
 check("legacy ESC compatibility aliases exist as browser globals", () => {
   includes(files.html, "var ESC = window.ESC = window.ESC || function");
@@ -174,6 +174,23 @@ check("call notifications request an audible, vibrating alert and show actionabl
 });
 check("notification onboarding prompt is only scheduled once per hydration", () => {
   assert.equal((files.backend.match(/promptNotificationSetup\(\);\},650/g)||[]).length, 1);
+});
+
+
+check("startup screen always exits when auth bootstrap stalls", () => {
+  includes(files.backend, "withTimeout(db.auth.getSession(),12000");
+  includes(files.backend, "withTimeout(hydrate(data.session.user),18000");
+  includes(files.backend, 'window.dispatchEvent(new Event("wa-startup-finished"))');
+  includes(files.html, "var startupWatchdog=window.setTimeout");
+  includes(files.html, "wa-startup-retry");
+});
+check("custom ringtone gain supports 300 percent and loops until call state changes", () => {
+  includes(files.calls, "value>=25&&value<=300?value:300");
+  includes(files.calls, "gain.gain.value=getRingtoneVolume()/100");
+  includes(files.calls, "audio.loop=true");
+  includes(files.calls, "Keep incoming audio looping until answered or ended.");
+  excludes(files.calls, "No answer. Call ended after 45 seconds.");
+  includes(files.app, "max='300'");
 });
 
 check("voice notes use inline audio playback", () => {
