@@ -90,15 +90,64 @@
       messageType:row.message_type||"text",voiceDurationMs:Number(row.voice_duration_ms||0),
       replyToId:row.reply_to_message_id||null,forwardedFromId:row.forwarded_from_message_id||null,forwarded:!!row.forwarded_from_message_id};
   }
-  function notifyIncomingMessage(chat,message){
+  function normalizePushSettings(settings=appState()?.settings||{}){
+    return {
+      messageNotifications:!!settings.messageNotifications,
+      groupNotifications:!!settings.groupNotifications,
+      callNotifications:!!settings.callNotifications
+    };
+  }
+  function vapidKeyToBytes(value){
+    const base64=String(value||"").replace(/-/g,"+").replace(/_/g,"/");
+    const raw=atob(base64+"=".repeat((4-base64.length%4)%4));
+    return Uint8Array.from(raw,character=>character.charCodeAt(0));
+  }
+  async function enableDevicePush(settings=appState()?.settings||{}){
+    const me=getUser();
+    if(!db||!me||!me.isSupabase)throw new Error("Sign in with your account before enabling background notifications.");
+    if(!("serviceWorker" in navigator)||!("PushManager" in window))throw new Error("This browser does not support background push. Browser notifications can still work while the app is connected.");
+    const registration=await navigator.serviceWorker.ready;
+    const {data:keyData,error:keyError}=await db.functions.invoke("whatsapp-push",{body:{action:"public-key"}});
+    if(keyError||!keyData?.publicKey)throw keyError||new Error("The background notification service did not return a public key.");
+    let subscription=await registration.pushManager.getSubscription();
+    if(!subscription)subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:vapidKeyToBytes(keyData.publicKey)});
+    const {error}=await db.functions.invoke("whatsapp-push",{
+      body:{action:"subscribe",subscription:subscription.toJSON(),settings:normalizePushSettings(settings)}
+    });
+    if(error)throw error;
+    return true;
+  }
+  async function updateDevicePushPreferences(settings=appState()?.settings||{}){
+    if(!db||!("serviceWorker" in navigator)||!("PushManager" in window))return false;
+    const registration=await navigator.serviceWorker.ready;
+    const subscription=await registration.pushManager.getSubscription();
+    if(!subscription)return false;
+    const {error}=await db.functions.invoke("whatsapp-push",{
+      body:{action:"preferences",endpoint:subscription.endpoint,settings:normalizePushSettings(settings)}
+    });
+    if(error)throw error;
+    return true;
+  }
+  function dispatchServerPush(action,payload){
+    if(!db||!getUser()?.isSupabase)return;
+    void db.functions.invoke("whatsapp-push",{body:Object.assign({action},payload||{})})
+      .then(({error})=>{if(error)console.warn("Background push request failed:",error.message||error);})
+      .catch(error=>console.warn("Background push request failed:",error));
+  }
+  async function notifyIncomingMessage(chat,message){
     const settings=appState()?.settings||{};
     if(!chat||!message||chat.muted||typeof Notification==="undefined"||Notification.permission!=="granted")return;
     const key=chat.type==="group"?"groupNotifications":"messageNotifications";
     if(settings[key]===false)return;
     if(document.visibilityState==="visible"&&document.hasFocus()&&String(bridge.getSelectedChatId?.()||"")===String(chat.id))return;
+    // If this device has a push subscription, the service worker owns background alerts.
+    // This avoids showing the same event twice (Realtime + Web Push).
+    if("serviceWorker" in navigator&&"PushManager" in window){
+      try{const registration=await navigator.serviceWorker.ready;if(await registration.pushManager.getSubscription())return;}catch(_){}
+    }
     const title=chat.type==="group"?(chat.name+" · "+(message.sender||"New message")):(chat.name||"New message");
     const body=String(message.text||(message.attachmentType==="voice"?"🎤 Voice message":message.attachmentName?"📎 "+message.attachmentName:"New attachment")).slice(0,180);
-    const options={body,icon:"/icon-192.svg",badge:"/icon-192.svg",tag:"wa-message-"+String(chat.id),renotify:true,data:{kind:"message",chatId:String(chat.id),url:"/"}};
+    const options={body,icon:"/icon-192.svg",badge:"/icon-192.svg",tag:"wa-message-"+String(message.id||chat.id),renotify:true,data:{kind:"message",messageId:String(message.id||""),chatId:String(chat.id),url:"/?waChatId="+encodeURIComponent(String(chat.id))}};
     if("serviceWorker" in navigator)void navigator.serviceWorker.ready.then(registration=>registration.showNotification(title,options)).catch(()=>{try{new Notification(title,options);}catch(_){}});
     else try{new Notification(title,options);}catch(_){}
   }
@@ -110,7 +159,7 @@
     if(!chat){void loadData(true);return;}
     if(chat.messages.some(m=>String(m.id)===String(row.id)))return;
     const msg=localMessage(row,me,chat);
-    if(msg.from==="them")notifyIncomingMessage(chat,msg);
+    if(msg.from==="them")void notifyIncomingMessage(chat,msg);
     if(msg.replyToId){
       const quoted=chat.messages.find(m=>String(m.id)===String(msg.replyToId));
       if(quoted)msg.replyTo={id:quoted.id,text:quoted.text||quoted.attachmentName||"Attachment",sender:quoted.from==="me"?"You":(quoted.sender||chat.name)};
@@ -343,7 +392,7 @@
     try{
       const payload={sender_id:me.id,recipient_id:chat.type==="group"?null:chat.id,group_id:chat.type==="group"?chat.id:null,body,message_type:"text",reply_to_message_id:quote?quote.id:null,forwarded_from_message_id:null};
       const {data,error}=await db.from("aeroshell_messages").insert(payload).select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms,reply_to_message_id,forwarded_from_message_id").single();
-      if(error)throw error;if(data)insertMessageIntoUI(data);
+      if(error)throw error;if(data){insertMessageIntoUI(data);void dispatchServerPush("notify-message",{messageId:data.id});}
       if(quote&&bridge.clearReplyToMessage)bridge.clearReplyToMessage(quote.id);
       const input=$("#message-input");if(input){input.value="";input.style.height="";input.dispatchEvent(new Event("input",{bubbles:true}));}
     }catch(error){say(safeError(error,"Message was not delivered."));}
@@ -399,7 +448,7 @@
     const payload={sender_id:me.id,recipient_id:target.type==="group"?null:target.id,group_id:target.type==="group"?target.id:null,body,message_type:"text",reply_to_message_id:null,forwarded_from_message_id:sourceId};
     const {data,error}=await db.from("aeroshell_messages").insert(payload).select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms,reply_to_message_id,forwarded_from_message_id").single();
     if(error)throw error;
-    if(data)insertMessageIntoUI(data);
+    if(data){insertMessageIntoUI(data);void dispatchServerPush("notify-message",{messageId:data.id});}
     return data;
   }
 
@@ -481,7 +530,7 @@
       const {data,error}=await db.from("aeroshell_messages").insert(row)
         .select("id,sender_id,recipient_id,group_id,body,message_type,created_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms,reply_to_message_id,forwarded_from_message_id").single();
       if(error)throw error;
-      if(data)insertMessageIntoUI(data);
+      if(data){insertMessageIntoUI(data);void dispatchServerPush("notify-message",{messageId:data.id});}
       if(!isVoice)say("Attachment sent.");
       else say("Voice message sent.");
     }catch(error){
@@ -1118,7 +1167,9 @@
   bridge.supabase=db;bridge.isBackendReady=()=>!!db;bridge.loadBackendData=()=>loadData(false);
   bridge.sendBackendMessage=sendMessage;bridge.searchBackendPeople=searchPeople;bridge.requestBackend=sendRequest;bridge.markAllBackendRead=markAllRead;
   bridge.hideBackendMessage=hideMessageForMe;bridge.deleteBackendMessage=deleteMessageForEveryone;bridge.forwardBackendMessage=forwardMessage;bridge.reactBackendMessage=toggleMessageReaction;
-  window.waBackend={client:db,load:()=>loadData(false),safeError,searchPeople,sendMessage,hideMessageForMe,deleteMessageForEveryone,forwardMessage,toggleMessageReaction,markAllRead};
+  window.waBackendEnablePush=enableDevicePush;
+  window.waBackendUpdatePushPreferences=updateDevicePushPreferences;
+  window.waBackend={client:db,load:()=>loadData(false),safeError,searchPeople,sendMessage,hideMessageForMe,deleteMessageForEveryone,forwardMessage,toggleMessageReaction,markAllRead,enableDevicePush,updateDevicePushPreferences};
   function finishStartup(showAuth) {
     const root = $("#app-screen");
     const auth = $("#auth-screen");
