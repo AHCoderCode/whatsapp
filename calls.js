@@ -226,12 +226,13 @@
       activeCall=Object.assign({},data,{direction:"outgoing",peer:person});
       renderCallOverlay("Calling @"+(person.username||person.name)+"…");
       ringTimer=setTimeout(()=>{if(activeCall&&activeCall.id===newId&&phase!=="connected")void endCall("No answer. Call ended after 45 seconds.");},45000);
-      const grantedStream=await userMedia(mediaType==="video");
-      if(!activeCall||activeCall.id!==newId){grantedStream.getTracks().forEach(track=>track.stop());return;}
-      localStream=grantedStream;
+      // Notify subscribed devices as soon as the ringing row exists, not after camera/mic permission.
       void client.functions.invoke("whatsapp-push",{body:{action:"notify-call",callId:newId}})
         .then(({error})=>{if(error)console.warn("Background call notification request failed:",error.message||error);})
         .catch(error=>console.warn("Background call notification request failed:",error));
+      const grantedStream=await userMedia(mediaType==="video");
+      if(!activeCall||activeCall.id!==newId){grantedStream.getTracks().forEach(track=>track.stop());return;}
+      localStream=grantedStream;
       const servers=await relayServers(data.id);
       if(!activeCall||activeCall.id!==newId)return;
       makePeer(activeCall,servers);
