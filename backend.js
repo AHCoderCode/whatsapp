@@ -896,7 +896,7 @@
         const active=String(device.device_key)===String(currentKey);
         const seen=new Date(device.last_seen_at||device.created_at);
         const lastSeen=Number.isNaN(seen.getTime())?"Unknown":seen.toLocaleString();
-        return "<div class='linked-device-card'>"+icon("monitor")+"<div><strong>"+esc(device.device_name||"Browser")+(active?" · This device":"")+"</strong><span>"+(active?"Current signed-in browser":"Linked browser session")+"</span><small>Last active: "+esc(lastSeen)+"</small></div><button class='danger-button' data-action='revoke-linked-device' data-device-key='"+esc(device.device_key)+"'>"+(active?"Sign out":"Sign out")+"</button></div>";
+        return "<div class='linked-device-card'>"+bridge.icon("monitor")+"<div><strong>"+esc(device.device_name||"Browser")+(active?" · This device":"")+"</strong><span>"+(active?"Current signed-in browser":"Linked browser session")+"</span><small>Last active: "+esc(lastSeen)+"</small></div><button class='danger-button' data-action='revoke-linked-device' data-device-key='"+esc(device.device_key)+"'>"+(active?"Sign out":"Sign out")+"</button></div>";
       }).join("");
       bridge.openDialog("Linked devices","<p class='screen-description'>These are browser sessions signed into this app account. Signing one out marks that session for revocation; it checks the change during its next active sync.</p><div class='wa-linked-device-list'>"+(rows||"<div class='empty-state'>No linked browser sessions are registered yet.</div>")+"</div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");
     }catch(error){say(safeError(error,"Could not load linked browser devices."));}
