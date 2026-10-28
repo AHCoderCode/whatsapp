@@ -1,0 +1,25 @@
+name: WhatsApp source smoke checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Parse JavaScript
+        run: node --check app.js && node --check backend.js && node --check calls.js && node --check sw.js
+      - name: Run source smoke checks
+        run: node tests/smoke-check.mjs
