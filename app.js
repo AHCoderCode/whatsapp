@@ -787,7 +787,7 @@
     document.querySelector('meta[name="theme-color"]').setAttribute("content",state.settings.dark?"#111b21":"#00a884");
     const conversation=main.querySelector(".conversation");
     if(conversation) conversation.style.background=state.settings.wallpaper==="plain"?"#ffffff":state.settings.wallpaper==="green"?"#dbeee5":"#efeae2";
-    $("#app-screen input,#app-screen textarea,[contenteditable='true']").forEach(field=>{
+    $$("#app-screen input,#app-screen textarea,[contenteditable='true']").forEach(field=>{
       field.spellcheck=state.settings.spellcheck!==false;
     });
   }
