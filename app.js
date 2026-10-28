@@ -1716,10 +1716,8 @@ function openSharedItemsDialog(chat,kind) {
     navigator.serviceWorker.addEventListener("message", event => {
       const data=event.data||{};
       if(data.type==="whatsapp-notification-action"){
-        if(data.kind==="call"){
-          if(data.action==="accept")window.WhatsAppCalls?.accept?.();
-          else if(data.action==="decline")window.WhatsAppCalls?.decline?.();
-        }else if(data.chatId&&window.waAppBridge)window.waAppBridge.selectChat(data.chatId);
+        if(data.kind==="call")window.WhatsAppCalls?.handleNotificationAction?.(data);
+        else if(data.chatId&&window.waAppBridge)window.waAppBridge.selectChat(data.chatId);
       }
     });
   }
