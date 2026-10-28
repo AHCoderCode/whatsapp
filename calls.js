@@ -14,6 +14,7 @@
   };
   let activeCall=null, phase="idle", pc=null, localStream=null, remoteStream=null;
   let incomingOffer=null, callChannel=null, channelUser="", pendingSignals=new Map(), seenSignals=new Set();
+  let incomingPollTimer=null,incomingPollBusy=false,incomingPollUser="",incomingPollVisibilityHandler=null,incomingPollLastErrorAt=0;
   let callTimer=null, ringTimer=null, callSetupTimer=null, callPushReminderTimer=null, callStart=0, elapsed=0, muted=false, cameraOff=false, speakerOn=true, busy=false;
   let pendingNotificationAction=null;
 const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
@@ -26,13 +27,53 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
   function getRingtoneInfo(){let name="Built-in loud ringtone";try{name=localStorage.getItem("wa_call_ringtone_name")||name;}catch(_){}return{name,custom:name!=="Built-in loud ringtone",volume:getRingtoneVolume()};}
   function getRingtoneVolume(){try{const value=Number(localStorage.getItem("wa_call_ringtone_volume"));return Number.isFinite(value)&&value>=25&&value<=300?value:300;}catch(_){return 300;}}
   function setRingtoneVolume(value){const volume=Math.max(25,Math.min(300,Number(value)||300));try{localStorage.setItem("wa_call_ringtone_volume",String(volume));}catch(_){}if(ringtoneGain)ringtoneGain.gain.value=volume/100;else if(ringtoneAudio)ringtoneAudio.volume=1;return volume;}
-  function closeRingtoneAudioGraph(){const context=ringtoneAudioContext;try{if(ringtoneSource)ringtoneSource.disconnect();if(ringtoneGain)ringtoneGain.disconnect();if(ringtoneCompressor)ringtoneCompressor.disconnect();}catch(_){}ringtoneAudioContext=null;ringtoneGain=null;ringtoneCompressor=null;ringtoneSource=null;if(context&&context.state!=="closed")void context.close().catch(()=>{});}
+  function closeRingtoneAudioGraph(){
+    // Disconnect the ringtone graph but keep the AudioContext alive. A browser
+    // unlock obtained from an ordinary user tap should remain available for the
+    // next incoming call instead of being discarded after every ring.
+    try{if(ringtoneSource)ringtoneSource.disconnect();if(ringtoneGain)ringtoneGain.disconnect();if(ringtoneCompressor)ringtoneCompressor.disconnect();}catch(_){}
+    ringtoneGain=null;ringtoneCompressor=null;ringtoneSource=null;
+  }
   function createBuiltInRingtone(){if(builtInRingtoneBlob)return builtInRingtoneBlob;const sampleRate=22050,duration=3.2,sampleCount=Math.floor(sampleRate*duration),dataLength=sampleCount*2,buffer=new ArrayBuffer(44+dataLength),view=new DataView(buffer);const write=(offset,value)=>{for(let i=0;i<value.length;i++)view.setUint8(offset+i,value.charCodeAt(i));};write(0,"RIFF");view.setUint32(4,36+dataLength,true);write(8,"WAVE");write(12,"fmt ");view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true);view.setUint32(24,sampleRate,true);view.setUint32(28,sampleRate*2,true);view.setUint16(32,2,true);view.setUint16(34,16,true);write(36,"data");view.setUint32(40,dataLength,true);for(let i=0;i<sampleCount;i++){const t=i/sampleRate,phase=t%duration,pulseStart=phase<0.46?0:phase>=0.66&&phase<1.12?0.66:-1;let sample=0;if(pulseStart>=0){const edge=phase-pulseStart,envelope=Math.max(0,Math.min(1,edge/0.018,(0.46-edge)/0.018));sample=(Math.sin(2*Math.PI*440*t)*0.46+Math.sin(2*Math.PI*480*t)*0.46)*envelope*0.94;}view.setInt16(44+i*2,Math.round(Math.max(-1,Math.min(1,sample))*32767),true);}builtInRingtoneBlob=new Blob([buffer],{type:"audio/wav"});return builtInRingtoneBlob;}
-  async function attemptRingtonePlayback(blob,token){const url=URL.createObjectURL(blob),audio=new Audio(url);audio.loop=true;audio.preload="auto";audio.volume=1;ringtoneAudio=audio;ringtoneObjectUrl=url;try{const AudioContextClass=window.AudioContext||window.webkitAudioContext;if(AudioContextClass){const context=new AudioContextClass(),source=context.createMediaElementSource(audio),gain=context.createGain(),compressor=context.createDynamicsCompressor();gain.gain.value=getRingtoneVolume()/100;compressor.threshold.value=-6;compressor.knee.value=6;compressor.ratio.value=12;compressor.attack.value=0.003;compressor.release.value=0.22;source.connect(gain);gain.connect(compressor);compressor.connect(context.destination);ringtoneAudioContext=context;ringtoneSource=source;ringtoneGain=gain;ringtoneCompressor=compressor;await context.resume();}await audio.play();if(token!==ringtoneRequestId)return false;return true;}catch(_){closeRingtoneAudioGraph();if(ringtoneAudio===audio)ringtoneAudio=null;if(ringtoneObjectUrl===url)ringtoneObjectUrl="";try{audio.pause();audio.removeAttribute("src");audio.load();}catch(_){}URL.revokeObjectURL(url);return false;}}
+  async function attemptRingtonePlayback(blob,token){
+    const url=URL.createObjectURL(blob),audio=new Audio(url);
+    audio.loop=true;audio.preload="auto";audio.volume=1;ringtoneAudio=audio;ringtoneObjectUrl=url;
+    try{
+      const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+      if(AudioContextClass){
+        let context=ringtoneAudioContext;
+        if(!context||context.state==="closed"){context=new AudioContextClass();ringtoneAudioContext=context;}
+        const source=context.createMediaElementSource(audio),gain=context.createGain(),compressor=context.createDynamicsCompressor();
+        gain.gain.value=getRingtoneVolume()/100;compressor.threshold.value=-6;compressor.knee.value=6;compressor.ratio.value=12;compressor.attack.value=0.003;compressor.release.value=0.22;
+        source.connect(gain);gain.connect(compressor);compressor.connect(context.destination);
+        ringtoneSource=source;ringtoneGain=gain;ringtoneCompressor=compressor;
+        if(context.state!=="running")await context.resume();
+      }
+      await audio.play();
+      if(token!==ringtoneRequestId)return false;
+      return true;
+    }catch(_){
+      closeRingtoneAudioGraph();
+      if(ringtoneAudio===audio)ringtoneAudio=null;
+      if(ringtoneObjectUrl===url)ringtoneObjectUrl="";
+      try{audio.pause();audio.removeAttribute("src");audio.load();}catch(_){}
+      URL.revokeObjectURL(url);
+      return false;
+    }
+  }
   async function startIncomingRingtone(options={}){if(ringtoneAudio&&!ringtoneAudio.paused)return true;if(ringtoneStartPromise)return ringtoneStartPromise;const token=++ringtoneRequestId;ringtoneWanted=true;ringtoneStartPromise=(async()=>{let saved=null;try{saved=await getSavedRingtone();}catch(error){console.warn("Could not read custom ringtone:",error&&error.message||error);}if(token!==ringtoneRequestId||(!options.preview&&(!activeCall||phase!=="incoming")))return false;if(saved&&saved.blob){if(await attemptRingtonePlayback(saved.blob,token)){ringtoneWanted=false;return true;}if(token!==ringtoneRequestId)return false;}const played=await attemptRingtonePlayback(createBuiltInRingtone(),token);if(token===ringtoneRequestId)ringtoneWanted=!played;return played;})().finally(()=>{if(token===ringtoneRequestId)ringtoneStartPromise=null;});return ringtoneStartPromise;}
   function stopIncomingRingtone(){ringtoneRequestId++;ringtoneWanted=false;ringtoneStartPromise=null;if(previewRingtoneTimer!==null)clearTimeout(previewRingtoneTimer);previewRingtoneTimer=null;const audio=ringtoneAudio,url=ringtoneObjectUrl;ringtoneAudio=null;ringtoneObjectUrl="";closeRingtoneAudioGraph();if(audio){try{audio.pause();audio.removeAttribute("src");audio.load();}catch(_){}}if(url){try{URL.revokeObjectURL(url);}catch(_){}}}
   async function previewRingtone(){if(phase==="incoming")return startIncomingRingtone();stopIncomingRingtone();const played=await startIncomingRingtone({preview:true});if(played)previewRingtoneTimer=setTimeout(()=>{previewRingtoneTimer=null;if(phase==="idle")stopIncomingRingtone();},7000);return played;}
-  document.addEventListener("pointerdown",()=>{if(phase==="incoming"&&ringtoneWanted)void startIncomingRingtone();},true);
+  function primeCallAudio(){
+    const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+    if(!AudioContextClass)return;
+    try{
+      if(!ringtoneAudioContext||ringtoneAudioContext.state==="closed")ringtoneAudioContext=new AudioContextClass();
+      if(ringtoneAudioContext.state!=="running")void ringtoneAudioContext.resume().catch(()=>{});
+    }catch(_){}
+  }
+  document.addEventListener("pointerdown",()=>{primeCallAudio();if(phase==="incoming"&&ringtoneWanted)void startIncomingRingtone();},true);
+  document.addEventListener("keydown",primeCallAudio,true);
   try{
     const params=new URLSearchParams(window.location.search);
     if(params.get("waPushKind")==="call"&&params.get("waCallId")){
@@ -431,8 +472,89 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     bridge.openDialog("Start "+(mediaType==="video"?"video":"voice")+" call",options||"<div class='empty-state'>Add a contact first. Call requests only work with accepted contacts.</div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button>");
     const backdrop=$("#dialog-backdrop");if(backdrop)backdrop.dataset.callMediaType=mediaType;
   }
+
+  async function recoverIncomingOffer(callId,userId,client){
+    const {data,error}=await client.from("aeroshell_call_signals")
+      .select("id,call_id,from_user_id,to_user_id,kind,payload,created_at")
+      .eq("call_id",callId).eq("to_user_id",userId).eq("kind","offer")
+      .order("created_at",{ascending:true}).limit(1);
+    if(!error&&data&&data[0])await receiveSignal(data[0]);
+  }
+  async function pollIncomingCallState(){
+    const current=me(),client=db();
+    if(!current||!current.isSupabase||!client||document.visibilityState==="hidden"||incomingPollBusy)return;
+    incomingPollBusy=true;
+    try{
+      if(activeCall&&String(activeCall.id).startsWith("pending-"))return;
+      if(activeCall){
+        const tracked=activeCall;
+        const {data:row,error}=await client.from("aeroshell_calls")
+          .select("id,caller_id,callee_id,status,created_at,media_type,group_call_id")
+          .eq("id",tracked.id).maybeSingle();
+        if(error){
+          if(Date.now()-incomingPollLastErrorAt>15000){console.warn("[calls] Could not reconcile call status:",error.message||error);incomingPollLastErrorAt=Date.now();}
+          return;
+        }
+        if(!row)return;
+        if(row.status==="rejected"||row.status==="ended"){
+          const direction=tracked.direction;
+          cleanupLocal();
+          if(direction==="outgoing"&&row.status==="rejected")say("The other person declined the call.");
+          else if(row.status==="ended")say("The call has ended.");
+          return;
+        }
+        tracked.status=row.status;
+        if(row.status==="accepted"&&tracked.direction==="outgoing"&&phase==="outgoing")setPhase("connecting","Connecting through the secure relay…");
+        if(tracked.direction==="incoming"&&phase==="incoming"&&!incomingOffer)await recoverIncomingOffer(tracked.id,current.id,client);
+        return;
+      }
+      const {data:rows,error}=await client.from("aeroshell_calls")
+        .select("id,caller_id,callee_id,status,created_at,media_type,group_call_id")
+        .eq("callee_id",current.id).eq("status","ringing").is("group_call_id",null)
+        .order("created_at",{ascending:false}).limit(1);
+      if(error){
+        if(Date.now()-incomingPollLastErrorAt>15000){console.warn("[calls] Could not check incoming calls:",error.message||error);incomingPollLastErrorAt=Date.now();}
+        return;
+      }
+      const row=rows&&rows[0];
+      if(!row)return;
+      await showIncomingCallRecord(row);
+      if(activeCall&&activeCall.direction==="incoming"&&String(activeCall.id)===String(row.id)&&phase==="incoming"&&!incomingOffer){
+        await recoverIncomingOffer(row.id,current.id,client);
+      }
+    }catch(error){
+      if(Date.now()-incomingPollLastErrorAt>15000){console.warn("[calls] Incoming-call recovery failed:",error&&error.message||error);incomingPollLastErrorAt=Date.now();}
+    }finally{incomingPollBusy=false;}
+  }
+  function ensureIncomingCallPolling(userId){
+    const next=String(userId||"");
+    if(!next)return;
+    if(incomingPollTimer!==null&&incomingPollUser===next)return;
+    if(incomingPollTimer!==null)clearInterval(incomingPollTimer);
+    incomingPollUser=next;
+    void pollIncomingCallState();
+    // Realtime is the low-latency path; this foreground poll is the recovery
+    // path for missed inserts or reconnect windows, not the only call transport.
+    incomingPollTimer=setInterval(()=>void pollIncomingCallState(),2000);
+    if(!incomingPollVisibilityHandler){
+      incomingPollVisibilityHandler=()=>{if(document.visibilityState==="visible")void pollIncomingCallState();};
+      document.addEventListener("visibilitychange",incomingPollVisibilityHandler);
+      window.addEventListener("online",incomingPollVisibilityHandler);
+    }
+  }
+  function stopIncomingCallPolling(){
+    if(incomingPollTimer!==null)clearInterval(incomingPollTimer);
+    incomingPollTimer=null;incomingPollUser="";
+    if(incomingPollVisibilityHandler){
+      document.removeEventListener("visibilitychange",incomingPollVisibilityHandler);
+      window.removeEventListener("online",incomingPollVisibilityHandler);
+      incomingPollVisibilityHandler=null;
+    }
+  }
   function subscribe(){
-    const current=me(),client=db();if(!current||!current.isSupabase||!client||(callChannel&&channelUser===current.id))return;
+    const current=me(),client=db();if(!current||!current.isSupabase||!client)return;
+    ensureIncomingCallPolling(current.id);
+    if(callChannel&&channelUser===current.id)return;
     if(callChannel)void client.removeChannel(callChannel);
     channelUser=current.id;
     callChannel=client.channel("wa-calls-"+current.id)
@@ -443,7 +565,10 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
         activeCall.status=row.status;
         if(row.status==="rejected"||row.status==="ended"){const who=activeCall.direction;cleanupLocal();if(who==="outgoing"&&row.status==="rejected")say("The other person declined the call.");else if(row.status==="ended")say("The call has ended.");}
         else if(row.status==="accepted"&&activeCall.direction==="outgoing"&&phase==="outgoing")setPhase("connecting","Connecting through the secure relay…");
-      }).subscribe();
+      }).subscribe((status,error)=>{
+        if(status==="SUBSCRIBED")console.info("[calls] Live call events connected.");
+        else if(status==="CHANNEL_ERROR"||status==="TIMED_OUT"||status==="CLOSED")console.warn("[calls] Realtime call events unavailable; foreground recovery remains active.",status,error&&error.message||"");
+      });
     // Recover offers that arrived while this device was offline; only a real offer opens the dialog.
     void (async()=>{
       const {data,error}=await client.from("aeroshell_calls").select("id,caller_id,callee_id,status,created_at,media_type,group_call_id").eq("callee_id",current.id).eq("status","ringing").order("created_at",{ascending:false}).limit(5);
@@ -502,7 +627,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     accept:()=>acceptCall(),
     decline:()=>declineCall(false),
     handleNotificationAction,
-    cleanup:()=>{cleanupLocal();if(callChannel&&db())void db().removeChannel(callChannel);callChannel=null;channelUser="";},
+    cleanup:()=>{cleanupLocal();stopIncomingCallPolling();if(callChannel&&db())void db().removeChannel(callChannel);callChannel=null;channelUser="";},
     getPhase:()=>phase
   };
 })();
