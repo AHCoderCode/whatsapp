@@ -46,10 +46,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261028j");
-  includes(files.sw, "whatsapp-final-20261028j");
-  includes(files.manifest, "whatsapp-final-20261028j");
-  includes(files.sw, "whatsapp-final-shell-v39");
+  includes(files.html, "whatsapp-final-20261028k");
+  includes(files.sw, "whatsapp-final-20261028k");
+  includes(files.manifest, "whatsapp-final-20261028k");
+  includes(files.sw, "whatsapp-final-shell-v40");
 });
 check("legacy ESC compatibility aliases exist as browser globals", () => {
   includes(files.html, "var ESC = window.ESC = window.ESC || function");
@@ -257,6 +257,17 @@ check("call row is created before asking for microphone or camera permission", (
 check("call notification action can be queued until offer arrives", () => {
   includes(files.calls, "runPendingNotificationAction");
   includes(files.calls, "handleNotificationAction");
+});
+check("background call alerts always show, retry transient push errors, and can be tested", () => {
+  includes(files.sw, "if (kind !== \"call\" && clients.some");
+  includes(files.sw, "const isCallTest = kind === \"call\" && data.test === true");
+  includes(files.push, 'body.action === "test-call-push"');
+  includes(files.push, "attempt < 2");
+  includes(files.push, "urgency: preferenceColumn === \"calls_enabled\" ? \"high\" : \"normal\"");
+  includes(files.push, "Background call-alert test.");
+  includes(files.app, '["phone","Test call alert"');
+  includes(files.app, 'if(title==="Test call alert")');
+  includes(files.backend, "window.waBackendTestCallPush=testCallPush;");
 });
 check("audio calls provide speaker-volume, mute and end controls", () => {
   includes(files.calls, "data-wa-call='speaker'");

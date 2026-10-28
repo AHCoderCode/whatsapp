@@ -1,19 +1,19 @@
-const CACHE_NAME = "whatsapp-final-shell-v39";
+const CACHE_NAME = "whatsapp-final-shell-v40";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/app.js?v=whatsapp-final-20261028j",
-  "/backend.js?v=whatsapp-final-20261028j",
-  "/calls.js?v=whatsapp-final-20261028j",
-  "/styles.css?v=whatsapp-final-20261028j",
-  "/manifest.webmanifest?v=whatsapp-final-20261028j",
-  "/whatsapp-favicon.svg?v=whatsapp-final-20261028j",
+  "/app.js?v=whatsapp-final-20261028k",
+  "/backend.js?v=whatsapp-final-20261028k",
+  "/calls.js?v=whatsapp-final-20261028k",
+  "/styles.css?v=whatsapp-final-20261028k",
+  "/manifest.webmanifest?v=whatsapp-final-20261028k",
+  "/whatsapp-favicon.svg?v=whatsapp-final-20261028k",
   "/icon.svg",
   "/icon-192.svg",
   "/icon-512.svg",
-  "/icon.svg?v=whatsapp-final-20261028j",
-  "/icon-192.svg?v=whatsapp-final-20261028j",
-  "/icon-512.svg?v=whatsapp-final-20261028j",
+  "/icon.svg?v=whatsapp-final-20261028k",
+  "/icon-192.svg?v=whatsapp-final-20261028k",
+  "/icon-512.svg?v=whatsapp-final-20261028k",
 ];
 
 self.addEventListener("install", event => {
@@ -74,6 +74,7 @@ self.addEventListener("push", event => {
   const kind = payload.kind || (payload.data && payload.data.kind) || "message";
   const data = Object.assign({ kind, url: "/" }, payload.data || {});
   const title = payload.title || (kind === "call" ? "Incoming call" : "New message");
+  const isCallTest = kind === "call" && data.test === true;
   const options = {
     body: payload.body || (kind === "call" ? "Someone is calling you." : "You received a new message."),
     icon: payload.icon || "/icon-192.svg",
@@ -84,13 +85,14 @@ self.addEventListener("push", event => {
     silent: false,
     vibrate: kind === "call" ? [1200, 350, 1200, 350, 1600] : [180, 80, 180],
     data,
-    actions: kind === "call"
+    actions: kind === "call" && !isCallTest
       ? [{ action: "accept", title: "Accept" }, { action: "decline", title: "Decline" }]
-      : [{ action: "open", title: "Open chat" }]
+      : kind === "call" ? [] : [{ action: "open", title: "Open chat" }]
   };
   event.waitUntil((async () => {
     const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    if (clients.some(client => client.visibilityState === "visible" && client.focused)) return;
+    // A stale "focused" state must never suppress an incoming-call system alert.
+    if (kind !== "call" && clients.some(client => client.visibilityState === "visible" && client.focused)) return;
     await self.registration.showNotification(title, options);
   })());
 });

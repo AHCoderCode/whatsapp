@@ -138,6 +138,13 @@
       .then(({error})=>{if(error)console.warn("Background push request failed:",error.message||error);})
       .catch(error=>console.warn("Background push request failed:",error));
   }
+  async function testCallPush(){
+    const me=getUser();
+    if(!db||!me||!me.isSupabase)throw new Error("Sign in before testing background call alerts.");
+    const {data,error}=await db.functions.invoke("whatsapp-push",{body:{action:"test-call-push"}});
+    if(error)throw new Error(error.message||"The background call alert test failed.");
+    return data||{sent:0,stale:0,failed:0};
+  }
   async function notifyIncomingMessage(chat,message){
     const settings=appState()?.settings||{};
     if(!chat||!message||chat.muted||typeof Notification==="undefined"||Notification.permission!=="granted")return;
@@ -1412,8 +1419,9 @@
   bridge.hideBackendMessage=hideMessageForMe;bridge.deleteBackendMessage=deleteMessageForEveryone;bridge.forwardBackendMessage=forwardMessage;bridge.reactBackendMessage=toggleMessageReaction;
   window.waBackendEnablePush=enableDevicePush;
   window.waBackendUpdatePushPreferences=updateDevicePushPreferences;
+  window.waBackendTestCallPush=testCallPush;
   window.waBackendOpenLinkedDevices=openLinkedDevices;
-  window.waBackend={client:db,load:()=>loadData(false),safeError,searchPeople,sendMessage,hideMessageForMe,deleteMessageForEveryone,forwardMessage,toggleMessageReaction,markAllRead,enableDevicePush,updateDevicePushPreferences,openLinkedDevices,revokeLinkedDevice};
+  window.waBackend={client:db,load:()=>loadData(false),safeError,searchPeople,sendMessage,hideMessageForMe,deleteMessageForEveryone,forwardMessage,toggleMessageReaction,markAllRead,enableDevicePush,updateDevicePushPreferences,testCallPush,openLinkedDevices,revokeLinkedDevice};
   function finishStartup(showAuth) {
     const root = $("#app-screen");
     const auth = $("#auth-screen");

@@ -117,26 +117,35 @@ async function sendPushToUsers(
   const { data, error } = await query;
   if (error) throw error;
   const subscriptions = data || [];
-  let sent = 0, stale = 0;
+  let sent = 0, stale = 0, failed = 0;
   const jobs = subscriptions.map(async (item: any) => {
-    try {
-      await webPush.sendNotification(item.subscription, JSON.stringify(payload), {
-        TTL: ttl,
-        urgency: preferenceColumn === "calls_enabled" ? "high" : "normal"
-      });
-      sent++;
-    } catch (error: any) {
-      const status = Number(error?.statusCode || error?.status || 0);
-      if (status === 404 || status === 410) {
-        await admin.from("whatsapp_push_subscriptions").delete().eq("endpoint", item.endpoint);
-        stale++;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await webPush.sendNotification(item.subscription, JSON.stringify(payload), {
+          TTL: ttl,
+          urgency: preferenceColumn === "calls_enabled" ? "high" : "normal"
+        });
+        sent++;
+        return;
+      } catch (error: any) {
+        const status = Number(error?.statusCode || error?.status || 0);
+        if (status === 404 || status === 410) {
+          await admin.from("whatsapp_push_subscriptions").delete().eq("endpoint", item.endpoint);
+          stale++;
+          return;
+        }
+        if (attempt === 0 && (status === 0 || status === 408 || status === 429 || status >= 500)) {
+          await new Promise(resolve => setTimeout(resolve, 350));
+          continue;
+        }
+        failed++;
+        console.error("Web Push delivery failed:", status || "unknown", clean(error?.message, 180));
         return;
       }
-      console.error("Web Push delivery failed:", status || "unknown", clean(error?.message, 180));
     }
   });
   await Promise.allSettled(jobs);
-  return { sent, stale };
+  return { sent, stale, failed };
 }
 
 async function notifyMessage(userId: string, body: any) {
@@ -217,7 +226,17 @@ async function notifyCall(userId: string, body: any) {
       chatId: String(call.caller_id),
       url: "/?waCallId=" + encodeURIComponent(String(call.id))
     }
-  }, 60);
+  }, 300);
+}
+
+async function testCallPush(userId: string) {
+  return await sendPushToUsers([userId], "calls_enabled", {
+    kind: "call",
+    title: "WhatsApp call alert test",
+    body: "Background call-alert test. Check notification sound, vibration and lock-screen display.",
+    tag: "wa-call-test-" + Date.now().toString(36),
+    data: { kind: "call", test: true, url: "/" }
+  }, 300);
 }
 
 Deno.serve(async (req: Request) => {
@@ -246,6 +265,7 @@ Deno.serve(async (req: Request) => {
     }
     if (body.action === "notify-message") return response(await notifyMessage(user.id, body));
     if (body.action === "notify-call") return response(await notifyCall(user.id, body));
+    if (body.action === "test-call-push") return response(await testCallPush(user.id));
     return response({ error: "Unknown action." }, 400);
   } catch (error: any) {
     console.error("whatsapp-push error:", clean(error?.message || error, 300));
