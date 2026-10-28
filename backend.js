@@ -702,6 +702,7 @@
         try{await db.from("aeroshell_messages").delete().eq("id",message.id).eq("sender_id",me.id);}catch(_){}
         throw pollError;
       }
+      void dispatchServerPush("notify-message",{messageId:message.id});
       bridge.closeDialog();await loadData(true);say("Poll sent. Votes will sync to the conversation.");
     }catch(error){say(safeError(error,"Could not send the poll."));}
   }
@@ -741,6 +742,7 @@
         try{await db.from("aeroshell_messages").delete().eq("id",message.id).eq("sender_id",me.id);}catch(_){}
         throw eventError;
       }
+      void dispatchServerPush("notify-message",{messageId:message.id});
       bridge.closeDialog();await loadData(true);say("Event sent to the conversation.");
     }catch(error){say(safeError(error,"Could not send the event."));}
   }
