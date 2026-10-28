@@ -344,6 +344,17 @@
     const sessionUser=Object.assign({},authUser,{isSupabase:true});
     bridge.setBackendUser(sessionUser,data);
     await loadData(false);
+    // Notification clicks can open a fresh tab; wait for authenticated chat data before routing.
+    try{
+      const params=new URLSearchParams(location.search);
+      const targetId=params.get("waChatId");
+      if(targetId){
+        params.delete("waChatId");
+        history.replaceState(history.state,"",location.pathname+(params.toString()?"?"+params.toString():"")+location.hash);
+        const target=(appState()?.chats||[]).find(chat=>String(chat.id)===String(targetId));
+        if(target)bridge.selectChat(target.id);
+      }
+    }catch(_){}
   }
   async function signUp(form){
     if(!db)return showError("signup","The secure backend did not load. Refresh the page and check your internet connection.");
