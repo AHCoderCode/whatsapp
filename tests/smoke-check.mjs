@@ -49,7 +49,7 @@ check("current asset version is shared by HTML and service worker", () => {
   includes(files.html, "whatsapp-final-20261028r");
   includes(files.sw, "whatsapp-final-20261028r");
   includes(files.manifest, "whatsapp-final-20261028r");
-  includes(files.sw, "whatsapp-final-shell-v47");
+  includes(files.sw, "whatsapp-final-shell-v48");
 });
 check("hidden call pages show a fallback if Web Push is delayed", () => {
   includes(files.calls, 'const tag="wa-call-"+String(call.id);');
@@ -318,6 +318,13 @@ check("call row is created before asking for microphone or camera permission", (
 check("call notification action can be queued until offer arrives", () => {
   includes(files.calls, "runPendingNotificationAction");
   includes(files.calls, "handleNotificationAction");
+});
+check("background call-test diagnostics record service-worker receipt and display stages", () => {
+  includes(files.sw, 'reportCallTestReceipt(probeId, "received")');
+  includes(files.sw, 'reportCallTestReceipt(probeId, "shown")');
+  includes(files.push, 'body.action === "push-receipt"');
+  includes(files.push, "push_event_received_at");
+  includes(files.push, "notification_api_resolved_at");
 });
 check("background call alerts always show, retry transient push errors, and can be tested", () => {
   includes(files.sw, "if (kind !== \"call\" && clients.some");
