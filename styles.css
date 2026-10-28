@@ -443,3 +443,10 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:
 .app-screen.mobile-landscape .mobile-tab{min-width:0;padding:3px}
 .app-screen.mobile-landscape.mobile-conversation-open .app-workspace{height:calc(100% - 48px - env(safe-area-inset-bottom))}
 .app-screen.mobile-landscape .conversation{min-height:0;height:100%}
+
+/* Linked browser sessions are readable and scroll independently on small screens. */
+.wa-linked-device-list{display:flex;flex-direction:column;gap:9px;max-height:min(55vh,420px);overflow:auto;padding:2px}
+.wa-linked-device-list .linked-device-card{min-width:0;align-items:center}
+.wa-linked-device-list .linked-device-card>div{min-width:0;overflow-wrap:anywhere}
+.wa-linked-device-list .danger-button{flex:0 0 auto}
+@media(max-width:480px){.wa-linked-device-list .linked-device-card{gap:8px;padding:10px}.wa-linked-device-list .danger-button{padding:0 9px;font-size:11px}}
