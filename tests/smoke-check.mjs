@@ -109,8 +109,8 @@ check("push and click events are handled by the service worker", () => {
 });
 check("incoming calls have an early top banner with accept/decline", () => {
   includes(files.calls, "wa-incoming-call-banner");
-  includes(files.calls, 'data-wa-call="accept"');
-  includes(files.calls, 'data-wa-call="decline"');
+  includes(files.calls, "data-wa-call='accept'");
+  includes(files.calls, "data-wa-call='decline'");
 });
 check("call row is created before asking for microphone or camera permission", () => {
   assert.ok(files.calls.indexOf('from("aeroshell_calls").insert') < files.calls.indexOf('await userMedia(mediaType==="video")'));
@@ -120,9 +120,9 @@ check("call notification action can be queued until offer arrives", () => {
   includes(files.calls, "handleNotificationAction");
 });
 check("audio calls provide speaker-volume, mute and end controls", () => {
-  includes(files.calls, 'data-wa-call="speaker"');
-  includes(files.calls, 'data-wa-call="mute"');
-  includes(files.calls, 'data-wa-call="end"');
+  includes(files.calls, "data-wa-call='speaker'");
+  includes(files.calls, "data-wa-call='mute'");
+  includes(files.calls, "data-wa-call='end'");
 });
 check("landscape phone layout focuses the open conversation", () => {
   includes(files.app, "mobile-landscape");
