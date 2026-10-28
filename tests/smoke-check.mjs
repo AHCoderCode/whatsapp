@@ -73,7 +73,7 @@ check("startup notification onboarding registers all device push preferences", (
   includes(files.backend, "async function enableDevicePush(");
 });
 check("foreground notifications still show when another chat is open", () => {
-  includes(files.backend, "const appIsFocused=document.visibilityState==="visible"&&document.hasFocus();");
+  includes(files.backend, 'const appIsFocused=document.visibilityState==="visible"&&document.hasFocus();');
   includes(files.backend, 'if(!appIsFocused&&"serviceWorker" in navigator&&"PushManager" in window)');
 });
 check("online/offline presence is tracked and reflected in direct chats", () => {
