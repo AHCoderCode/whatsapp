@@ -53,13 +53,13 @@ check("current asset version is shared by HTML and service worker", () => {
 });
 check("legacy ESC compatibility alias exists", () => includes(files.html, "window.ESC=window.ESC||function"));
 check("settings startup uses querySelectorAll for its forEach loop", () => {
-  const line = files.app.split("\\n").find(line => line.includes("#app-screen input,#app-screen textarea,[contenteditable='true']"));
+  const line = files.app.split(String.fromCharCode(10)).find(line => line.includes("#app-screen input,#app-screen textarea,[contenteditable='true']"));
   assert.ok(line, "applySettings field selector is present");
-  assert.ok(line.trimStart().startsWith("$("), "field loop must use the querySelectorAll helper");
-  assert.ok(!line.trimStart().startsWith("$("), "single-element querySelector must not be used with forEach");
+  assert.ok(line.trimStart().startsWith(String.fromCharCode(36).repeat(2)+"("), "field loop must use the querySelectorAll helper");
+  assert.ok(!line.trimStart().startsWith(String.fromCharCode(36)+"("), "single-element querySelector must not be used with forEach");
 });
 check("Linked devices uses the backend bridge icon helper", () => {
-  const line = files.backend.split("\\n").find(line => line.includes('icon("monitor")'));
+  const line = files.backend.split(String.fromCharCode(10)).find(line => line.includes('icon("monitor")'));
   assert.ok(line && line.includes('bridge.icon("monitor")'), "Linked devices must call bridge.icon");
   assert.ok(!line || !line.includes('+icon("monitor")'), "undefined icon() call must not remain");
 });
