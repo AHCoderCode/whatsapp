@@ -46,12 +46,34 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261028c");
-  includes(files.sw, "whatsapp-final-20261028c");
-  includes(files.manifest, "whatsapp-final-20261028c");
-  includes(files.sw, "whatsapp-final-shell-v32");
+  includes(files.html, "whatsapp-final-20261028d");
+  includes(files.sw, "whatsapp-final-20261028d");
+  includes(files.manifest, "whatsapp-final-20261028d");
+  includes(files.sw, "whatsapp-final-shell-v33");
 });
 check("legacy ESC compatibility alias exists", () => includes(files.html, "window.ESC=window.ESC||function"));
+check("settings startup uses querySelectorAll for its forEach loop", () => {
+  const line = files.app.split("\\n").find(line => line.includes("#app-screen input,#app-screen textarea,[contenteditable='true']"));
+  assert.ok(line, "applySettings field selector is present");
+  assert.ok(line.trimStart().startsWith("$("), "field loop must use the querySelectorAll helper");
+  assert.ok(!line.trimStart().startsWith("$("), "single-element querySelector must not be used with forEach");
+});
+check("Linked devices uses the backend bridge icon helper", () => {
+  const line = files.backend.split("\\n").find(line => line.includes('icon("monitor")'));
+  assert.ok(line && line.includes('bridge.icon("monitor")'), "Linked devices must call bridge.icon");
+  assert.ok(!line || !line.includes('+icon("monitor")'), "undefined icon() call must not remain");
+});
+check("profile photo and About have independent editing actions", () => {
+  includes(files.app, "data-action='change-profile-photo'");
+  includes(files.app, "function editAboutDialog()");
+  includes(files.app, "data-action='edit-about'");
+  includes(files.backend, 'dialogAction==="save-about"');
+});
+check("new accounts can start a chat from the empty state", () => {
+  includes(files.app, "wa-empty-actions");
+  includes(files.app, "data-action='new-chat'>Find people");
+  includes(files.app, "data-action='new-group'>Create group");
+});
 check("old recursive shared menu branch is absent", () => excludes(files.app, 'if(action==="broadcast-list"||action==="linked-devices"||action==="mark-all-read"'));
 check("menu actions route to concrete handlers", () => {
   includes(files.app, '["linked-devices","mark-all-read","install-app"');
