@@ -481,7 +481,8 @@
       if(error)throw error;if(data){insertMessageIntoUI(data);void dispatchServerPush("notify-message",{messageId:data.id});}
       if(quote&&bridge.clearReplyToMessage)bridge.clearReplyToMessage(quote.id);
       const input=$("#message-input");if(input){input.value="";input.style.height="";input.dispatchEvent(new Event("input",{bubbles:true}));}
-    }catch(error){say(safeError(error,"Message was not delivered."));}
+      return true;
+    }catch(error){say(safeError(error,"Message was not delivered."));return false;}
     finally{if(button)button.disabled=false;}
   }
 

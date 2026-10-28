@@ -165,14 +165,14 @@ check("sent text messages can be edited and the UI displays an edited marker", (
   includes(files.app, "message-edited-label");
 });
 check("pinning a message supports jumping to it and unpinning it", () => {
-  includes(files.app, 'action:"pin-message"');
+  includes(files.app, 'label:isPinned?"Unpin message":"Pin message"');
   includes(files.app, 'action==="pin-message"');
   includes(files.app, 'action==="pinned-preview"');
   includes(files.app, 'row.scrollIntoView({behavior:"smooth",block:"center"})');
 });
 check("videos can be uploaded and played in a private attachment preview", () => {
   excludes(files.backend, "Video attachments are not enabled by the current secure storage policy");
-  includes(files.backend, 'mime.startsWith("video/")preview="<video');
+  includes(files.backend, 'else if(mime.startsWith("video/"))preview="<video');
   includes(files.app, 'input.accept="image/*,video/*"');
 });
 check("poll and event workflows have local fallbacks as well as backend persistence", () => {

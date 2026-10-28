@@ -1375,7 +1375,7 @@ function openSharedItemsDialog(chat,kind) {
       const card="👤 Contact card\nName: "+String(contact.name||"Contact")+"\nUsername: @"+String(contact.username||"")+(contact.phone?"\nIn-app number: "+String(contact.phone):"");
       closeDialog();
       if(currentUser&&currentUser.isSupabase&&window.waAppBridge&&window.waAppBridge.sendBackendMessage){
-        void window.waAppBridge.sendBackendMessage(card).then(()=>toast("Contact card sent.")).catch(error=>toast("Could not share contact: "+String(error&&error.message||"Unknown error")));
+        void window.waAppBridge.sendBackendMessage(card).then(sent=>{if(sent===true)toast("Contact card sent.");else toast("The contact card was not sent. Check the chat and try again.");}).catch(error=>toast("Could not share contact: "+String(error&&error.message||"Unknown error")));
       }else{sendMessage(card);toast("Contact card sent in this local chat.");}
       return;
     }
