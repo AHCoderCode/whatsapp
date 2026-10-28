@@ -46,10 +46,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261028q");
-  includes(files.sw, "whatsapp-final-20261028q");
-  includes(files.manifest, "whatsapp-final-20261028q");
-  includes(files.sw, "whatsapp-final-shell-v46");
+  includes(files.html, "whatsapp-final-20261028r");
+  includes(files.sw, "whatsapp-final-20261028r");
+  includes(files.manifest, "whatsapp-final-20261028r");
+  includes(files.sw, "whatsapp-final-shell-v47");
 });
 check("hidden call pages show a fallback if Web Push is delayed", () => {
   includes(files.calls, 'const tag="wa-call-"+String(call.id);');
@@ -325,12 +325,18 @@ check("background call alerts always show, retry transient push errors, and can 
   includes(files.push, 'body.action === "test-call-push"');
   includes(files.push, "attempt < 2");
   includes(files.push, "urgency: preferenceColumn === \"calls_enabled\" ? \"high\" : \"normal\"");
-  includes(files.push, "Background call-alert test.");
+  includes(files.push, "Background call alert test. Check sound, vibration and lock-screen display.");
   includes(files.push, "subscriptions: subscriptions.length");
-  includes(files.app, "If it appeared silently, set WhatsApp/Chrome notifications to Alerting with sound");
+  includes(files.app, "switch to Facebook now and leave WhatsApp closed");
   includes(files.app, '["phone","Test call alert"');
   includes(files.app, 'if(title==="Test call alert")');
   includes(files.backend, "window.waBackendTestCallPush=testCallPush;");
+  includes(files.app, "window.waBackendTestCallPush(8)");
+  includes(files.backend, "delaySeconds:delay");
+  includes(files.push, "body.delaySeconds");
+  includes(files.push, "setTimeout(resolve, delaySeconds * 1000)");
+  includes(files.push, "[whatsapp-push] Incoming-call delivery result");
+  includes(files.push, "[whatsapp-push] Background call-test result");
 });
 check("audio calls provide speaker-volume, mute and end controls", () => {
   includes(files.calls, "data-wa-call='speaker'");
