@@ -128,7 +128,15 @@
   function normalizeUsername(value) { return String(value || "").trim().toLowerCase().replace(/^@/, ""); }
   function normalizePhone(value) { return String(value || "").replace(/\D/g, ""); }
   function nowTime() { return new Date().toLocaleTimeString([], {hour:"numeric", minute:"2-digit", hour12:true}); }
-  function dayLabel() { return "TODAY"; }
+  function dayLabel(date = new Date()) {
+    const day = new Date(date);
+    const today = new Date(); today.setHours(0,0,0,0);
+    const labelDay = new Date(day); labelDay.setHours(0,0,0,0);
+    const delta = Math.round((today.getTime() - labelDay.getTime()) / 86400000);
+    if (delta === 0) return "TODAY";
+    if (delta === 1) return "YESTERDAY";
+    return day.toLocaleDateString([], {month:"short", day:"numeric", ...(day.getFullYear() !== today.getFullYear() ? {year:"numeric"} : {})});
+  }
   // New accounts start empty; this factory is only for explicit create/accept actions.
   function seedChat(id,name,username,phone,avatar,type,time,preview,unread,favorite,pinned,online,messages,extra) {
     const contactName = String(name || "Contact");
