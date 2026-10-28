@@ -1104,7 +1104,8 @@ function openSharedItemsDialog(chat,kind) {
     if(action==="new-community"){createCommunityDialog();return;}
     if(action==="broadcast-list"){createBroadcastDialog();return;}
     if(action==="linked-devices"){
-      openDialog("Linked devices","<div class='linked-device-card'>"+icon("monitor")+"<div><strong>This device</strong><span>Current browser session</span><small>Devices are managed independently in this app. No other linked sessions are available to display.</small></div><span class='linked-device-current'>Active</span></div><p class='screen-description'>This panel shows this app's current frontend device; it does not link this account to the official WhatsApp service.</p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
+      if(currentUser&&currentUser.isSupabase&&window.waBackendOpenLinkedDevices){void window.waBackendOpenLinkedDevices();return;}
+      openDialog("Linked devices","<p class='screen-description'>Sign in to an account to register and manage linked browser sessions.</p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
     }
     if(action==="mark-all-read"){
       if(currentUser&&currentUser.isSupabase&&window.waAppBridge&&typeof window.waAppBridge.markAllBackendRead==="function"){
@@ -1170,6 +1171,10 @@ function openSharedItemsDialog(chat,kind) {
   }
   function runMenuAction(action,chat) {
     closePopup();
+    if(["linked-devices","mark-all-read","install-app","broadcast-list","go-archived","go-channels","go-calls","new-voice-call","new-video-call"].includes(action)){
+      handleAction(action,{dataset:{}});
+      return;
+    }
     const mapped=["open-chat","toggle-unread","toggle-favorite","toggle-pin","toggle-mute","toggle-archive","lock-chat","toggle-lock","delete-chat","clear-chat","chat-info","chat-search","search-in-chat","disappearing","block-chat","report-chat","select-messages","star-message","pinned-preview","unpin-message","reply-message","forward-message","copy-message","delete-message","voice-call","video-call","shared-media","shared-links","shared-documents","rename-contact","remove-contact","edit-group","edit-group-description","edit-contact-about","copy-chat-phone","copy-chat-username"];
     if(mapped.includes(action)){useAction(action,chat||currentChat());return;}
     if(action==="new-group"){createGroupDialog();return;}
