@@ -358,11 +358,32 @@ check("incoming calls have an early top banner with accept/decline", () => {
   includes(files.calls, "data-wa-call='accept'");
   includes(files.calls, "data-wa-call='decline'");
 });
-check("call row is created before asking for microphone or camera permission", () => {
+check("outgoing calls acquire local media before creating a call row or alerting the peer", () => {
   const start = files.calls.indexOf("async function startCall");
-  const insert = files.calls.indexOf('from("aeroshell_calls").insert', start);
-  const mediaPrompt = files.calls.indexOf('await userMediaWithTimeout(mediaType==="video",20000)', start);
-  assert.ok(start >= 0 && insert > start && mediaPrompt > insert);
+  const end = files.calls.indexOf("async function receiveSignal", start);
+  const source = files.calls.slice(start, end);
+  const mediaPrompt = source.indexOf('await userMediaWithTimeout(mediaType==="video",20000)');
+  const insert = source.indexOf('from("aeroshell_calls")');
+  const push = source.indexOf('action:"notify-call"');
+  const nativeAudio = source.indexOf("beginNativeCallAudioSession()");
+  assert.ok(start >= 0 && end > start, "startCall function must exist");
+  assert.ok(mediaPrompt >= 0 && insert > mediaPrompt, "capture must succeed before creating a remote call row");
+  assert.ok(push > insert, "the remote call alert must happen after the local call row and successful capture");
+  assert.ok(nativeAudio > mediaPrompt, "native communication audio routing must not start before microphone capture");
+  includes(source, "Only send the incoming-call alert after this phone has a live local media stream.");
+});
+check("incoming calls acquire microphone before switching Android to communication audio mode", () => {
+  const start = files.calls.indexOf("async function acceptCall");
+  const end = files.calls.indexOf("async function notifyCallEnded", start);
+  const source = files.calls.slice(start, end);
+  const mediaPrompt = source.indexOf('await userMediaWithTimeout(call.media_type==="video",20000)');
+  const nativeAudio = source.indexOf("beginNativeCallAudioSession()");
+  assert.ok(mediaPrompt >= 0 && nativeAudio > mediaPrompt, "acceptCall must acquire media before changing native audio mode");
+});
+check("transient Android audio capture failures retry with delayed default constraints", () => {
+  includes(files.calls, 'await new Promise(resolve=>setTimeout(resolve,350))');
+  includes(files.calls, 'await new Promise(resolve=>setTimeout(resolve,650))');
+  includes(files.calls, "Android WebView can transiently fail while its audio input is being released.");
 });
 check("call notification action can be queued until offer arrives", () => {
   includes(files.calls, "runPendingNotificationAction");
