@@ -62,6 +62,7 @@ public final class NativeCallNotifications {
     public static void showIncomingCall(Context context, Map<String, String> data) {
         String kind = value(data, "kind", "call");
         if ("call".equals(kind)) { ensureChannel(context); showCall(context, data); }
+        else if ("call-ended".equals(kind)) endIncomingCall(context, value(data, "callId", ""));
         else if ("message".equals(kind)) showMessage(context, data);
     }
 
@@ -101,6 +102,17 @@ public final class NativeCallNotifications {
                 CallNotificationActionReceiver.pendingIntent(context, callId, "decline", id)).build());
         }
         try { NotificationManagerCompat.from(context).notify(id, builder.build()); } catch (SecurityException ignored) {}
+    }
+
+    public static void endIncomingCall(Context context, String callId) {
+        if (callId == null || callId.isEmpty()) return;
+        int id = callId.hashCode() & 0x7fffffff;
+        if (id == 0) id = 83001;
+        cancel(context, id);
+        Intent finish = new Intent(IncomingCallActivity.ACTION_FINISH);
+        finish.setPackage(context.getPackageName());
+        finish.putExtra("waCallId", callId);
+        try { context.sendBroadcast(finish); } catch (Exception ignored) {}
     }
 
     public static void cancel(Context context, int notificationId) {
