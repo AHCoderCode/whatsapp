@@ -5,6 +5,7 @@ const APP_SHELL = [
   "/app.js?v=whatsapp-final-20261029d",
   "/backend.js?v=whatsapp-final-20261029d",
   "/calls.js?v=whatsapp-final-20261029d",
+  "/updater.js?v=whatsapp-final-20261029d",
   "/styles.css?v=whatsapp-final-20261029d",
   "/manifest.webmanifest?v=whatsapp-final-20261029d",
   "/whatsapp-favicon.svg?v=whatsapp-final-20261029d",

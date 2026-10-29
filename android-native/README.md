@@ -32,3 +32,8 @@ This companion uses the existing hosted UI and Supabase account; it does not rep
 - WebView microphone/camera permission requests and file chooser support.
 
 Native FCM depends on Google Play services, Android notification permission, network availability, and the phone's own background settings. It improves the architecture but is not a delivery guarantee until real-device tests pass.
+
+
+## Signed release and in-app updates
+
+Back up one permanent Android signing keystore. In GitHub repository Settings → Secrets and variables → Actions, configure `ANDROID_SIGNING_KEYSTORE_BASE64`, `ANDROID_SIGNING_KEYSTORE_PASSWORD`, `ANDROID_SIGNING_KEY_ALIAS`, and `ANDROID_SIGNING_KEY_PASSWORD`. Never commit the keystore or passwords. With all four secrets configured, the main-branch workflow publishes a versioned signed `whatsapp.apk` to GitHub Releases. The Android app checks for new versions on launch, verifies the checksum and signing certificate, and opens Android's package installer. User approval is still required. If the installed APK uses a temporary per-run debug key, a one-time switch may need uninstalling that old build.

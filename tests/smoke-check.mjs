@@ -9,6 +9,9 @@ const files = {
   nativeNotifications: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/NativeCallNotifications.java"),
   nativeReceiver: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/CallNotificationActionReceiver.java"),
   nativeActivity: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/MainActivity.java"),
+  incomingActivity: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/IncomingCallActivity.java"),
+  updater: read("updater.js"),
+  buildWorkflow: read(".github/workflows/build-native-android.yml"),
   nativeManifest: read("android-native/app/src/main/AndroidManifest.xml"),
   calls: read("calls.js"),
   sw: read("sw.js"),
@@ -38,7 +41,7 @@ function excludes(source, value, message) {
   assert.ok(!source.includes(value), message || "unexpected source found: " + value);
 }
 
-for (const [name, source] of [["app.js",files.app],["backend.js",files.backend],["calls.js",files.calls],["sw.js",files.sw]]) {
+for (const [name, source] of [["app.js",files.app],["backend.js",files.backend],["calls.js",files.calls],["sw.js",files.sw],["updater.js",files.updater]]) {
   check(name + " JavaScript parses", () => new Script(source, { filename: name }));
 }
 check("inline HTML scripts parse", () => {
@@ -50,10 +53,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261029c");
-  includes(files.sw, "whatsapp-final-20261029c");
-  includes(files.manifest, "whatsapp-final-20261029c");
-  includes(files.sw, "whatsapp-final-shell-v52");
+  includes(files.html, "whatsapp-final-20261029d");
+  includes(files.sw, "whatsapp-final-20261029d");
+  includes(files.manifest, "whatsapp-final-20261029d");
+  includes(files.sw, "whatsapp-final-shell-v53");
 });
 check("Android incoming-call actions launch the Activity directly and can wake the lock screen", () => {
   includes(files.nativeManifest, "android.permission.USE_FULL_SCREEN_INTENT");
@@ -63,6 +66,28 @@ check("Android incoming-call actions launch the Activity directly and can wake t
   includes(files.nativeActivity, "setShowWhenLocked(incomingCall)");
   includes(files.nativeActivity, "setTurnScreenOn(incomingCall)");
   includes(files.nativeActivity, "canUseFullScreenIntent()");
+});
+check("dedicated incoming-call activity presents Accept and Decline above the lock screen", () => {
+  includes(files.nativeManifest, 'android:name=".IncomingCallActivity"');
+  includes(files.incomingActivity, "setShowWhenLocked(true)");
+  includes(files.incomingActivity, "setTurnScreenOn(true)");
+  includes(files.incomingActivity, 'accept.setText("Accept")');
+  includes(files.incomingActivity, 'decline.setText("Decline")');
+});
+check("in-app update checker validates trusted release APK and checksum before install", () => {
+  includes(files.updater, "Update now");
+  includes(files.nativeActivity, "downloadAndInstallUpdate(String url, String sha256)");
+  includes(files.nativeActivity, "MessageDigest.getInstance");
+  includes(files.nativeActivity, "hasSameSigningCertificate(apk)");
+  includes(files.buildWorkflow, "ANDROID_SIGNING_KEYSTORE_BASE64");
+  includes(files.buildWorkflow, "softprops/action-gh-release@v2");
+  includes(files.buildWorkflow, "APK SHA-256:");
+});
+check("WebView attachment inputs remain clickable and native calls set audio mode", () => {
+  includes(files.app, 'addInput.style.cssText="position:fixed;left:-10000px');
+  includes(files.calls, "beginNativeCallAudioSession();");
+  includes(files.calls, "endNativeCallAudioSession();");
+  includes(files.nativeActivity, "AudioManager.MODE_IN_COMMUNICATION");
 });
 check("microphone source errors retry default constraints and explain permission/device failures", () => {
   includes(files.calls, "noiseSuppression:true");

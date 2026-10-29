@@ -100,3 +100,18 @@ Serve the repository root over HTTP instead of opening `index.html` using `file:
 
 
 This is an independent project and is not affiliated with or connected to the official WhatsApp service.
+
+
+## Android APK updates
+
+The native app checks the public GitHub Releases feed when the app opens and returns to the foreground. If a newer signed release exists, it displays **Update now**. The updater downloads only the `whatsapp.apk` asset from this repository's Releases, verifies the published SHA-256 checksum and APK signing certificate, then opens Android's installer. The user still has to approve installation.
+
+**One-time setup is required before updateable releases can publish.** In GitHub → repository Settings → Secrets and variables → Actions, add:
+- `ANDROID_SIGNING_KEYSTORE_BASE64`: Base64-encoded permanent Android release keystore.
+- `ANDROID_SIGNING_KEYSTORE_PASSWORD`
+- `ANDROID_SIGNING_KEY_ALIAS`
+- `ANDROID_SIGNING_KEY_PASSWORD`
+
+Keep the keystore and passwords private and backed up securely; never commit them to this public repository. Without these secrets, Actions continues to build the debug APK but deliberately does not publish an update-incompatible release. APKs signed by temporary GitHub runner debug keys are not suitable as a permanent update channel; switching such an installation may require a one-time uninstall/reinstall, which resets device-local data. Messages already in Supabase remain in your cloud account.
+
+SHA-256 verifies that a downloaded file matches the release's declared checksum; it is not a malware scan or an absolute safety guarantee. Review code and ship only releases you trust.

@@ -537,3 +537,18 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:
 .wa-attachment-video{display:block;width:min(100%,520px);max-height:65dvh;object-fit:contain;border-radius:10px;background:#101820}
 .wa-attachment-preview{display:block;max-width:100%;max-height:65dvh;object-fit:contain;border-radius:10px}
 .field-hint{display:block;margin-top:6px;color:#667781;font-size:12px;line-height:1.4}
+
+
+/* Native Android APK update prompt */
+.wa-native-update-banner{position:fixed;z-index:1000020;top:max(10px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:min(620px,calc(100% - 24px));display:flex;align-items:center;gap:12px;padding:13px 14px;background:#fff;border:1px solid #d0e8db;border-radius:16px;box-shadow:0 10px 36px rgba(17,35,29,.22);color:#111b21}
+.wa-native-update-banner[hidden]{display:none!important}
+.wa-native-update-copy{display:flex;flex:1;min-width:0;flex-direction:column;gap:4px}
+.wa-native-update-copy strong{font-size:14px}
+.wa-native-update-copy small{font-size:12px;line-height:1.45;color:#667781}
+.wa-native-update-actions{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.wa-native-update-actions button{min-height:38px;border:0;border-radius:22px;padding:0 13px;font-size:12px;font-weight:700;cursor:pointer}
+.wa-native-update-install{background:#128c7e;color:#fff}
+.wa-native-update-install:disabled{opacity:.65;cursor:wait}
+.wa-native-update-dismiss{background:#f0f2f5;color:#3b4a54}
+.wa-native-update-message{display:block;flex-basis:100%;font-size:12px;color:#7b2d22;line-height:1.4}
+@media(max-width:480px){.wa-native-update-banner{align-items:flex-start;flex-wrap:wrap}.wa-native-update-copy{flex-basis:100%}.wa-native-update-actions{width:100%;justify-content:flex-end}.wa-native-update-message{width:100%}}
