@@ -1130,7 +1130,8 @@
     if(action==="call-menu")return[{icon:"phone",label:"Voice call",action:"voice-call"},{icon:"video",label:"Video call",action:"video-call"}];
     if(action==="attachment")return[
       {icon:"file",label:"Document",action:"pick-file"},{icon:"image",label:"Photos & videos",action:"pick-image"},
-      {icon:"camera",label:"Camera",action:"camera"},{icon:"contact",label:"Contact",action:"share-contact"},
+      {icon:"music",label:"Audio",action:"pick-audio"},{icon:"camera",label:"Camera",action:"camera"},
+      {icon:"contact",label:"Contact",action:"share-contact"},
       {icon:"poll",label:"Poll",action:"create-poll"},{icon:"calendar",label:"Event",action:"create-event"}
     ];
     if(action==="emoji")return ["😀","😂","🥹","😍","😊","😭","❤️","👍","🙏","🔥","🎉","✨","🙌","🤔","✅","💯"].map(e=>({icon:"smile",label:e,action:"emoji:"+e}));
@@ -1589,6 +1590,7 @@ function openSharedItemsDialog(chat,kind) {
     }
     if(action==="pick-file"){const input=$("#attachment-input");if(input){input.accept="*/*";input.removeAttribute("capture");input.click();}return;}
     if(action==="pick-image"){const input=$("#attachment-input");if(input){input.accept="image/*,video/*";input.removeAttribute("capture");input.click();}return;}
+    if(action==="pick-audio"){const input=$("#attachment-input");if(input){input.accept="audio/*";input.removeAttribute("capture");input.click();}return;}
     if(action==="create-poll"){openDialog("Create poll","<div class='dialog-field'><label for='poll-question'>Question</label><input id='poll-question' maxlength='240' placeholder='Ask a question'></div><div class='dialog-field'><label for='poll-options'>Options (one per line)</label><textarea id='poll-options' rows='4' placeholder='Option 1&#10;Option 2'></textarea><small class='field-hint'>Add 2–10 different options.</small></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='send-poll'>Add poll</button>");return;}
     if(action==="create-event"){openDialog("Create event","<div class='dialog-field'><label for='event-name'>Event name</label><input id='event-name' maxlength='120' placeholder='Event name'></div><div class='dialog-field'><label for='event-date'>Date</label><input id='event-date' type='date'></div><div class='dialog-field'><label for='event-time'>Time</label><input id='event-time' type='time'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='send-event'>Add event</button>");return;}
     if(action==="edit-profile"){editProfileDialog();return;}
@@ -1640,7 +1642,7 @@ function openSharedItemsDialog(chat,kind) {
     if(action==="logout"){handleAction("logout",{});return;}
     if(action==="voice-call"||action==="video-call"){useAction(action,chat);return;}
     if(action.startsWith("emoji:")){const input=$("#message-input");if(input){input.value+=action.slice(5);input.focus();input.dispatchEvent(new Event("input",{bubbles:true}));}return;}
-    if(action==="pick-file"||action==="pick-image"||action==="camera"||action==="share-contact"||action==="create-poll"||action==="create-event"){handleAction(action,{});return;}
+    if(action==="pick-file"||action==="pick-image"||action==="pick-audio"||action==="camera"||action==="share-contact"||action==="create-poll"||action==="create-event"){handleAction(action,{});return;}
     if(action==="search-all"){filter="all";archivedMode=false;searchQuery="";$("#chat-search").value="";renderSidebar();return;}
     if(action==="search-media"){toast("Search by media type preview.");return;}
     if(action==="new-list"){handleAction(action,{});return;}
@@ -2280,7 +2282,7 @@ function openSharedItemsDialog(chat,kind) {
     navigator.serviceWorker.addEventListener("message", event => {
       const data=event.data||{};
       if(data.type==="whatsapp-notification-action"){
-        if(data.kind==="call")window.WhatsAppCalls?.handleNotificationAction?.(data);
+        if(data.kind==="call"||data.kind==="call-ended")window.WhatsAppCalls?.handleNotificationAction?.(data);
         else if(data.chatId&&window.waAppBridge)window.waAppBridge.selectChat(data.chatId);
       }
     });
