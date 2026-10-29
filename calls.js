@@ -211,7 +211,18 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       }
     }
   };
-  function beginNativeCallAudioSession(){try{if(window.WhatsAppNativeAndroid&&window.WhatsAppNativeAndroid.beginCallAudio)window.WhatsAppNativeAndroid.beginCallAudio();}catch(error){console.warn("[calls] Native audio setup failed:",error&&error.message||error);}}
+  function beginNativeCallAudioSession(){
+    const nativeBridge=window.WhatsAppNativeAndroid;
+    if(!nativeBridge||typeof nativeBridge.beginCallAudio!=="function")return true;
+    try{
+      const started=nativeBridge.beginCallAudio();
+      if(started===false)throw new Error("Android could not prepare call audio routing. Update WhatsApp to the latest version, then try again.");
+      return true;
+    }catch(error){
+      console.error("[calls] Native audio setup failed:",error&&error.message||error);
+      throw error instanceof Error?error:new Error("Android could not prepare call audio routing. Update WhatsApp to the latest version, then try again.");
+    }
+  }
   function setNativeCallSpeaker(enabled){try{if(window.WhatsAppNativeAndroid&&window.WhatsAppNativeAndroid.setCallSpeaker)window.WhatsAppNativeAndroid.setCallSpeaker(!!enabled);}catch(_){}}
   function endNativeCallAudioSession(){try{if(window.WhatsAppNativeAndroid&&window.WhatsAppNativeAndroid.endCallAudio)window.WhatsAppNativeAndroid.endCallAudio();}catch(_){}}
   async function userMediaWithTimeout(video,ms=20000){
@@ -418,11 +429,12 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     const pendingId=activeCall.id;
     let newId="";
     try{
-      // Open the local media device before creating a server call or sending a
-      // push. Previously the callee was alerted first, so a local microphone
-      // failure produced a brief ring and then a misleading ended-call alert.
-      // Do not change Android's communication audio mode until capture is ready:
-      // some WebView/audio stacks fail to open the microphone during that transition.
+      // Android WebView needs communication audio routing prepared before
+      // WebRTC opens its microphone. The native bridge reports setup failures
+      // instead of silently swallowing them.
+      beginNativeCallAudioSession();
+      // Capture before creating a server call or notifying the other phone, so
+      // a local microphone failure does not produce a brief incoming ring.
       const grantedStream=await userMediaWithTimeout(mediaType==="video",20000);
       if(!activeCall||activeCall.id!==pendingId){
         grantedStream.getTracks().forEach(track=>track.stop());
@@ -469,7 +481,6 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       }
       if(!activeCall||activeCall.id!==newId)return;
       startCallPushReminders(newId,client);
-      beginNativeCallAudioSession();
       setPhase("preparing","Preparing the secure relay…");
       const servers=await withCallTimeout(relayServers(newId),12000,"Secure relay setup timed out. Check the TURN configuration and connection, then try again.");
       if(!activeCall||activeCall.id!==newId)return;
@@ -538,12 +549,11 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     if(ringTimer!==null)clearTimeout(ringTimer);ringTimer=null;
     callSetupTimer=setTimeout(()=>{if(activeCall&&activeCall.id===call.id&&phase!=="connected")void endCall("Call setup timed out. Check microphone permission, relay and internet, then try again.");},40000);
     try{
-      setPhase("preparing","Requesting microphone permission…");
+      setPhase("preparing","Preparing Android call audio and requesting microphone permission…");
+      beginNativeCallAudioSession();
       const grantedStream=await userMediaWithTimeout(call.media_type==="video",20000);
       if(!activeCall||activeCall.id!==call.id){grantedStream.getTracks().forEach(track=>track.stop());return;}
       localStream=grantedStream;
-      // Capture the microphone before switching Android into communication mode.
-      beginNativeCallAudioSession();
       setPhase("preparing","Preparing the secure relay…");
       const servers=await withCallTimeout(relayServers(call.id),12000,"Secure relay setup timed out. Check TURN configuration and connection, then try again.");
       if(!activeCall||activeCall.id!==call.id){localStream.getTracks().forEach(track=>track.stop());localStream=null;return;}
