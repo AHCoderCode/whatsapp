@@ -14,8 +14,6 @@ import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.view.Gravity;
 import android.view.Window;
 import android.view.WindowManager;
@@ -25,7 +23,6 @@ import android.widget.TextView;
 
 public final class IncomingCallActivity extends Activity {
     public static final String ACTION_FINISH = "com.ahcodercode.whatsapp.FINISH_INCOMING_CALL_UI";
-    private final Handler handler = new Handler(Looper.getMainLooper());
     private String callId = "";
     private String callerName = "Contact";
     private String mediaType = "audio";
@@ -33,12 +30,15 @@ public final class IncomingCallActivity extends Activity {
     private boolean actionTaken;
     private Ringtone incomingRingtone;
 
-    private final Runnable fallbackRunnable = () -> {
-        if (!isFinishing() && !actionTaken) launchMainActivity("open");
-    };
     private final BroadcastReceiver finishReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
-            if (intent != null && ACTION_FINISH.equals(intent.getAction())) { stopRinging(); finish(); }
+            if (intent != null && ACTION_FINISH.equals(intent.getAction())) {
+                String endedCallId = intent.getStringExtra("waCallId");
+                if (endedCallId == null || endedCallId.isEmpty() || endedCallId.equals(callId)) {
+                    stopRinging();
+                    finish();
+                }
+            }
         }
     };
 
@@ -62,7 +62,6 @@ public final class IncomingCallActivity extends Activity {
         else registerReceiver(finishReceiver, filter);
         renderScreen();
         startRinging();
-        handler.postDelayed(fallbackRunnable, 60000);
     }
 
     @Override protected void onNewIntent(Intent intent) {
@@ -75,10 +74,10 @@ public final class IncomingCallActivity extends Activity {
 
     private void configureLockScreen() {
         Window window = getWindow();
+        // Show the call UI over the lock screen without dismissing the device keyguard.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
             | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
-            | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-            | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);
+            | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON);
         if (Build.VERSION.SDK_INT >= 27) {
             setShowWhenLocked(true);
             setTurnScreenOn(true);
@@ -188,7 +187,6 @@ public final class IncomingCallActivity extends Activity {
         if (actionTaken || callId.isEmpty()) { if (callId.isEmpty()) finish(); return; }
         actionTaken = true;
         stopRinging();
-        handler.removeCallbacks(fallbackRunnable);
         if (notificationId >= 0) NativeCallNotifications.cancel(this, notificationId);
         Uri target = Uri.parse(MainActivity.HOME_URL).buildUpon()
             .appendQueryParameter("waPushKind", "call")
@@ -197,7 +195,7 @@ public final class IncomingCallActivity extends Activity {
         Intent launch = new Intent(this, MainActivity.class);
         launch.setData(target);
         launch.putExtra("waNativeLaunchUrl", target.toString());
-        launch.putExtra("waNativeIncomingCall", true);
+        launch.putExtra("waNativeIncomingCall", !"decline".equals(action));
         launch.putExtra("waNotificationId", notificationId);
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         startActivity(launch);
@@ -205,7 +203,6 @@ public final class IncomingCallActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
-        handler.removeCallbacks(fallbackRunnable);
         stopRinging();
         try { unregisterReceiver(finishReceiver); } catch (Exception ignored) {}
         super.onDestroy();
