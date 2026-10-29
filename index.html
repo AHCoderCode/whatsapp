@@ -241,7 +241,7 @@
   window.addEventListener("wa-startup-finished",function(){window.clearTimeout(startupWatchdog);},{once:true});
 })();
 if("serviceWorker" in navigator){
-  const releaseKey="whatsapp_release_20261028p";
+  const releaseKey="whatsapp_release_20261029a";
   navigator.serviceWorker.addEventListener("controllerchange",()=>{
     try{
       if(sessionStorage.getItem(releaseKey)!=="1"){
