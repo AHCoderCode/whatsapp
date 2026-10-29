@@ -1506,6 +1506,29 @@ function openSharedItemsDialog(chat,kind) {
     else{event.myResponse="going";event.total=Number(event.total||0)+1;toast("You are going to this event.");}
     saveState();renderMain();
   }
+  function openAttachmentPicker(kind) {
+    const input=$("#attachment-input");
+    if(!input){toast("The attachment picker is unavailable. Close and reopen WhatsApp, then try again.");return;}
+    const accepts={file:"*/*",image:"image/*,video/*",audio:"audio/*",camera:"image/*,video/*"};
+    input.accept=accepts[kind]||"*/*";
+    input.value="";
+    input.removeAttribute("capture");
+    if(kind==="camera")input.setAttribute("capture","environment");
+    // Prefer showPicker in supported WebViews; it preserves the tap's user
+    // activation more reliably than clicking an off-screen file input.
+    try {
+      if(typeof input.showPicker==="function")input.showPicker();
+      else input.click();
+    } catch(error) {
+      // Older Android System WebView versions do not implement showPicker for
+      // file inputs. Fall back to click, but never fail silently.
+      try { input.click(); }
+      catch(fallbackError) {
+        console.error("[attachments] Could not open the native file picker:",fallbackError&&fallbackError.message||fallbackError);
+        toast("Android could not open the file picker. Reopen WhatsApp and try again.");
+      }
+    }
+  }
   function handleAction(action,el) {
     const chat=findChat(el.dataset.chatId)||currentChat();
     if(action==="rename-contact" && chat && chat.type==="person"){
@@ -1557,7 +1580,7 @@ function openSharedItemsDialog(chat,kind) {
     if(action==="copy-phone"){copyText(state.profile.phone);return;}
     if(action==="copy-username"){copyText("@"+state.profile.username);return;}
     if(action==="change-profile-photo"){const input=$("#profile-photo-input");if(input)input.click();return;}
-    if(action==="camera"){const input=$("#attachment-input");if(input){input.accept="image/*,video/*";input.setAttribute("capture","environment");input.click();}return;}
+    if(action==="camera"){openAttachmentPicker("camera");return;}
     if(action==="new-status"){openDialog("New status","<div class='dialog-field'><label for='status-text'>Type a status update</label><textarea id='status-text' rows='3' maxlength='700' placeholder='What’s on your mind?'></textarea></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='publish-status'>Share status</button>");return;}
     if(action==="status-preview"){toast("Status viewer preview.");return;}
     if(action==="new-call"){openPopup(el,[{icon:"phone",label:"New voice call",action:"new-voice-call"},{icon:"video",label:"New video call",action:"new-video-call"}],null);return;}
@@ -1588,9 +1611,9 @@ function openSharedItemsDialog(chat,kind) {
       }else{sendMessage(card);toast("Contact card sent in this local chat.");}
       return;
     }
-    if(action==="pick-file"){const input=$("#attachment-input");if(input){input.accept="*/*";input.removeAttribute("capture");input.click();}return;}
-    if(action==="pick-image"){const input=$("#attachment-input");if(input){input.accept="image/*,video/*";input.removeAttribute("capture");input.click();}return;}
-    if(action==="pick-audio"){const input=$("#attachment-input");if(input){input.accept="audio/*";input.removeAttribute("capture");input.click();}return;}
+    if(action==="pick-file"){openAttachmentPicker("file");return;}
+    if(action==="pick-image"){openAttachmentPicker("image");return;}
+    if(action==="pick-audio"){openAttachmentPicker("audio");return;}
     if(action==="create-poll"){openDialog("Create poll","<div class='dialog-field'><label for='poll-question'>Question</label><input id='poll-question' maxlength='240' placeholder='Ask a question'></div><div class='dialog-field'><label for='poll-options'>Options (one per line)</label><textarea id='poll-options' rows='4' placeholder='Option 1&#10;Option 2'></textarea><small class='field-hint'>Add 2–10 different options.</small></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='send-poll'>Add poll</button>");return;}
     if(action==="create-event"){openDialog("Create event","<div class='dialog-field'><label for='event-name'>Event name</label><input id='event-name' maxlength='120' placeholder='Event name'></div><div class='dialog-field'><label for='event-date'>Date</label><input id='event-date' type='date'></div><div class='dialog-field'><label for='event-time'>Time</label><input id='event-time' type='time'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='send-event'>Add event</button>");return;}
     if(action==="edit-profile"){editProfileDialog();return;}
@@ -1624,6 +1647,14 @@ function openSharedItemsDialog(chat,kind) {
     box.innerHTML=matches.map(c=>"<div class='channel-row'>"+avatarHTML(c)+"<span class='community-copy'><strong>"+esc(c.name)+"</strong><span>"+esc(c.description)+"</span></span><button class='"+(c.following?"secondary-button":"primary-button")+"' data-action='toggle-channel' data-channel-id='"+esc(c.id)+"'>"+(c.following?"Following":"Follow")+"</button></div>").join("")||"<div class='empty-state'>No channels found.</div>";
   }
   function runMenuAction(action,chat) {
+    // Open Android's native chooser while the menu tap is still active. Closing
+    // the popup first detaches the tapped element and can make some Android
+    // System WebView builds discard the synthetic input.click() user gesture.
+    if(["pick-file","pick-image","pick-audio","camera"].includes(action)){
+      handleAction(action,{dataset:{}});
+      closePopup();
+      return;
+    }
     closePopup();
     if(["linked-devices","mark-all-read","install-app","broadcast-list","go-archived","go-channels","go-calls","new-voice-call","new-video-call"].includes(action)){
       handleAction(action,{dataset:{}});
@@ -2165,7 +2196,7 @@ function openSharedItemsDialog(chat,kind) {
   function init() {
     clearLegacyLocalDemoState();
     const addInput=document.createElement("input");
-    addInput.type="file";addInput.id="attachment-input";addInput.accept="*/*";addInput.tabIndex=-1;addInput.setAttribute("aria-hidden","true");addInput.style.cssText="position:fixed;left:-10000px;top:0;width:1px;height:1px;opacity:0";document.body.appendChild(addInput);
+    addInput.type="file";addInput.id="attachment-input";addInput.accept="*/*";addInput.tabIndex=-1;addInput.setAttribute("aria-hidden","true");addInput.style.cssText="position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none;z-index:-1";document.body.appendChild(addInput);
     const photoInput=document.createElement("input");
     photoInput.type="file";photoInput.id="profile-photo-input";photoInput.accept="image/*";photoInput.tabIndex=-1;photoInput.setAttribute("aria-hidden","true");photoInput.style.cssText="position:fixed;left:-10000px;top:0;width:1px;height:1px;opacity:0";document.body.appendChild(photoInput);
     renderAuth("signup");
