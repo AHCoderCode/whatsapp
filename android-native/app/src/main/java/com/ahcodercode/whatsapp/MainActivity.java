@@ -9,12 +9,24 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.content.pm.PackageInfo;
+import android.content.pm.Signature;
 import android.net.Uri;
 import android.media.AudioAttributes;
 import android.media.AudioFocusRequest;
 import android.media.AudioManager;
 import android.provider.MediaStore;
 import java.io.File;
+import java.io.ByteArrayOutputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.Arrays;
+import java.util.Locale;
 import android.provider.Settings;
 import android.os.Build;
 import android.os.Bundle;
@@ -249,6 +261,203 @@ public final class MainActivity extends Activity {
         callAudioManager = null;
     }
 
+
+    private static final String UPDATE_API_URL = "https://api.github.com/repos/AHCoderCode/whatsapp/releases/latest";
+    private static final String RELEASE_APK_PREFIX = "https://github.com/AHCoderCode/whatsapp/releases/download/";
+
+    private void notifyUpdateJavascript(String functionName, String jsonArgument) {
+        runOnUiThread(() -> {
+            if (webView == null) return;
+            String js = "try{if(typeof window." + functionName + "==='function')window." + functionName + "(" + jsonArgument + ");}catch(e){}";
+            webView.evaluateJavascript(js, null);
+        });
+    }
+
+    private static String readLimited(InputStream stream, int maxBytes) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int read, total = 0;
+        while ((read = stream.read(buffer)) != -1) {
+            total += read;
+            if (total > maxBytes) throw new IOException("GitHub response exceeded the expected size.");
+            output.write(buffer, 0, read);
+        }
+        return new String(output.toByteArray(), StandardCharsets.UTF_8);
+    }
+
+    private static String releaseLine(String body, String label) {
+        if (body == null) return "";
+        for (String line : body.split("\\r?\\n")) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith(label)) return trimmed.substring(label.length()).trim();
+        }
+        return "";
+    }
+
+    private void checkForUpdates() {
+        new Thread(() -> {
+            JSONObject result = new JSONObject();
+            HttpURLConnection connection = null;
+            try {
+                connection = (HttpURLConnection) new URL(UPDATE_API_URL).openConnection();
+                connection.setRequestMethod("GET");
+                connection.setConnectTimeout(8000);
+                connection.setReadTimeout(10000);
+                connection.setRequestProperty("Accept", "application/vnd.github+json");
+                connection.setRequestProperty("User-Agent", "WhatsApp-Android-Updater");
+                int status = connection.getResponseCode();
+                if (status == 404) {
+                    result.put("updateAvailable", false);
+                    result.put("noReleasePublished", true);
+                    notifyUpdateJavascript("waOnNativeUpdateCheck", result.toString());
+                    return;
+                }
+                if (status != HttpURLConnection.HTTP_OK) throw new IOException("GitHub returned HTTP " + status + ".");
+                JSONObject release = new JSONObject(readLimited(connection.getInputStream(), 2 * 1024 * 1024));
+                String body = release.optString("body", "");
+                String versionCodeText = releaseLine(body, "Version code:");
+                String versionName = releaseLine(body, "Version:");
+                String checksum = releaseLine(body, "APK SHA-256:").toLowerCase(Locale.ROOT);
+                int versionCode;
+                try { versionCode = Integer.parseInt(versionCodeText); }
+                catch (NumberFormatException error) { throw new IOException("The latest release has no valid Android version code."); }
+                if (!checksum.matches("[a-f0-9]{64}")) throw new IOException("The release checksum is missing or invalid.");
+                String apkUrl = "";
+                org.json.JSONArray assets = release.optJSONArray("assets");
+                if (assets != null) for (int i = 0; i < assets.length(); i++) {
+                    JSONObject asset = assets.optJSONObject(i);
+                    if (asset != null && "whatsapp.apk".equals(asset.optString("name"))) {
+                        apkUrl = asset.optString("browser_download_url", "");
+                        break;
+                    }
+                }
+                if (!apkUrl.startsWith(RELEASE_APK_PREFIX)) throw new IOException("The latest release does not contain a trusted WhatsApp APK asset.");
+                result.put("updateAvailable", versionCode > BuildConfig.VERSION_CODE);
+                result.put("versionCode", versionCode);
+                result.put("versionName", versionName.isEmpty() ? release.optString("tag_name", "latest") : versionName);
+                result.put("apkUrl", apkUrl);
+                result.put("sha256", checksum);
+                result.put("installedVersionCode", BuildConfig.VERSION_CODE);
+                result.put("installedVersionName", BuildConfig.VERSION_NAME);
+                result.put("releaseUrl", release.optString("html_url", "https://github.com/AHCoderCode/whatsapp/releases"));
+            } catch (Exception error) {
+                try {
+                    result.put("updateAvailable", false);
+                    result.put("checkFailed", true);
+                    result.put("message", "Could not check for updates: " + String.valueOf(error.getMessage()));
+                } catch (Exception ignored) {}
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+            notifyUpdateJavascript("waOnNativeUpdateCheck", result.toString());
+        }, "wa-update-check").start();
+    }
+
+    private void downloadAndInstallUpdate(String apkUrl, String expectedSha256) {
+        new Thread(() -> {
+            try {
+                if (apkUrl == null || !apkUrl.startsWith(RELEASE_APK_PREFIX))
+                    throw new IOException("Only APKs published by the WhatsApp GitHub Releases page can be installed.");
+                String expected = expectedSha256 == null ? "" : expectedSha256.toLowerCase(Locale.ROOT).trim();
+                if (!expected.matches("[a-f0-9]{64}")) throw new IOException("The release checksum is invalid.");
+                File folder = new File(getCacheDir(), "updates");
+                if (!folder.exists() && !folder.mkdirs()) throw new IOException("Could not prepare update storage.");
+                File apk = new File(folder, "whatsapp-update.apk");
+                if (!apk.isFile() || !expected.equals(sha256File(apk))) {
+                    File partial = new File(folder, "whatsapp-update.part");
+                    if (partial.exists()) partial.delete();
+                    HttpURLConnection connection = (HttpURLConnection) new URL(apkUrl).openConnection();
+                    try {
+                        connection.setRequestMethod("GET");
+                        connection.setConnectTimeout(12000);
+                        connection.setReadTimeout(20000);
+                        connection.setInstanceFollowRedirects(true);
+                        connection.setRequestProperty("User-Agent", "WhatsApp-Android-Updater");
+                        int status = connection.getResponseCode();
+                        if (status != HttpURLConnection.HTTP_OK) throw new IOException("APK download returned HTTP " + status + ".");
+                        if (connection.getContentLengthLong() > 100L * 1024L * 1024L) throw new IOException("The APK exceeds the 100 MB safety limit.");
+                        try (InputStream input = connection.getInputStream(); FileOutputStream output = new FileOutputStream(partial)) {
+                            byte[] buffer = new byte[16384];
+                            int read; long total = 0;
+                            while ((read = input.read(buffer)) != -1) {
+                                total += read;
+                                if (total > 100L * 1024L * 1024L) throw new IOException("The APK exceeded the 100 MB safety limit.");
+                                output.write(buffer, 0, read);
+                            }
+                            output.flush();
+                        }
+                    } finally { connection.disconnect(); }
+                    if (!expected.equals(sha256File(partial))) {
+                        partial.delete();
+                        throw new IOException("The downloaded APK failed its SHA-256 integrity check. Nothing was installed.");
+                    }
+                    if (apk.exists()) apk.delete();
+                    if (!partial.renameTo(apk)) throw new IOException("Could not finalize the downloaded APK.");
+                }
+                int flags = Build.VERSION.SDK_INT >= 28 ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES;
+                PackageInfo candidate = getPackageManager().getPackageArchiveInfo(apk.getAbsolutePath(), flags);
+                if (candidate == null || candidate.applicationInfo == null || !getPackageName().equals(candidate.applicationInfo.packageName))
+                    throw new IOException("The downloaded file is not the WhatsApp Android package.");
+                if (!hasSameSigningCertificate(apk))
+                    throw new IOException("The APK signing key differs from the installed app. A one-time switch to the permanent signed release may be necessary; device-only settings may reset if the old app must be uninstalled, while Supabase cloud chats remain in your account.");
+                if (Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) {
+                    runOnUiThread(() -> {
+                        notifyUpdateJavascript("waNativeUpdateInstallFailed", JSONObject.quote("Allow WhatsApp to install unknown apps in Android Settings, return to the app, then tap Update now again."));
+                        try {
+                            Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName()));
+                            startActivity(settings);
+                        } catch (Exception ignored) {}
+                    });
+                    return;
+                }
+                Uri apkUri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", apk);
+                runOnUiThread(() -> {
+                    try {
+                        Intent installer = new Intent(Intent.ACTION_VIEW);
+                        installer.setDataAndType(apkUri, "application/vnd.android.package-archive");
+                        installer.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        startActivity(installer);
+                    } catch (Exception error) {
+                        notifyUpdateJavascript("waNativeUpdateInstallFailed", JSONObject.quote("Android could not open the installer: " + String.valueOf(error.getMessage())));
+                    }
+                });
+            } catch (Exception error) {
+                String detail = String.valueOf(error.getMessage() == null ? "The update could not be installed." : error.getMessage());
+                notifyUpdateJavascript("waNativeUpdateInstallFailed", JSONObject.quote(detail));
+            }
+        }, "wa-update-install").start();
+    }
+
+    private static String sha256File(File file) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        try (InputStream input = new java.io.FileInputStream(file)) {
+            byte[] buffer = new byte[16384];
+            int read;
+            while ((read = input.read(buffer)) != -1) digest.update(buffer, 0, read);
+        }
+        StringBuilder result = new StringBuilder();
+        for (byte value : digest.digest()) result.append(String.format(Locale.ROOT, "%02x", value & 0xff));
+        return result.toString();
+    }
+
+    private boolean hasSameSigningCertificate(File apk) throws Exception {
+        int flags = Build.VERSION.SDK_INT >= 28 ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES;
+        PackageInfo installed = getPackageManager().getPackageInfo(getPackageName(), flags);
+        PackageInfo candidate = getPackageManager().getPackageArchiveInfo(apk.getAbsolutePath(), flags);
+        if (candidate == null) return false;
+        Signature[] installedSignatures;
+        Signature[] candidateSignatures;
+        if (Build.VERSION.SDK_INT >= 28) {
+            if (installed.signingInfo == null || candidate.signingInfo == null) return false;
+            installedSignatures = installed.signingInfo.getApkContentsSigners();
+            candidateSignatures = candidate.signingInfo.getApkContentsSigners();
+        } else {
+            installedSignatures = installed.signatures;
+            candidateSignatures = candidate.signatures;
+        }
+        return installedSignatures != null && candidateSignatures != null && Arrays.equals(installedSignatures, candidateSignatures);
+    }
+
     private void refreshFcmToken() {
         try {
             FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
@@ -324,6 +533,10 @@ public final class MainActivity extends Activity {
 
     private final class NativeAppBridge {
         @JavascriptInterface public boolean isNativeApp() { return true; }
+        @JavascriptInterface public int getVersionCode() { return BuildConfig.VERSION_CODE; }
+        @JavascriptInterface public String getVersionName() { return BuildConfig.VERSION_NAME; }
+        @JavascriptInterface public void checkForUpdates() { MainActivity.this.checkForUpdates(); }
+        @JavascriptInterface public void downloadAndInstallUpdate(String url, String sha256) { MainActivity.this.downloadAndInstallUpdate(url, sha256); }
         @JavascriptInterface public void beginCallAudio() { try { beginNativeCallAudio(true); } catch (Exception error) { android.util.Log.w("WhatsApp", "Native audio focus failed", error); } }
         @JavascriptInterface public void setCallSpeaker(boolean enabled) { setNativeCallSpeaker(enabled); }
         @JavascriptInterface public void endCallAudio() { endNativeCallAudio(); }
