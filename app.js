@@ -551,9 +551,14 @@
     if(token)window.__waNativeFCMToken=token;
     return token;
   }
-  function nativeAndroidNotificationsEnabled(){
-    try{return isNativeAndroidApp()&&!!window.WhatsAppNativeAndroid.notificationsEnabled();}
-    catch(_){return false;}
+  function nativeAndroidNotificationsEnabled(settingKey="callNotifications"){
+    try{
+      if(!isNativeAndroidApp()||!window.WhatsAppNativeAndroid.notificationsEnabled())return false;
+      const channelId=settingKey==="callNotifications"?"wa_incoming_calls_v1":"wa_messages_v1";
+      if(typeof window.WhatsAppNativeAndroid.notificationChannelEnabled==="function"&&
+        !window.WhatsAppNativeAndroid.notificationChannelEnabled(channelId))return false;
+      return true;
+    }catch(_){return false;}
   }
   function openNativeNotificationSettings(){
     try{if(isNativeAndroidApp()){window.WhatsAppNativeAndroid.openNotificationSettings();return true;}}catch(_){}
@@ -565,7 +570,7 @@
     const showToast=options.showToast===true;
     if(!isNativeAndroidApp())return false;
     if(!state||!currentUser||!currentUser.isSupabase)throw new Error("Sign in to your WhatsApp account before enabling call alerts.");
-    if(!nativeAndroidNotificationsEnabled()){
+    if(!nativeAndroidNotificationsEnabled("callNotifications")){
       if(showDialog)openDialog("Allow Android call notifications","<p class='screen-description'>Android notifications are currently disabled for this app or its Incoming calls notification channel. Enable them in Android Settings so calls can alert you while the app is in the background.</p>","<button class='primary-button' data-action='open-native-notification-settings'>Open Android notification settings</button><button class='secondary-button' data-action='close-dialog'>Not now</button>");
       return false;
     }
@@ -585,19 +590,44 @@
     return true;
   }
   window.waNativeAppResumed=function(){
-    if(!isNativeAndroidApp()||!state||!currentUser||!currentUser.isSupabase||!state.settings||!state.settings.callNotifications)return;
-    void enableNativeCallAlerts({showDialog:false,showToast:false}).catch(error=>console.warn("Could not refresh native call alert registration:",error&&error.message||error));
+    if(!isNativeAndroidApp()||!state||!currentUser||!currentUser.isSupabase||!state.settings)return;
+    if(!["messageNotifications","groupNotifications","callNotifications"].some(key=>state.settings[key]))return;
+    const token=nativeAndroidToken();
+    if(!token){try{window.WhatsAppNativeAndroid.refreshFcmToken();}catch(_){}return;}
+    if(window.waBackendRegisterAndroidPushToken){
+      void window.waBackendRegisterAndroidPushToken(token,state.settings).catch(error=>console.warn("Could not refresh native notification preferences:",error&&error.message||error));
+    }
   };
   async function requestNotificationPermission(settingKey){
     if(isNativeAndroidApp()){
-      if(settingKey!=="callNotifications"){
+      const supportedKeys=["messageNotifications","groupNotifications","callNotifications"];
+      const label=settingKey==="messageNotifications"?"Message":settingKey==="groupNotifications"?"Group":"Call";
+      if(!supportedKeys.includes(settingKey))return false;
+      if(!nativeAndroidNotificationsEnabled(settingKey)){
         state.settings[settingKey]=false;state.settings.notificationsSetupComplete=false;saveState();renderSettings();
-        toast("This Android app currently provides native push for incoming calls. Message and group push alerts are not enabled in the native shell yet.");
+        openDialog("Allow Android notifications","<p class='screen-description'>Enable Android notifications for WhatsApp and make sure the "+(settingKey==="callNotifications"?"Incoming calls":"Messages and groups")+" notification channel is not blocked. Then turn this switch on again.</p>","<button class='primary-button' data-action='open-native-notification-settings'>Open Android notification settings</button><button class='secondary-button' data-action='close-dialog'>Not now</button>");
         return false;
       }
-      state.settings.nativeCallNotificationsConfigured=true;
-      try{return await enableNativeCallAlerts({showDialog:true,showToast:true});}
-      catch(error){state.settings[settingKey]=false;state.settings.notificationsSetupComplete=false;saveState();renderSettings();toast("Could not register native call alerts: "+String(error&&error.message||"Please retry."));return false;}
+      const token=nativeAndroidToken();
+      if(!token){
+        state.settings[settingKey]=false;state.settings.notificationsSetupComplete=false;saveState();renderSettings();
+        try{window.WhatsAppNativeAndroid.refreshFcmToken();}catch(_){}
+        toast("Android is still preparing its push token. Wait a moment, then turn the notification switch on again.");
+        return false;
+      }
+      try{
+        if(!window.waBackendRegisterAndroidPushToken)throw new Error("The secure notification registration service has not loaded. Refresh and retry.");
+        if(settingKey==="callNotifications")state.settings.nativeCallNotificationsConfigured=true;
+        await window.waBackendRegisterAndroidPushToken(token,state.settings);
+        state.settings.notificationsSetupComplete=true;
+        saveState();renderSettings();
+        toast(label+" notifications are enabled on this phone.");
+        return true;
+      }catch(error){
+        state.settings[settingKey]=false;state.settings.notificationsSetupComplete=false;saveState();renderSettings();
+        toast("Could not enable "+label.toLowerCase()+" notifications: "+String(error&&error.message||"Please retry."));
+        return false;
+      }
     }
     if(typeof Notification==="undefined"){state.settings[settingKey]=false;state.settings.notificationsSetupComplete=false;saveState();renderSettings();toast("This browser does not support device notifications.");return false;}
     let permission=Notification.permission;
@@ -740,17 +770,11 @@
     if(settingByTitle[title]){
       const key=settingByTitle[title];
       state.settings[key]=!state.settings[key];
-      if(isNativeAndroidApp()&&["messageNotifications","groupNotifications","callNotifications"].includes(key)){
-        if(key==="callNotifications")state.settings.nativeCallNotificationsConfigured=true;
-        else if(state.settings[key]){
-          state.settings[key]=false;
-          toast("Native Android push currently supports incoming-call alerts only.");
-        }
-      }
       saveState();applySettings();renderSettings();
       if(["messageNotifications","groupNotifications","callNotifications"].includes(key)){
         if(state.settings[key])void requestNotificationPermission(key);
-        else if(window.waBackendUpdatePushPreferences)void window.waBackendUpdatePushPreferences(state.settings).catch(error=>console.warn("Push preferences could not sync:",error));
+        else if(window.waBackendUpdatePushPreferences)void window.waBackendUpdatePushPreferences(state.settings).catch(error=>{console.warn("Push preferences could not sync:",error&&error.message||error);toast("The switch changed, but the server could not sync this notification preference. Check the connection and retry.");});
+        return;
       }
       toast(title+" updated.");
       return;
@@ -1526,8 +1550,22 @@ function openSharedItemsDialog(chat,kind) {
     if(action==="edit-about"){editAboutDialog();return;}
     if(action==="wallpaper"){chooseWallpaperDialog();return;}
     if(action==="status-preview"){toast("Status viewer preview.");return;}
-    if(action==="vote-poll"){voteLocalPoll(el.dataset.pollId,el.dataset.optionIndex);return;}
-    if(action==="event-rsvp"){respondLocalEvent(el.dataset.eventId);return;}
+    if(action==="vote-poll"){
+      if(currentUser&&currentUser.isSupabase){
+        if(window.waAppBridge&&typeof window.waAppBridge.voteBackendPoll==="function")void window.waAppBridge.voteBackendPoll(el.dataset.pollId,el.dataset.optionIndex);
+        else toast("Poll service is still loading. Refresh and try again.");
+        return;
+      }
+      voteLocalPoll(el.dataset.pollId,el.dataset.optionIndex);return;
+    }
+    if(action==="event-rsvp"){
+      if(currentUser&&currentUser.isSupabase){
+        if(window.waAppBridge&&typeof window.waAppBridge.respondBackendEvent==="function")void window.waAppBridge.respondBackendEvent(el.dataset.eventId);
+        else toast("Event service is still loading. Refresh and try again.");
+        return;
+      }
+      respondLocalEvent(el.dataset.eventId);return;
+    }
     if(action==="toggle-unread"||action==="toggle-favorite")return;
     if(action==="not-ready"){toast("This control is part of the frontend preview.");return;}
     toast("This control is available as a frontend interaction.");
@@ -1587,7 +1625,8 @@ function openSharedItemsDialog(chat,kind) {
       saveState();applySettings();renderSettings();
       if(["messageNotifications","groupNotifications","callNotifications"].includes(key)){
         if(state.settings[key])void requestNotificationPermission(key);
-        else if(window.waBackendUpdatePushPreferences)void window.waBackendUpdatePushPreferences(state.settings).catch(error=>console.warn("Push preferences could not sync:",error));
+        else if(window.waBackendUpdatePushPreferences)void window.waBackendUpdatePushPreferences(state.settings).catch(error=>{console.warn("Push preferences could not sync:",error&&error.message||error);toast("The switch changed, but the server could not sync this notification preference. Check the connection and retry.");});
+        return;
       }
       toast("Setting updated.");
       return;
@@ -1598,11 +1637,19 @@ function openSharedItemsDialog(chat,kind) {
     if(t.dataset.dialogAction){
       const action=t.dataset.dialogAction;
       if(action==="send-poll"){
-        if(currentUser&&currentUser.isSupabase){toast("The secure poll service is still processing this request.");return;}
+        if(currentUser&&currentUser.isSupabase){
+          if(window.waAppBridge&&typeof window.waAppBridge.sendBackendPoll==="function")void window.waAppBridge.sendBackendPoll();
+          else toast("Secure poll service is still loading. Refresh and try again.");
+          return;
+        }
         sendLocalPoll();return;
       }
       if(action==="send-event"){
-        if(currentUser&&currentUser.isSupabase){toast("The secure event service is still processing this request.");return;}
+        if(currentUser&&currentUser.isSupabase){
+          if(window.waAppBridge&&typeof window.waAppBridge.sendBackendEvent==="function")void window.waAppBridge.sendBackendEvent();
+          else toast("Secure event service is still loading. Refresh and try again.");
+          return;
+        }
         sendLocalEvent();return;
       }
       if(action==="save-edited-message"){
@@ -1831,6 +1878,15 @@ function openSharedItemsDialog(chat,kind) {
     }
     if(t.id==="attachment-input" && t.files && t.files[0]){
       const file=t.files[0];attachmentFile=file;
+      if(currentUser&&currentUser.isSupabase){
+        if(!currentChat()){toast("Open a conversation before attaching a file.");t.value="";return;}
+        const bridge=window.waAppBridge;
+        if(bridge&&typeof bridge.uploadBackendAttachment==="function"){
+          void bridge.uploadBackendAttachment(file,{type:"file",name:file.name,mime:file.type||"application/octet-stream"});
+        }else toast("Secure attachment upload is still loading. Refresh and try again.");
+        t.value="";
+        return;
+      }
       const chat=currentChat();if(chat){
         const reader=new FileReader();
         reader.onload=()=>{
@@ -1840,7 +1896,7 @@ function openSharedItemsDialog(chat,kind) {
           chat.messages.push({id:uid("msg"),from:"me",text:text,time:nowTime(),date:"TODAY",status:"sent",attachmentId:attachment.id});
           chat.preview=text;chat.time="Now";chat.lastMessageType="attachment";saveState();renderSidebar();renderMain();toast("Attachment added to the local preview.");
         };
-        if(file.type.startsWith("image/")&&file.size<2*1024*1024)reader.readAsDataURL(file);else {reader.result=null;reader.onload();} 
+        if(file.type.startsWith("image/")&&file.size<2*1024*1024)reader.readAsDataURL(file);else {reader.result=null;reader.onload();}
       }
       t.value="";
     }
