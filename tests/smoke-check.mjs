@@ -247,7 +247,7 @@ check("pinning a message supports jumping to it and unpinning it", () => {
 check("videos can be uploaded and played in a private attachment preview", () => {
   excludes(files.backend, "Video attachments are not enabled by the current secure storage policy");
   includes(files.backend, 'else if(mime.startsWith("video/"))preview="<video');
-  includes(files.app, 'input.accept="image/*,video/*"');
+  includes(files.app, 'image:"image/*,video/*"');
 });
 check("poll and event workflows have local fallbacks as well as backend persistence", () => {
   includes(files.app, "function sendLocalPoll()");
@@ -515,7 +515,7 @@ check("call-ended push dismisses matching Android and browser incoming-call UI",
 check("chat attachment menu has a dedicated audio picker using private storage", () => {
   includes(files.app, '{icon:"music",label:"Audio",action:"pick-audio"}');
   includes(files.app, 'if(action==="pick-audio")');
-  includes(files.app, 'input.accept="audio/*"');
+  includes(files.app, 'audio:"audio/*"');
   includes(files.backend, 'db.storage.from(ATTACHMENT_BUCKET).upload(path,uploadFile');
 });
 console.log("\n" + passed + " passed, " + failed + " failed.");
