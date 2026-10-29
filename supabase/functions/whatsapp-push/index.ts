@@ -260,7 +260,7 @@ async function sendAndroidPushToUsers(
         const response = await fetch("https://fcm.googleapis.com/v1/projects/" + encodeURIComponent(firebase.projectId) + "/messages:send", {
           method: "POST",
           headers: { "Authorization": "Bearer " + firebase.accessToken, "Content-Type": "application/json" },
-          body: JSON.stringify({message:{token:item.token,data:nativeData,android:{priority:"HIGH",ttl:kind==="call"?"60s":"3600s",collapse_key:collapseKey}})
+          body: JSON.stringify({message:{token:item.token,data:nativeData,android:{priority:"HIGH",ttl:kind==="call"?"60s":"3600s",collapse_key:collapseKey}}})
         });
         if (response.ok) { sent++; return; }
         const errorBody = await response.text().catch(() => "");
