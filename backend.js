@@ -1484,6 +1484,7 @@
   bridge.supabase=db;bridge.isBackendReady=()=>!!db;bridge.loadBackendData=()=>loadData(false);
   bridge.sendBackendMessage=sendMessage;bridge.searchBackendPeople=searchPeople;bridge.requestBackend=sendRequest;bridge.markAllBackendRead=markAllRead;
   bridge.hideBackendMessage=hideMessageForMe;bridge.deleteBackendMessage=deleteMessageForEveryone;bridge.editBackendMessage=editMessage;bridge.forwardBackendMessage=forwardMessage;bridge.reactBackendMessage=toggleMessageReaction;
+  bridge.uploadBackendAttachment=uploadStoredAttachment;bridge.sendBackendPoll=sendPoll;bridge.voteBackendPoll=votePoll;bridge.sendBackendEvent=sendEvent;bridge.respondBackendEvent=respondToEvent;
   window.waBackendEnablePush=enableDevicePush;
   window.waBackendUpdatePushPreferences=updateDevicePushPreferences;
   window.waBackendTestCallPush=testCallPush;
