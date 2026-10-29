@@ -1,20 +1,20 @@
-const CACHE_NAME = "whatsapp-final-shell-v53";
+const CACHE_NAME = "whatsapp-final-shell-v54";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/app.js?v=whatsapp-final-20261029d",
-  "/backend.js?v=whatsapp-final-20261029d",
-  "/calls.js?v=whatsapp-final-20261029d",
-  "/updater.js?v=whatsapp-final-20261029d",
-  "/styles.css?v=whatsapp-final-20261029d",
-  "/manifest.webmanifest?v=whatsapp-final-20261029d",
-  "/whatsapp-favicon.svg?v=whatsapp-final-20261029d",
+  "/app.js?v=whatsapp-final-20261029e",
+  "/backend.js?v=whatsapp-final-20261029e",
+  "/calls.js?v=whatsapp-final-20261029e",
+  "/updater.js?v=whatsapp-final-20261029e",
+  "/styles.css?v=whatsapp-final-20261029e",
+  "/manifest.webmanifest?v=whatsapp-final-20261029e",
+  "/whatsapp-favicon.svg?v=whatsapp-final-20261029e",
   "/icon.svg",
   "/icon-192.svg",
   "/icon-512.svg",
-  "/icon.svg?v=whatsapp-final-20261029d",
-  "/icon-192.svg?v=whatsapp-final-20261029d",
-  "/icon-512.svg?v=whatsapp-final-20261029d",
+  "/icon.svg?v=whatsapp-final-20261029e",
+  "/icon-192.svg?v=whatsapp-final-20261029e",
+  "/icon-512.svg?v=whatsapp-final-20261029e",
 ];
 
 self.addEventListener("install", event => {
@@ -87,6 +87,25 @@ self.addEventListener("push", event => {
   catch (_) { payload = { body: event.data ? event.data.text() : "" }; }
   const kind = payload.kind || (payload.data && payload.data.kind) || "message";
   const data = Object.assign({ kind, url: "/" }, payload.data || {});
+  if (kind === "call-ended") {
+    event.waitUntil((async () => {
+      const callId = String(data.callId || "");
+      if (callId) {
+        try {
+          const old = await self.registration.getNotifications({ tag: "wa-call-" + callId });
+          old.forEach(notification => notification.close());
+        } catch (_) {}
+      }
+      const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      clients.forEach(client => client.postMessage({
+        type: "whatsapp-notification-action",
+        kind: "call-ended",
+        callId,
+        callStatus: String(data.callStatus || "")
+      }));
+    })());
+    return;
+  }
   const title = payload.title || (kind === "call" ? "Incoming call" : "New message");
   const isCallTest = kind === "call" && data.test === true;
   const options = {

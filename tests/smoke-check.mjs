@@ -53,10 +53,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261029d");
-  includes(files.sw, "whatsapp-final-20261029d");
-  includes(files.manifest, "whatsapp-final-20261029d");
-  includes(files.sw, "whatsapp-final-shell-v53");
+  includes(files.html, "whatsapp-final-20261029e");
+  includes(files.sw, "whatsapp-final-20261029e");
+  includes(files.manifest, "whatsapp-final-20261029e");
+  includes(files.sw, "whatsapp-final-shell-v54");
 });
 check("Android incoming-call actions launch the Activity directly and can wake the lock screen", () => {
   includes(files.nativeManifest, "android.permission.USE_FULL_SCREEN_INTENT");
@@ -449,6 +449,30 @@ check("signed-in events and polls use shared backend workflows", () => {
   includes(files.backend, 'bridge.sendBackendEvent=sendEvent');
   includes(files.backend, 'bridge.voteBackendPoll=votePoll');
   includes(files.backend, 'bridge.respondBackendEvent=respondToEvent');
+});
+check("lock-screen calls do not dismiss the keyguard or auto-open the main app", () => {
+  excludes(files.incomingActivity, "FLAG_DISMISS_KEYGUARD");
+  excludes(files.incomingActivity, 'handler.postDelayed(fallbackRunnable, 60000)');
+  includes(files.incomingActivity, 'launch.putExtra("waNativeIncomingCall", !"decline".equals(action))');
+  includes(files.nativeActivity, '!"decline".equalsIgnoreCase(uri.getQueryParameter("waPushAction"))');
+});
+check("background push delivery failures do not show a caller-facing call error", () => {
+  excludes(files.calls, "its background notification could not be confirmed");
+  includes(files.calls, "continuing call setup:");
+});
+check("call-ended push dismisses matching Android and browser incoming-call UI", () => {
+  includes(files.calls, 'action:"notify-call-ended"');
+  includes(files.push, "async function notifyCallEnded(");
+  includes(files.push, 'body.action === "notify-call-ended"');
+  includes(files.sw, 'if (kind === "call-ended")');
+  includes(files.nativeNotifications, '"call-ended".equals(kind)');
+  includes(files.nativeNotifications, 'endIncomingCall(context, value(data, "callId", ""))');
+});
+check("chat attachment menu has a dedicated audio picker using private storage", () => {
+  includes(files.app, '{icon:"music",label:"Audio",action:"pick-audio"}');
+  includes(files.app, 'if(action==="pick-audio")');
+  includes(files.app, 'input.accept="audio/*"');
+  includes(files.backend, 'db.storage.from(ATTACHMENT_BUCKET).upload(path,uploadFile');
 });
 console.log("\n" + passed + " passed, " + failed + " failed.");
 if (failed) process.exitCode = 1;

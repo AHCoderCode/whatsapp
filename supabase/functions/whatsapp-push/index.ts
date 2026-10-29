@@ -244,12 +244,13 @@ async function sendAndroidPushToUsers(
     const d = payload?.data || {};
     const kind = clean(d.kind || payload?.kind || "message", 32);
     const callId = String(d.callId || ""), messageId = String(d.messageId || ""), chatId = String(d.chatId || "");
-    const collapseKey = (kind === "call" ? "wa-call-" + (callId || Date.now()) : "wa-msg-" + (messageId || chatId || Date.now())).slice(0, 64);
+    const collapseKey = (kind === "call" || kind === "call-ended" ? "wa-call-" + (callId || Date.now()) : "wa-msg-" + (messageId || chatId || Date.now())).slice(0, 64);
     const nativeData: Record<string, string> = {
       kind, title: clean(payload?.title || (kind === "call" ? "Incoming call" : "WhatsApp"), 120),
       body: clean(payload?.body || (kind === "call" ? "Someone is calling you." : "You have a new message."), 200),
       callId, callerName: clean(d.callerName || "", 80),
       mediaType: d.mediaType === "video" ? "video" : "audio",
+      callStatus: clean(d.callStatus || "", 24),
       chatId, messageId, chatType: clean(d.chatType || "direct", 24),
       url: clean(d.url || "/", 500), test: d.test === true || d.test === "true" ? "true" : "false",
       probeId: clean(d.probeId || "", 80)
@@ -260,7 +261,7 @@ async function sendAndroidPushToUsers(
         const response = await fetch("https://fcm.googleapis.com/v1/projects/" + encodeURIComponent(firebase.projectId) + "/messages:send", {
           method: "POST",
           headers: { "Authorization": "Bearer " + firebase.accessToken, "Content-Type": "application/json" },
-          body: JSON.stringify({message:{token:item.token,data:nativeData,android:{priority:"HIGH",ttl:kind==="call"?"60s":"3600s",collapse_key:collapseKey}}})
+          body: JSON.stringify({message:{token:item.token,data:nativeData,android:{priority:"HIGH",ttl:(kind==="call"||kind==="call-ended")?"60s":"3600s",collapse_key:collapseKey}}})
         });
         if (response.ok) { sent++; return; }
         const errorBody = await response.text().catch(() => "");
@@ -391,6 +392,45 @@ async function notifyCall(userId: string, body: any) {
   return result;
 }
 
+
+async function notifyCallEnded(userId: string, body: any) {
+  if (!admin) throw new Error("Push service is unavailable.");
+  const callId = String(body?.callId || "");
+  if (!uuidPattern.test(callId)) throw new Error("A valid call ID is required.");
+  const { data: call, error } = await admin.from("aeroshell_calls")
+    .select("id,caller_id,callee_id,status,media_type,group_call_id")
+    .eq("id", callId).maybeSingle();
+  if (error) throw error;
+  if (!call || call.group_call_id || !["ended", "rejected"].includes(call.status)
+      || (call.caller_id !== userId && call.callee_id !== userId)) {
+    return { sent: 0, reason: "call-not-ended-or-not-participant" };
+  }
+  const recipientId = call.caller_id === userId ? call.callee_id : call.caller_id;
+  const pushPayload = {
+    kind: "call-ended",
+    title: call.status === "rejected" ? "Call declined" : "Call ended",
+    body: call.status === "rejected" ? "The incoming call was declined." : "The other person ended the call.",
+    tag: "wa-call-" + call.id,
+    data: {
+      kind: "call-ended",
+      callId: String(call.id),
+      callStatus: String(call.status),
+      url: "/"
+    }
+  };
+  const [webResult, androidResult] = await Promise.all([
+    sendPushToUsers([recipientId], "calls_enabled", pushPayload, 60),
+    sendAndroidCallPushToUsers([recipientId], pushPayload)
+  ]);
+  return {
+    sent: Number(webResult.sent || 0) + Number(androidResult.sent || 0),
+    failed: Number(webResult.failed || 0) + Number(androidResult.failed || 0),
+    subscriptions: Number(webResult.subscriptions || 0) + Number(androidResult.subscriptions || 0),
+    web: webResult,
+    android: androidResult
+  };
+}
+
 async function recordPushReceipt(body: any) {
   const probeId = String(body?.probeId || "");
   const stage = String(body?.stage || "");
@@ -502,6 +542,7 @@ Deno.serve(async (req: Request) => {
     }
     if (body.action === "notify-message") return response(await notifyMessage(user.id, body));
     if (body.action === "notify-call") return response(await notifyCall(user.id, body));
+    if (body.action === "notify-call-ended") return response(await notifyCallEnded(user.id, body));
     if (body.action === "test-call-push") return response(await testCallPush(user.id, body.delaySeconds));
     return response({ error: "Unknown action." }, 400);
   } catch (error: any) {
