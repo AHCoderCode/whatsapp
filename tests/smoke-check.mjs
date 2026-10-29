@@ -456,6 +456,10 @@ check("lock-screen calls do not dismiss the keyguard or auto-open the main app",
   includes(files.incomingActivity, 'launch.putExtra("waNativeIncomingCall", !"decline".equals(action))');
   includes(files.nativeActivity, '!"decline".equalsIgnoreCase(uri.getQueryParameter("waPushAction"))');
 });
+check("background push delivery failures do not show a caller-facing call error", () => {
+  excludes(files.calls, "its background notification could not be confirmed");
+  includes(files.calls, "continuing call setup:");
+});
 check("call-ended push dismisses matching Android and browser incoming-call UI", () => {
   includes(files.calls, 'action:"notify-call-ended"');
   includes(files.push, "async function notifyCallEnded(");
