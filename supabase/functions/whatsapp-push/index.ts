@@ -224,34 +224,35 @@ async function getFirebaseAccessToken() {
   return { accessToken: cachedFirebaseToken, projectId };
 }
 
-async function sendAndroidCallPushToUsers(userIds: string[], payload: any) {
+async function sendAndroidPushToUsers(
+  userIds: string[],
+  preferenceColumn: "messages_enabled" | "groups_enabled" | "calls_enabled",
+  payload: any
+) {
   if (!admin || !userIds.length) return { sent: 0, stale: 0, failed: 0, subscriptions: 0, reason: "not-configured" };
-  if (!Deno.env.get("FIREBASE_SERVICE_ACCOUNT_JSON")) {
-    return { sent: 0, stale: 0, failed: 0, subscriptions: 0, reason: "firebase-not-configured" };
-  }
+  if (!Deno.env.get("FIREBASE_SERVICE_ACCOUNT_JSON")) return { sent: 0, stale: 0, failed: 0, subscriptions: 0, reason: "firebase-not-configured" };
   try {
     const { data, error } = await admin.from("whatsapp_android_push_tokens")
       .select("id,user_id,token")
       .in("user_id", Array.from(new Set(userIds)))
-      .eq("calls_enabled", true);
+      .eq(preferenceColumn, true);
     if (error) throw error;
     const tokens = data || [];
     if (!tokens.length) return { sent: 0, stale: 0, failed: 0, subscriptions: 0, reason: "no-registered-android-device" };
     const firebase = await getFirebaseAccessToken();
     if (!firebase) return { sent: 0, stale: 0, failed: 0, subscriptions: tokens.length, reason: "firebase-not-configured" };
-
     const d = payload?.data || {};
-    const callId = String(d.callId || "");
-    const callKey = callId || String(Date.now());
+    const kind = clean(d.kind || payload?.kind || "message", 32);
+    const callId = String(d.callId || ""), messageId = String(d.messageId || ""), chatId = String(d.chatId || "");
+    const collapseKey = (kind === "call" ? "wa-call-" + (callId || Date.now()) : "wa-msg-" + (messageId || chatId || Date.now())).slice(0, 64);
     const nativeData: Record<string, string> = {
-      kind: "call",
-      title: clean(payload?.title || "Incoming call", 120),
-      body: clean(payload?.body || "Someone is calling you.", 200),
-      callId,
-      callerName: clean(d.callerName || String(payload?.title || "Incoming call").replace(/^Incoming call\s*[·-]\s*/i, ""), 80),
+      kind, title: clean(payload?.title || (kind === "call" ? "Incoming call" : "WhatsApp"), 120),
+      body: clean(payload?.body || (kind === "call" ? "Someone is calling you." : "You have a new message."), 200),
+      callId, callerName: clean(d.callerName || "", 80),
       mediaType: d.mediaType === "video" ? "video" : "audio",
-      url: clean(d.url || "/", 500),
-      test: d.test === true || d.test === "true" ? "true" : "false"
+      chatId, messageId, chatType: clean(d.chatType || "direct", 24),
+      url: clean(d.url || "/", 500), test: d.test === true || d.test === "true" ? "true" : "false",
+      probeId: clean(d.probeId || "", 80)
     };
     let sent = 0, stale = 0, failed = 0;
     await Promise.all(tokens.map(async (item: any) => {
@@ -259,30 +260,16 @@ async function sendAndroidCallPushToUsers(userIds: string[], payload: any) {
         const response = await fetch("https://fcm.googleapis.com/v1/projects/" + encodeURIComponent(firebase.projectId) + "/messages:send", {
           method: "POST",
           headers: { "Authorization": "Bearer " + firebase.accessToken, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: {
-              token: item.token,
-              data: nativeData,
-              android: {
-                priority: "HIGH",
-                ttl: "60s",
-                collapse_key: "wa-call-" + callKey
-              }
-            }
-          })
+          body: JSON.stringify({message:{token:item.token,data:nativeData,android:{priority:"HIGH",ttl:kind==="call"?"60s":"3600s",collapse_key:collapseKey}})
         });
         if (response.ok) { sent++; return; }
         const errorBody = await response.text().catch(() => "");
         if (response.status === 404 || /UNREGISTERED|registration-token-not-registered/i.test(errorBody)) {
-          await admin.from("whatsapp_android_push_tokens").delete().eq("token", item.token);
-          stale++;
-          return;
+          await admin.from("whatsapp_android_push_tokens").delete().eq("token", item.token);stale++;return;
         }
-        failed++;
-        console.error("Android FCM delivery failed:", response.status, clean(errorBody, 240));
+        failed++;console.error("Android FCM delivery failed:", response.status, clean(errorBody, 240));
       } catch (error: any) {
-        failed++;
-        console.error("Android FCM request failed:", clean(error?.message || error, 180));
+        failed++;console.error("Android FCM request failed:", clean(error?.message || error, 180));
       }
     }));
     return { sent, stale, failed, subscriptions: tokens.length };
@@ -290,6 +277,10 @@ async function sendAndroidCallPushToUsers(userIds: string[], payload: any) {
     console.error("Android FCM setup failed:", clean(error?.message || error, 240));
     return { sent: 0, stale: 0, failed: 1, subscriptions: 0, reason: "firebase-setup-error" };
   }
+}
+
+async function sendAndroidCallPushToUsers(userIds: string[], payload: any) {
+  return sendAndroidPushToUsers(userIds, "calls_enabled", payload);
 }
 
 async function notifyMessage(userId: string, body: any) {
@@ -343,9 +334,12 @@ async function notifyMessage(userId: string, body: any) {
       url: "/?waChatId=" + encodeURIComponent(String(chatId))
     }
   };
-  const webResult = await sendPushToUsers(recipientIds, preferenceColumn, pushPayload, 3600);
-  const androidResult = await sendAndroidCallPushToUsers([], pushPayload);
-  return { sent: webResult.sent, web: webResult, android: androidResult };
+  pushPayload.data.chatType = message.group_id ? "group" : "direct";
+  const [webResult, androidResult] = await Promise.all([
+    sendPushToUsers(recipientIds, preferenceColumn, pushPayload, 3600),
+    sendAndroidPushToUsers(recipientIds, preferenceColumn, pushPayload)
+  ]);
+  return { sent: Number(webResult.sent || 0) + Number(androidResult.sent || 0), web: webResult, android: androidResult };
 }
 
 async function notifyCall(userId: string, body: any) {
