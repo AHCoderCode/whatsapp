@@ -6,6 +6,7 @@ const read = path => readFileSync(new URL("../" + path, import.meta.url), "utf8"
 const files = {
   app: read("app.js"),
   backend: read("backend.js"),
+  nativeNotifications: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/NativeCallNotifications.java"),
   calls: read("calls.js"),
   sw: read("sw.js"),
   html: read("index.html"),
@@ -46,10 +47,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261029a");
-  includes(files.sw, "whatsapp-final-20261029a");
-  includes(files.manifest, "whatsapp-final-20261029a");
-  includes(files.sw, "whatsapp-final-shell-v50");
+  includes(files.html, "whatsapp-final-20261029b");
+  includes(files.sw, "whatsapp-final-20261029b");
+  includes(files.manifest, "whatsapp-final-20261029b");
+  includes(files.sw, "whatsapp-final-shell-v51");
 });
 check("hidden call pages show a fallback if Web Push is delayed", () => {
   includes(files.calls, 'const tag="wa-call-"+String(call.id);');
@@ -380,6 +381,26 @@ check("Supabase profile edit is intercepted by backend update", () => {
 check("communities have real create and membership functions", () => {
   includes(files.backend, "async function createCommunity");
   includes(files.backend, "async function setCommunityMembership");
+});
+check("Android notification switches sync Messages, Groups and Calls push preferences", () => {
+  includes(files.app, 'nativeAndroidNotificationsEnabled(settingKey="callNotifications")');
+  includes(files.app, 'supportedKeys=["messageNotifications","groupNotifications","callNotifications"]');
+  includes(files.push, 'sendAndroidPushToUsers(recipientIds, preferenceColumn, pushPayload)');
+  includes(files.push, '.eq(preferenceColumn, true)');
+  includes(files.nativeNotifications, 'MESSAGE_CHANNEL_ID = "wa_messages_v1"');
+});
+check("signed-in attachments use shared secure storage", () => {
+  includes(files.app, 'bridge.uploadBackendAttachment(file,{type:"file"');
+  includes(files.backend, 'bridge.uploadBackendAttachment=uploadStoredAttachment');
+  includes(files.backend, 'db.storage.from(ATTACHMENT_BUCKET).upload(path,uploadFile');
+});
+check("signed-in events and polls use shared backend workflows", () => {
+  includes(files.app, 'sendBackendPoll==="function"');
+  includes(files.app, 'sendBackendEvent==="function"');
+  includes(files.backend, 'bridge.sendBackendPoll=sendPoll');
+  includes(files.backend, 'bridge.sendBackendEvent=sendEvent');
+  includes(files.backend, 'bridge.voteBackendPoll=votePoll');
+  includes(files.backend, 'bridge.respondBackendEvent=respondToEvent');
 });
 console.log("\n" + passed + " passed, " + failed + " failed.");
 if (failed) process.exitCode = 1;
