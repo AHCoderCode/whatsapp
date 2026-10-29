@@ -2,7 +2,7 @@
   "use strict";
   const native = window.WhatsAppNativeAndroid;
   if (!native || typeof native.isNativeApp !== "function" || !native.isNativeApp()) return;
-  let latestUpdate = null, lastCheckAt = 0, banner = null, installButton = null, message = null, dismissedVersion = "";
+  let latestUpdate = null, lastCheckAt = 0, banner = null, installButton = null, message = null, dismissedVersion = "", checking = false;
   function ensureBanner() {
     if (banner) return banner;
     banner = document.createElement("section");
@@ -40,7 +40,21 @@
   }
   function hideBanner() { if (banner) banner.hidden = true; }
   window.waOnNativeUpdateCheck = function (info) {
-    if (!info || info.checkFailed || !info.updateAvailable || !info.apkUrl || !info.sha256) {
+    checking = false;
+    if (!info) return;
+    if (info.checkFailed) {
+      // Keep a previously discovered update available through a temporary network/API failure.
+      if (latestUpdate && dismissedVersion !== String(latestUpdate.versionCode)) {
+        const el = ensureBanner(); el.hidden = false;
+        if (message) {
+          message.textContent = "Could not refresh update information. The previously found update is still available; check your connection and try again if needed.";
+          message.hidden = false;
+        }
+        if (installButton) { installButton.disabled = false; installButton.textContent = "Update now"; }
+      }
+      return;
+    }
+    if (!info.updateAvailable || !info.apkUrl || !info.sha256) {
       latestUpdate = null; hideBanner(); return;
     }
     latestUpdate = info;
@@ -71,9 +85,15 @@
   });
   function check(force) {
     const now = Date.now();
-    if (!force && now - lastCheckAt < 5 * 60 * 1000) return;
+    if (checking || (!force && now - lastCheckAt < 5 * 60 * 1000)) return;
     lastCheckAt = now;
-    try { native.checkForUpdates(); } catch (error) { console.warn("[updater] Update check could not start:", error); }
+    checking = true;
+    try {
+      native.checkForUpdates();
+    } catch (error) {
+      checking = false;
+      console.warn("[updater] Update check could not start:", error);
+    }
   }
   const priorResume = window.waNativeAppResumed;
   window.waNativeAppResumed = function () {
