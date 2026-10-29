@@ -8,9 +8,11 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.provider.Settings;
 import android.os.Build;
 import android.os.Bundle;
 import android.webkit.PermissionRequest;
+import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -18,6 +20,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import androidx.core.content.ContextCompat;
+import androidx.core.app.NotificationManagerCompat;
 import com.google.firebase.messaging.FirebaseMessaging;
 import org.json.JSONObject;
 import java.util.ArrayList;
@@ -47,6 +50,7 @@ public final class MainActivity extends Activity {
         else registerReceiver(tokenReceiver, filter);
 
         webView = new WebView(this);
+        webView.addJavascriptInterface(new NativeAppBridge(), "WhatsAppNativeAndroid");
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
@@ -125,6 +129,10 @@ public final class MainActivity extends Activity {
             FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
                 if (task.isSuccessful() && task.getResult() != null) {
                     fcmToken = task.getResult().trim();
+                    if (!fcmToken.isEmpty()) {
+                        getSharedPreferences("whatsapp_native_push", MODE_PRIVATE)
+                            .edit().putString("fcm_token", fcmToken).apply();
+                    }
                     publishFcmToken();
                 }
             });
@@ -175,7 +183,61 @@ public final class MainActivity extends Activity {
             callback.onReceiveValue(result == RESULT_OK ? WebChromeClient.FileChooserParams.parseResult(result, data) : null);
         }
     }
-    @Override protected void onResume() { super.onResume(); refreshFcmToken(); publishFcmToken(); }
+    @Override protected void onResume() {
+        super.onResume();
+        refreshFcmToken();
+        publishFcmToken();
+        if (webView != null) {
+            webView.postDelayed(() -> webView.evaluateJavascript(
+                "if(window.waNativeAppResumed)window.waNativeAppResumed();", null
+            ), 350);
+        }
+    }
+
+    private final class NativeAppBridge {
+        @JavascriptInterface public boolean isNativeApp() { return true; }
+
+        @JavascriptInterface public String getFcmToken() {
+            if (fcmToken != null && !fcmToken.trim().isEmpty()) return fcmToken.trim();
+            return getSharedPreferences("whatsapp_native_push", MODE_PRIVATE)
+                .getString("fcm_token", "");
+        }
+
+        @JavascriptInterface public boolean notificationsEnabled() {
+            if (Build.VERSION.SDK_INT >= 33 &&
+                ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) return false;
+            if (!NotificationManagerCompat.from(MainActivity.this).areNotificationsEnabled()) return false;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                android.app.NotificationManager manager =
+                    (android.app.NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                android.app.NotificationChannel channel = manager == null ? null :
+                    manager.getNotificationChannel(NativeCallNotifications.CHANNEL_ID);
+                if (channel != null && channel.getImportance() == android.app.NotificationManager.IMPORTANCE_NONE) return false;
+            }
+            return true;
+        }
+
+        @JavascriptInterface public void openNotificationSettings() {
+            runOnUiThread(() -> {
+                try {
+                    Intent intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                    intent.putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName());
+                    startActivity(intent);
+                } catch (Exception ignored) {
+                    try {
+                        Intent fallback = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.parse("package:" + getPackageName()));
+                        startActivity(fallback);
+                    } catch (Exception ignoredAgain) {}
+                }
+            });
+        }
+
+        @JavascriptInterface public void refreshFcmToken() {
+            runOnUiThread(MainActivity.this::refreshFcmToken);
+        }
+    }
     @Override public void onBackPressed() {
         if (webView != null && webView.canGoBack()) webView.goBack(); else super.onBackPressed();
     }
