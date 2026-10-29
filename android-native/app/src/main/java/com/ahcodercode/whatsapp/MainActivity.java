@@ -219,28 +219,47 @@ public final class MainActivity extends Activity {
         return intent;
     }
 
-    private synchronized void beginNativeCallAudio(boolean useSpeaker) {
+    private synchronized boolean beginNativeCallAudio(boolean useSpeaker) {
         AudioManager manager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        if (manager == null) return;
-        if (!callAudioSessionActive) {
+        if (manager == null) return false;
+        boolean hadActiveSession = callAudioSessionActive;
+        if (!hadActiveSession) {
             previousAudioMode = manager.getMode();
             previousSpeakerphoneOn = manager.isSpeakerphoneOn();
             callAudioManager = manager;
-            callAudioSessionActive = true;
         }
-        manager.setMode(AudioManager.MODE_IN_COMMUNICATION);
-        if (Build.VERSION.SDK_INT >= 26) {
-            if (callAudioFocusRequest == null) {
-                callAudioFocusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
-                    .setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
-                    .setOnAudioFocusChangeListener(callAudioFocusListener).build();
+        try {
+            // Prepare Android's communication route before WebView/WebRTC opens
+            // AudioRecord through getUserMedia().
+            manager.setMode(AudioManager.MODE_IN_COMMUNICATION);
+            if (Build.VERSION.SDK_INT >= 26) {
+                if (callAudioFocusRequest == null) {
+                    callAudioFocusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                        .setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                        .setOnAudioFocusChangeListener(callAudioFocusListener).build();
+                }
+                manager.requestAudioFocus(callAudioFocusRequest);
+            } else {
+                manager.requestAudioFocus(callAudioFocusListener, AudioManager.STREAM_VOICE_CALL, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
             }
-            manager.requestAudioFocus(callAudioFocusRequest);
-        } else {
-            manager.requestAudioFocus(callAudioFocusListener, AudioManager.STREAM_VOICE_CALL, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
+            manager.setSpeakerphoneOn(useSpeaker);
+            callAudioSessionActive = true;
+            return true;
+        } catch (RuntimeException error) {
+            android.util.Log.e("WhatsApp", "Native call audio setup failed", error);
+            if (!hadActiveSession) {
+                try {
+                    manager.setSpeakerphoneOn(previousSpeakerphoneOn);
+                    manager.setMode(previousAudioMode);
+                } catch (Exception restoreError) {
+                    android.util.Log.w("WhatsApp", "Could not restore audio after call setup failed", restoreError);
+                }
+                callAudioManager = null;
+                callAudioSessionActive = false;
+            }
+            return false;
         }
-        manager.setSpeakerphoneOn(useSpeaker);
     }
 
     private synchronized void setNativeCallSpeaker(boolean enabled) {
@@ -538,7 +557,10 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public String getVersionName() { return BuildConfig.VERSION_NAME; }
         @JavascriptInterface public void checkForUpdates() { MainActivity.this.checkForUpdates(); }
         @JavascriptInterface public void downloadAndInstallUpdate(String url, String sha256) { MainActivity.this.downloadAndInstallUpdate(url, sha256); }
-        @JavascriptInterface public void beginCallAudio() { try { beginNativeCallAudio(true); } catch (Exception error) { android.util.Log.w("WhatsApp", "Native audio focus failed", error); } }
+        @JavascriptInterface public boolean beginCallAudio() {
+            try { return beginNativeCallAudio(true); }
+            catch (Exception error) { android.util.Log.e("WhatsApp", "Native audio focus failed", error); return false; }
+        }
         @JavascriptInterface public void setCallSpeaker(boolean enabled) { setNativeCallSpeaker(enabled); }
         @JavascriptInterface public void endCallAudio() { endNativeCallAudio(); }
 
