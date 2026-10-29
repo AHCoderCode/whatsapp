@@ -46,9 +46,9 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261028s");
-  includes(files.sw, "whatsapp-final-20261028s");
-  includes(files.manifest, "whatsapp-final-20261028s");
+  includes(files.html, "whatsapp-final-20261029a");
+  includes(files.sw, "whatsapp-final-20261029a");
+  includes(files.manifest, "whatsapp-final-20261029a");
   includes(files.sw, "whatsapp-final-shell-v49");
 });
 check("hidden call pages show a fallback if Web Push is delayed", () => {
