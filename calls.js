@@ -425,7 +425,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
         }
       }catch(pushError){
         console.warn("Initial background call alert dispatch failed:",pushError&&pushError.message||pushError);
-        say("The call is trying to connect, but its background notification could not be confirmed. Check Calls notifications on the receiving phone.");
+        // Push delivery can be delayed while a screen is off; keep trying without converting it into a call error.
       }
       if(!activeCall||activeCall.id!==newId)return;
       startCallPushReminders(newId,client);
