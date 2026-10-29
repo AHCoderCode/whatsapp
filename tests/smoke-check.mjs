@@ -369,8 +369,15 @@ check("outgoing calls acquire local media before creating a call row or alerting
   assert.ok(start >= 0 && end > start, "startCall function must exist");
   assert.ok(mediaPrompt >= 0 && insert > mediaPrompt, "capture must succeed before creating a remote call row");
   assert.ok(push > insert, "the remote call alert must happen after the local call row and successful capture");
-  assert.ok(nativeAudio > mediaPrompt, "native communication audio routing must not start before microphone capture");
+  assert.ok(nativeAudio >= 0 && nativeAudio < mediaPrompt, "native communication audio routing must be ready before microphone capture");
   includes(source, "If microphone capture failed, the recipient is not rung.");
+});
+check("native Android manifest declares audio-settings permission for WebRTC routing", () => {
+  includes(files.nativeManifest, 'android.permission.RECORD_AUDIO');
+  includes(files.nativeManifest, 'android.permission.MODIFY_AUDIO_SETTINGS');
+  includes(files.nativeActivity, 'private synchronized boolean beginNativeCallAudio(boolean useSpeaker)');
+  includes(files.nativeActivity, '@JavascriptInterface public boolean beginCallAudio()');
+  includes(files.nativeActivity, 'return false;');
 });
 check("incoming calls acquire microphone before switching Android to communication audio mode", () => {
   const start = files.calls.indexOf("async function acceptCall");
@@ -378,7 +385,7 @@ check("incoming calls acquire microphone before switching Android to communicati
   const source = files.calls.slice(start, end);
   const mediaPrompt = source.indexOf('await userMediaWithTimeout(call.media_type==="video",20000)');
   const nativeAudio = source.indexOf("beginNativeCallAudioSession()");
-  assert.ok(mediaPrompt >= 0 && nativeAudio > mediaPrompt, "acceptCall must acquire media before changing native audio mode");
+  assert.ok(mediaPrompt >= 0 && nativeAudio >= 0 && nativeAudio < mediaPrompt, "acceptCall must prepare native audio mode before opening the microphone");
 });
 check("transient Android audio capture failures retry with delayed default constraints", () => {
   includes(files.calls, 'await new Promise(resolve=>setTimeout(resolve,350))');
