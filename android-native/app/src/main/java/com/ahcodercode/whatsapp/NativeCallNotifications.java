@@ -87,6 +87,9 @@ public final class NativeCallNotifications {
             .setContentIntent(CallNotificationActionReceiver.pendingIntent(context, callId, "open", id))
             .setWhen(System.currentTimeMillis());
         if (!test && !callId.isEmpty()) {
+            // Full-screen pending intent is an Activity PendingIntent so Android
+            // can launch the answer screen over the lock screen for an incoming call.
+            builder.setFullScreenIntent(CallNotificationActionReceiver.pendingIntent(context, callId, "open", id), true);
             builder.addAction(new NotificationCompat.Action.Builder(android.R.drawable.sym_action_call, "Accept",
                 CallNotificationActionReceiver.pendingIntent(context, callId, "accept", id)).build());
             builder.addAction(new NotificationCompat.Action.Builder(android.R.drawable.ic_menu_close_clear_cancel, "Decline",

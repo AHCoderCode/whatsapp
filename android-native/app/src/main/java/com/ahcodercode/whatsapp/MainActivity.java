@@ -2,6 +2,7 @@ package com.ahcodercode.whatsapp;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.NotificationManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -110,8 +111,31 @@ public final class MainActivity extends Activity {
         }
         return true;
     }
+    private void applyIncomingCallWindowFlags(Intent intent) {
+        boolean incomingCall = intent != null && intent.getBooleanExtra("waNativeIncomingCall", false);
+        if (intent != null && !incomingCall) {
+            String launchUrl = intent.getStringExtra("waNativeLaunchUrl");
+            if (launchUrl != null) {
+                Uri uri = Uri.parse(launchUrl);
+                incomingCall = "call".equals(uri.getQueryParameter("waPushKind"))
+                    && uri.getQueryParameter("waCallId") != null;
+            }
+        }
+        if (Build.VERSION.SDK_INT >= 27) {
+            setShowWhenLocked(incomingCall);
+            setTurnScreenOn(incomingCall);
+        } else {
+            int flags = android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                | android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON;
+            if (incomingCall) getWindow().addFlags(flags);
+            else getWindow().clearFlags(flags);
+        }
+        if (incomingCall) getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        else getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
     private void handleLaunchIntent(Intent intent) {
         if (intent == null) return;
+        applyIncomingCallWindowFlags(intent);
         String url = intent.getStringExtra("waNativeLaunchUrl");
         if (url != null && isTrustedAppUrl(Uri.parse(url))) pendingUrl = url;
         if (webView != null) webView.loadUrl(pendingUrl);
@@ -119,6 +143,7 @@ public final class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        applyIncomingCallWindowFlags(intent);
         String url = intent.getStringExtra("waNativeLaunchUrl");
         if (url != null && isTrustedAppUrl(Uri.parse(url))) {
             pendingUrl = url;
@@ -230,6 +255,32 @@ public final class MainActivity extends Activity {
                     } catch (Exception ignoredAgain) {}
                 }
             });
+        }
+
+        @JavascriptInterface public boolean canUseFullScreenIntent() {
+            if (Build.VERSION.SDK_INT < 34) return true;
+            try {
+                NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                return manager != null && manager.canUseFullScreenIntent();
+            } catch (Exception ignored) { return false; }
+        }
+
+        @JavascriptInterface public void openFullScreenIntentSettings() {
+            runOnUiThread(() -> {
+                try {
+                    if (Build.VERSION.SDK_INT >= 34) {
+                        Intent intent = new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT);
+                        intent.setData(Uri.parse("package:" + getPackageName()));
+                        startActivity(intent);
+                    } else {
+                        openNotificationSettings();
+                    }
+                } catch (Exception ignored) { openNotificationSettings(); }
+            });
+        }
+
+        @JavascriptInterface public void finishIncomingCallUi() {
+            runOnUiThread(() -> applyIncomingCallWindowFlags(null));
         }
 
         @JavascriptInterface public void refreshFcmToken() {

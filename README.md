@@ -19,7 +19,7 @@ This independent WhatsApp-inspired web app is a responsive, installable messagin
 
 Appearance, read-receipt, accessibility and notification preferences are saved in this browser; profile name/about/photo, messages, contact requests, groups, communities and channels use the connected Supabase backend. Contact display-name aliases are device-local by design. Incoming voice notes play inline, message URLs are clickable, and outgoing messages display grey check marks until the recipient is recorded as having read them, then switch to blue. Incoming calls show a compact accept/decline banner, and audio calls include mute, speaker-volume and hang-up controls. Linked browser sessions register in a row-level-security-protected Supabase table and can be revoked; a revoked session signs out on its next active heartbeat. Device notifications use browser permission plus a Web Push service: the Supabase Edge Function creates and stores VAPID keys server-side on first use, stores per-device push subscriptions, and sends message/call alerts. Delivery still depends on the browser/device supporting Web Push, permission being granted, a valid saved subscription, and the caller's/ sender's app completing its trigger request. No web app can receive a call while the phone itself is powered off. The app is not connected to real WhatsApp accounts and does not implement WhatsApp's end-to-end encryption.
 
-For Android devices where browser Web Push is delivered late while backgrounded, a native FCM companion is available in android-native/README.md. It requires a Firebase Android app, a local google-services.json, and the server-only FIREBASE_SERVICE_ACCOUNT_JSON secret before native calls can work.
+For Android devices where browser Web Push is delayed while backgrounded, the native FCM companion in android-native/README.md posts system-level message and call alerts. Incoming calls use direct Accept/Decline activity actions and a full-screen call intent when Android allows it. It requires a Firebase Android app, a local google-services.json, and the server-only FIREBASE_SERVICE_ACCOUNT_JSON secret. On Android 14+, enable the app's Full-screen notifications special access when prompted; otherwise calls may remain in the notification shade rather than waking the full answer screen. Install the newly built native APK to get native lock-screen call behavior—installing the PWA alone cannot force Android to open a full-screen call screen.
 
 ### Device notifications and linked browser sessions
 
@@ -32,6 +32,13 @@ This app uses the Supabase project shared with the Windows 12 Master Chat, so th
 Never place a Supabase service-role/secret key or Metered account secret in HTML, browser JavaScript, GitHub or public Vercel environment variables. The browser contains only the Supabase publishable key and relies on RLS. **Do not disable RLS to make a rejected query work.**
 
 The custom-ID lookup, lookup-rate-limit, group description, polls/events, status/channel/community and channel-post migrations have already been applied to the connected Supabase project. Do not copy-paste or rerun those migrations.
+
+
+### Lock-screen calls and microphone troubleshooting
+
+The hosted web app can show actionable Web Push call notifications when the browser and operating system deliver push. For the strongest Android lock-screen experience, build and install the native companion and allow its **Incoming calls** notification channel. On Android 14 and newer, also allow **Full-screen notifications** for the app if Android presents that special-access setting. Test with the screen locked but the phone powered on; no software app can receive a call while the phone itself is powered off.
+
+If a caller sees **Could not start the microphone audio source**, close other apps currently using the microphone, check Android Settings → Apps → WhatsApp → Permissions → Microphone, then retry. The latest web call code retries once with default audio constraints on selected Android/WebView media-source errors. If it still fails, verify the microphone works in the phone's recorder app and restart the phone; real microphone/OS faults cannot be corrected by web code alone.
 
 ## Exact relay setup (required for actual calls)
 
@@ -87,7 +94,7 @@ Serve the repository root over HTTP instead of opening `index.html` using `file:
 
 - `+990` is a custom app identifier only; it cannot receive SMS or use the telephone network.
 - A valid Metered TURN plan/domain/API key is required before calls can actually connect.
-- Video file attachments, group calls, channel media posts, photo/video status capture and community subgroup binding are not implemented.
+- Group calls, channel media posts, photo/video status capture and community subgroup binding are not implemented. Direct and group chat photo/video/file attachments are supported through private Supabase Storage links, subject to the 15 MB limit and the current storage policy.
 - WhatsApp is independent, cannot message accounts on other messaging services, and does not provide end-to-end encryption. Supabase stores message text/metadata under its existing RLS policies.
 - Static syntax/build checks are not a substitute for the two-account/two-device test above. Verify actual audio/video on supported browsers before advertising the service as production-ready.
 

@@ -565,6 +565,21 @@
     toast("Open Android Settings → Apps → WhatsApp → Notifications and allow notifications.");
     return false;
   }
+  function nativeAndroidFullScreenCallsEnabled(){
+    try{
+      return !isNativeAndroidApp()||typeof window.WhatsAppNativeAndroid.canUseFullScreenIntent!=="function"||
+        !!window.WhatsAppNativeAndroid.canUseFullScreenIntent();
+    }catch(_){return false;}
+  }
+  function openNativeFullScreenCallSettings(){
+    try{
+      if(isNativeAndroidApp()&&typeof window.WhatsAppNativeAndroid.openFullScreenIntentSettings==="function"){
+        window.WhatsAppNativeAndroid.openFullScreenIntentSettings();return true;
+      }
+    }catch(_){}
+    toast("Open Android Settings → Apps → Special app access → Full-screen notifications and allow WhatsApp.");
+    return false;
+  }
   async function enableNativeCallAlerts(options={}){
     const showDialog=options.showDialog!==false;
     const showToast=options.showToast===true;
@@ -598,6 +613,9 @@
       void window.waBackendRegisterAndroidPushToken(token,state.settings).catch(error=>console.warn("Could not refresh native notification preferences:",error&&error.message||error));
     }
   };
+  function labelForNotificationKey(key){
+    return key==="messageNotifications"?"message":key==="groupNotifications"?"group":"call";
+  }
   async function requestNotificationPermission(settingKey){
     if(isNativeAndroidApp()){
       const supportedKeys=["messageNotifications","groupNotifications","callNotifications"];
@@ -622,6 +640,9 @@
         state.settings.notificationsSetupComplete=true;
         saveState();renderSettings();
         toast(label+" notifications are enabled on this phone.");
+        if(settingKey==="callNotifications"&&!nativeAndroidFullScreenCallsEnabled()){
+          openDialog("Allow full-screen incoming calls","<p class='screen-description'>Calls are registered, but Android may keep the alert in the notification shade until full-screen call alerts are allowed. Enable this special access so an incoming call can open the answer screen when your phone is locked.</p>","<button class='primary-button' data-action='open-native-full-screen-settings'>Open full-screen call settings</button><button class='secondary-button' data-action='close-dialog'>Later</button>");
+        }
         return true;
       }catch(error){
         state.settings[settingKey]=false;state.settings.notificationsSetupComplete=false;saveState();renderSettings();
@@ -629,23 +650,46 @@
         return false;
       }
     }
-    if(typeof Notification==="undefined"){state.settings[settingKey]=false;state.settings.notificationsSetupComplete=false;saveState();renderSettings();toast("This browser does not support device notifications.");return false;}
+    if(typeof Notification==="undefined"){
+      state.settings[settingKey]=false;state.settings.notificationsSetupComplete=false;saveState();renderSettings();
+      toast("This browser does not support device notifications.");return false;
+    }
     let permission=Notification.permission;
     if(permission==="default"){try{permission=await Notification.requestPermission();}catch(_){permission="denied";}}
-    if(permission!=="granted"){state.settings[settingKey]=false;state.settings.notificationsSetupComplete=false;saveState();renderSettings();toast("Notifications are blocked. Allow them in browser or device settings, then try again.");return false;}
-    saveState();renderSettings();
+    if(permission!=="granted"){
+      state.settings[settingKey]=false;state.settings.notificationsSetupComplete=false;saveState();renderSettings();
+      toast("Notifications are blocked. Allow them in browser or device settings, then try again.");return false;
+    }
+    if(!("serviceWorker" in navigator)||!("PushManager" in window)){
+      state.settings[settingKey]=false;state.settings.notificationsSetupComplete=false;saveState();renderSettings();
+      toast("This browser cannot register background notifications. Use an up-to-date browser with push-notification support.");return false;
+    }
     let backgroundPushReady=false;
-    if(window.waBackendEnablePush){
-      try{backgroundPushReady=await window.waBackendEnablePush(state.settings);}catch(error){console.warn("Background push registration failed:",error&&error.message||error);}
+    try{
+      if(typeof window.waBackendEnablePush!=="function")throw new Error("The secure push-registration service has not loaded. Refresh and retry.");
+      backgroundPushReady=await window.waBackendEnablePush(state.settings);
+      if(!backgroundPushReady)throw new Error("The device subscription was not confirmed by the server.");
+    }catch(error){
+      state.settings[settingKey]=false;state.settings.notificationsSetupComplete=false;saveState();renderSettings();
+      if(window.waBackendUpdatePushPreferences){
+        try{await window.waBackendUpdatePushPreferences(state.settings);}catch(_){}
+      }
+      const detail=String(error&&error.message||"Please check your connection and retry.");
+      console.warn("Background push registration failed:",detail);
+      toast("Could not enable "+labelForNotificationKey(settingKey)+" notifications: "+detail);
+      return false;
     }
     const allAlertsEnabled=!!(state.settings.messageNotifications&&state.settings.groupNotifications&&state.settings.callNotifications);
     state.settings.notificationsSetupComplete=backgroundPushReady&&allAlertsEnabled;
     saveState();
     try{
-      if("serviceWorker" in navigator){const registration=await navigator.serviceWorker.ready;await registration.showNotification("WhatsApp notifications enabled",{body:backgroundPushReady?"Background message and call alerts are registered for this device.":"Browser notifications are enabled, but background delivery still needs push registration.",icon:"/icon-192.svg",badge:"/icon-192.svg",tag:"wa-notifications-enabled"});}
-      else new Notification("WhatsApp notifications enabled",{body:"Notifications are enabled while the app is connected."});
-    }catch(_){}
-    toast(backgroundPushReady?"Device and background notifications enabled.":"Browser notifications enabled, but background delivery could not be registered on this device.");return true;
+      const registration=await navigator.serviceWorker.ready;
+      await registration.showNotification("WhatsApp notifications enabled",{
+        body:"Background notification delivery is registered on this device.",
+        icon:"/icon-192.svg",badge:"/icon-192.svg",tag:"wa-notifications-enabled"
+      });
+    }catch(error){console.warn("The test notification could not be displayed:",error&&error.message||error);}
+    toast("Device and background notifications enabled.");return true;
   }
   async function enableNotificationsFromPrompt(){
     if(!state||!currentUser||!currentUser.isSupabase){closeDialog();toast("Sign in before enabling device notifications.");return;}
@@ -1495,6 +1539,7 @@ function openSharedItemsDialog(chat,kind) {
     if(action==="settings"){settingsTab="account";settingsQuery="";setView("settings");return;}
     if(action==="enable-notifications"){void enableNotificationsFromPrompt();return;}
     if(action==="open-native-notification-settings"){closeDialog();openNativeNotificationSettings();return;}
+    if(action==="open-native-full-screen-settings"){closeDialog();openNativeFullScreenCallSettings();return;}
     if(action==="retry-native-call-notifications"){closeDialog();void enableNativeCallAlerts({showDialog:true,showToast:true}).then(ready=>{if(ready)renderApp();}).catch(error=>toast("Could not register native call alerts: "+String(error&&error.message||"Please retry.")));return;}
     if(action==="select-ringtone-file"){const input=$("#wa-ringtone-file-input");if(input)input.click();else toast("Open Settings → Notifications → Ringtone first.");return;}
     if(action==="preview-ringtone"){const api=window.WhatsAppCalls;if(!api||!api.previewRingtone){toast("Ringtone controls are still loading. Refresh and retry.");return;}void api.previewRingtone().then(played=>{if(!played)toast("The browser blocked ringtone playback. Tap Test ringtone again and check device media volume.");}).catch(error=>toast("Could not play the ringtone: "+String(error&&error.message||"Unknown error")));return;}

@@ -1,6 +1,6 @@
 # Native Android call-alert companion
 
-The hosted PWA uses browser Web Push. Production diagnostics showed the service worker received a provider-accepted push only when the app was reopened. This Android shell adds a native Firebase Cloud Messaging receiver so Android can post a call alert without waiting for the WebView to resume.
+The hosted PWA uses browser Web Push. This Android shell adds a native Firebase Cloud Messaging receiver so Android can post a call alert without waiting for the WebView to resume. Call notifications use direct Activity PendingIntents for Accept/Decline, an Android full-screen call intent, and lock-screen wake flags while the incoming-call screen is active. Android may still require the user to enable Full-screen notifications special access; manufacturer battery/network restrictions can also delay delivery.
 
 This companion uses the existing hosted UI and Supabase account; it does not replace the call backend or TURN configuration. It is not enabled on the hosted website by itself: install the native app and complete Firebase setup first. Verify delivery on a real phone before relying on it.
 
@@ -13,7 +13,7 @@ This companion uses the existing hosted UI and Supabase account; it does not rep
 5. Open Supabase Dashboard → Edge Functions → Secrets for project qoyqfmovzvtyvxutakym and add FIREBASE_SERVICE_ACCOUNT_JSON, with the entire service-account JSON as the value. Never put that private key in browser JavaScript, GitHub, or public Vercel variables.
 6. Build and install this Android app, open it, allow notification permission, and sign in with the same WhatsApp app account. The app passes its native FCM token to the authenticated Supabase backend.
 7. Confirm the receiving account has a row in public.whatsapp_android_push_tokens with calls_enabled = true. Call delivery logs should stop reporting firebase-not-configured and show Android FCM sending.
-8. Test with the phone unlocked first, then from Facebook, then with the screen off. Do not force-stop it for the first test. Review Android Settings → Apps → WhatsApp → Notifications → Incoming calls if the channel is silent or disabled.
+8. Test with the phone unlocked first, then from Facebook, then with the screen off while the phone remains powered on. Do not force-stop it for the first test. Review Android Settings → Apps → WhatsApp → Notifications → Incoming calls if the channel is silent or disabled. On Android 14+, open Settings → Apps → Special app access → Full-screen notifications and allow WhatsApp if that option is shown.
 
 ## Open and build
 
@@ -26,9 +26,9 @@ This companion uses the existing hosted UI and Supabase account; it does not rep
 ## What's included
 
 - Native high-importance Incoming calls channel with system ringtone and vibration.
-- Accept, decline, and open actions route into the existing web call UI.
+- Accept, decline, and open actions route directly into the existing web call UI through Activity PendingIntents.
+- Full-screen call intent and lock-screen wake flags for incoming-call UI, subject to Android special access and device policy.
 - Native FCM token registration via the authenticated Supabase Edge Function; token unregisters at sign-out.
 - WebView microphone/camera permission requests and file chooser support.
-- No full-screen-call permission is requested; Android restricts that capability and a high-importance notification is used instead.
 
 Native FCM depends on Google Play services, Android notification permission, network availability, and the phone's own background settings. It improves the architecture but is not a delivery guarantee until real-device tests pass.

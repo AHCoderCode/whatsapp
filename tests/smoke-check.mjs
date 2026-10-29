@@ -7,6 +7,9 @@ const files = {
   app: read("app.js"),
   backend: read("backend.js"),
   nativeNotifications: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/NativeCallNotifications.java"),
+  nativeReceiver: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/CallNotificationActionReceiver.java"),
+  nativeActivity: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/MainActivity.java"),
+  nativeManifest: read("android-native/app/src/main/AndroidManifest.xml"),
   calls: read("calls.js"),
   sw: read("sw.js"),
   html: read("index.html"),
@@ -47,10 +50,30 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261029b");
-  includes(files.sw, "whatsapp-final-20261029b");
-  includes(files.manifest, "whatsapp-final-20261029b");
-  includes(files.sw, "whatsapp-final-shell-v51");
+  includes(files.html, "whatsapp-final-20261029c");
+  includes(files.sw, "whatsapp-final-20261029c");
+  includes(files.manifest, "whatsapp-final-20261029c");
+  includes(files.sw, "whatsapp-final-shell-v52");
+});
+check("Android incoming-call actions launch the Activity directly and can wake the lock screen", () => {
+  includes(files.nativeManifest, "android.permission.USE_FULL_SCREEN_INTENT");
+  includes(files.nativeNotifications, "builder.setFullScreenIntent(");
+  includes(files.nativeReceiver, "PendingIntent.getActivity(");
+  excludes(files.nativeReceiver, "return PendingIntent.getBroadcast(");
+  includes(files.nativeActivity, "setShowWhenLocked(incomingCall)");
+  includes(files.nativeActivity, "setTurnScreenOn(incomingCall)");
+  includes(files.nativeActivity, "canUseFullScreenIntent()");
+});
+check("microphone source errors retry default constraints and explain permission/device failures", () => {
+  includes(files.calls, "noiseSuppression:true");
+  includes(files.calls, "audio:true,video:video?{facingMode:\"user\"}:false");
+  includes(files.calls, "Could not start the microphone audio source.");
+  includes(files.calls, "Allow the permission for WhatsApp in browser or Android app settings");
+});
+check("notification toggles roll back when background push registration fails", () => {
+  includes(files.app, "The device subscription was not confirmed by the server.");
+  includes(files.app, "state.settings[settingKey]=false;state.settings.notificationsSetupComplete=false;saveState();renderSettings();");
+  includes(files.app, "Could not enable \"+labelForNotificationKey(settingKey)+\" notifications: \"+detail");
 });
 check("hidden call pages show a fallback if Web Push is delayed", () => {
   includes(files.calls, 'const tag="wa-call-"+String(call.id);');

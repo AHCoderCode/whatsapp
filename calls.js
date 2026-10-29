@@ -139,9 +139,44 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     try{if(navigator.vibrate)navigator.vibrate([180,80,180]);}catch(_){}
     ringTimer=null; // Wait for accept/decline or a caller-ended event.
   }
+  function mediaPermissionError(error,video){
+    const name=String(error&&error.name||"");
+    if(name==="NotReadableError"||name==="AbortError"){
+      return new Error("Could not start the microphone audio source. Another app may be using the microphone, or Android could not open the audio input. Close other calling/recording apps, allow WhatsApp microphone access in system settings, and try again.");
+    }
+    if(name==="NotAllowedError"||name==="SecurityError"){
+      return new Error("Microphone"+(video?" / camera":"")+" access was denied. Allow the permission for WhatsApp in browser or Android app settings, then try the call again.");
+    }
+    if(name==="NotFoundError"){
+      return new Error("No available "+(video?"microphone or camera":"microphone")+" was found. Check the device and try again.");
+    }
+    if(name==="OverconstrainedError"){
+      return new Error("This device rejected the requested microphone or camera settings. Try closing other media apps and start the call again.");
+    }
+    if(name==="NotSupportedError"){
+      return new Error("Secure calling requires a current browser or the WhatsApp Android app, with microphone permission over HTTPS.");
+    }
+    return new Error(String(error&&error.message||"Could not start the microphone or camera."));
+  }
   const userMedia = async video => {
     if(!navigator.mediaDevices?.getUserMedia||typeof RTCPeerConnection==="undefined")throw new Error("This browser cannot make secure calls. Use an up-to-date browser over HTTPS.");
-    return navigator.mediaDevices.getUserMedia({audio:true,video:video?{facingMode:"user",width:{ideal:1280},height:{ideal:720}}:false});
+    const videoConstraints=video?{facingMode:"user",width:{ideal:1280},height:{ideal:720}}:false;
+    try{
+      return await navigator.mediaDevices.getUserMedia({
+        audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},
+        video:videoConstraints
+      });
+    }catch(error){
+      const name=String(error&&error.name||"");
+      if(!["NotReadableError","AbortError","OverconstrainedError"].includes(name))throw mediaPermissionError(error,video);
+      // Some Android/WebView audio stacks reject enhancement constraints even
+      // when the microphone is available. Retry once with browser defaults.
+      try{
+        return await navigator.mediaDevices.getUserMedia({audio:true,video:video?{facingMode:"user"}:false});
+      }catch(fallbackError){
+        throw mediaPermissionError(fallbackError&&fallbackError.name?fallbackError:error,video);
+      }
+    }
   };
   async function userMediaWithTimeout(video,ms=20000){
     let timedOut=false,timer=null;
@@ -199,6 +234,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     activeCall=null;incomingOffer=null;phase="idle";busy=false;muted=false;cameraOff=false;speakerOn=true;elapsed=0;callStart=0;
     pendingSignals.clear();seenSignals.clear();
     root().innerHTML="";
+    try{if(window.WhatsAppNativeAndroid&&typeof window.WhatsAppNativeAndroid.finishIncomingCallUi==="function")window.WhatsAppNativeAndroid.finishIncomingCallUi();}catch(_){}
   }
   function formatTime(total){const seconds=Math.max(0,Math.floor(total));return String(Math.floor(seconds/60)).padStart(2,"0")+":"+String(seconds%60).padStart(2,"0");}
   function renderCallOverlay(notice) {

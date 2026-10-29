@@ -10,13 +10,25 @@ import android.net.Uri;
 public final class CallNotificationActionReceiver extends BroadcastReceiver {
     private static final String CALL_ID = "waCallId", PUSH_ACTION = "waPushAction", NOTIFICATION_ID = "waNotificationId";
     public static PendingIntent pendingIntent(Context context, String callId, String action, int notificationId) {
-        Intent intent = new Intent(context, CallNotificationActionReceiver.class);
-        intent.setAction("com.ahcodercode.whatsapp.CALL_" + action.toUpperCase());
-        intent.putExtra(CALL_ID, callId == null ? "" : callId);
-        intent.putExtra(PUSH_ACTION, action);
+        String safeCallId = callId == null ? "" : callId;
+        String safeAction = action == null ? "open" : action;
+        Uri.Builder target = Uri.parse(MainActivity.HOME_URL).buildUpon().appendQueryParameter("waPushKind", "call");
+        if (!safeCallId.isEmpty()) target.appendQueryParameter("waCallId", safeCallId);
+        target.appendQueryParameter("waPushAction", safeAction);
+        Uri targetUri = target.build();
+
+        // Use a direct Activity PendingIntent. A BroadcastReceiver calling
+        // startActivity() is commonly blocked while the app is backgrounded.
+        Intent intent = new Intent(context, MainActivity.class);
+        intent.setData(targetUri);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        intent.putExtra("waNativeLaunchUrl", targetUri.toString());
+        intent.putExtra("waNativeIncomingCall", !safeCallId.isEmpty());
+        intent.putExtra(CALL_ID, safeCallId);
+        intent.putExtra(PUSH_ACTION, safeAction);
         intent.putExtra(NOTIFICATION_ID, notificationId);
-        int code = (String.valueOf(callId) + "|" + action + "|" + notificationId).hashCode();
-        return PendingIntent.getBroadcast(context, code, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        int code = (String.valueOf(safeCallId) + "|" + safeAction + "|" + notificationId).hashCode();
+        return PendingIntent.getActivity(context, code, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
     @Override public void onReceive(Context context, Intent intent) {
         String callId = intent.getStringExtra(CALL_ID), action = intent.getStringExtra(PUSH_ACTION);
