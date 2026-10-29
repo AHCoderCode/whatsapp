@@ -102,5 +102,9 @@
   };
   window.addEventListener("focus", () => check(false));
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") check(false); });
+  // If a release finishes while the app stays open, refresh availability in the foreground too.
+  window.setInterval(() => {
+    if (document.visibilityState === "visible") check(false);
+  }, 60 * 1000);
   check(true);
 })();
