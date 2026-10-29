@@ -121,7 +121,17 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     if(pending.action==="open")pendingNotificationAction=null;
   }
   function handleNotificationAction(data){
-    if(!data||data.kind!=="call")return;
+    if(!data)return;
+    if(data.kind==="call-ended"){
+      if(activeCall&&(!data.callId||String(activeCall.id)===String(data.callId))){
+        const wasOutgoing=activeCall.direction==="outgoing";
+        cleanupLocal();
+        if(wasOutgoing&&data.callStatus==="rejected")say("The other person declined the call.");
+        else if(wasOutgoing)say("The call has ended.");
+      }
+      return;
+    }
+    if(data.kind!=="call")return;
     pendingNotificationAction={kind:"call",callId:String(data.callId||""),action:data.action||"open"};
     runPendingNotificationAction();
   }
@@ -404,11 +414,12 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
         const sent=Number(delivery.sent||0);
         const failed=Number(delivery.failed||0);
         if(sent<1){
-          const message=subscriptions<1
-            ?"The call is ringing, but the other device has no enabled call-alert subscription. Open WhatsApp there and enable Settings → Notifications → Calls."
-            :"The call is ringing, but the background alert could not be delivered. Check notifications and internet on the receiving phone.";
-          console.warn("Background call alert was not accepted:",delivery);
-          say(message);
+          const reason=subscriptions<1
+            ?"no enabled call-alert subscription"
+            :"the push provider did not confirm delivery";
+          // A background-alert delivery warning is not a call/media failure.
+          // Keep call setup running and avoid showing a misleading error toast.
+          console.warn("Background call alert was not confirmed; continuing call setup:",reason,delivery);
         }else if(failed>0){
           console.warn("Some background call alerts failed:",delivery);
         }
@@ -434,7 +445,10 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       if(activeCall&&activeCall.id===newId)setPhase("outgoing","Calling @"+(person.username||person.name)+"…");
     }catch(error){
       const wasCancelled=!activeCall||(newId?activeCall.id!==newId:activeCall.id!==pendingId);
-      if(newId)try{await client.from("aeroshell_calls").update({status:"ended"}).eq("id",newId);}catch(_){}
+      if(newId)try{
+        const {error:endedError}=await client.from("aeroshell_calls").update({status:"ended"}).eq("id",newId);
+        if(!endedError)void notifyCallEnded({id:newId},client);
+      }catch(_){}
       cleanupLocal();
       if(!wasCancelled)say(error instanceof Error?error.message:"Call could not start.");
     }finally{busy=false;}
@@ -504,17 +518,38 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       if(!activeCall||activeCall.id!==call.id)return;
       await withCallTimeout(sendSignal(call,"answer",{type:"answer",sdp:pc.localDescription.sdp}),8000,"The call answer could not be delivered. Check the connection and try again.");
       setPhase("connecting","Connecting through the secure relay…");
-    }catch(error){try{await client.from("aeroshell_calls").update({status:activeCall&&activeCall.status==="accepted"?"ended":"rejected"}).eq("id",call.id).in("status",["ringing","accepted"]);}catch(_){}cleanupLocal();say(error instanceof Error?error.message:"Could not accept this call.");}
+    }catch(error){
+      try{
+        const {error:endedError}=await client.from("aeroshell_calls").update({status:activeCall&&activeCall.status==="accepted"?"ended":"rejected"}).eq("id",call.id).in("status",["ringing","accepted"]);
+        if(!endedError)void notifyCallEnded(call,client);
+      }catch(_){}
+      cleanupLocal();say(error instanceof Error?error.message:"Could not accept this call.");
+    }
     finally{busy=false;}
   }
+  async function notifyCallEnded(call,client=db()){
+    if(!call||!call.id||!client||String(call.id).startsWith("pending-"))return;
+    try{
+      const {error}=await client.functions.invoke("whatsapp-push",{body:{action:"notify-call-ended",callId:String(call.id)}});
+      if(error)console.warn("[calls] End-of-call push could not be sent:",error.message||error);
+    }catch(error){console.warn("[calls] End-of-call push request failed:",error&&error.message||error);}
+  }
   async function declineCall(expired){
-    const call=activeCall,client=db();
-    if(call&&client)try{await client.from("aeroshell_calls").update({status:"rejected"}).eq("id",call.id).eq("status","ringing");}catch(_){}
+    const call=activeCall,client=db();let changed=false;
+    if(call&&client)try{
+      const {error}=await client.from("aeroshell_calls").update({status:"rejected"}).eq("id",call.id).eq("status","ringing");
+      changed=!error;
+    }catch(_){}
+    if(changed)void notifyCallEnded(call,client);
     cleanupLocal();if(!expired)say("Call declined.");
   }
   async function endCall(message){
-    const call=activeCall,client=db(),current=me();busy=true;
-    if(call&&client&&current)try{await client.from("aeroshell_calls").update({status:"ended"}).eq("id",call.id).in("status",["ringing","accepted"]);}catch(_){}
+    const call=activeCall,client=db(),current=me();busy=true;let changed=false;
+    if(call&&client&&current)try{
+      const {error}=await client.from("aeroshell_calls").update({status:"ended"}).eq("id",call.id).in("status",["ringing","accepted"]);
+      changed=!error;
+    }catch(_){}
+    if(changed)void notifyCallEnded(call,client);
     cleanupLocal();if(message)say(message);
   }
   function toggleMute(){
