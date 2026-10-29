@@ -2,6 +2,17 @@ name: Build native Android APK
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "android-native/**"
+      - ".github/workflows/build-native-android.yml"
+      - "app.js"
+      - "backend.js"
+      - "index.html"
+      - "sw.js"
+      - "manifest.webmanifest"
 
 permissions:
   contents: read
