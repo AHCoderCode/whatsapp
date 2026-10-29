@@ -20,9 +20,12 @@ jobs:
           java-version: '17'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
-          cmdline-tools-version: "11076708"
+          # Use current command-line tools to avoid the SDK XML v4 warning.
+          cmdline-tools-version: "15859902"
+          # The legacy "tools" SDK package is discontinued; request only supported packages.
+          packages: "platform-tools"
 
       - name: Install Android SDK packages
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
