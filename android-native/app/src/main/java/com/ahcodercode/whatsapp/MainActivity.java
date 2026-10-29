@@ -45,6 +45,7 @@ public final class MainActivity extends Activity {
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         NativeCallNotifications.ensureChannel(this);
+        NativeCallNotifications.ensureMessageChannel(this);
         IntentFilter filter = new IntentFilter(WhatsAppMessagingService.ACTION_TOKEN_UPDATED);
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(tokenReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         else registerReceiver(tokenReceiver, filter);
@@ -207,15 +208,12 @@ public final class MainActivity extends Activity {
             if (Build.VERSION.SDK_INT >= 33 &&
                 ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.POST_NOTIFICATIONS)
                     != PackageManager.PERMISSION_GRANTED) return false;
-            if (!NotificationManagerCompat.from(MainActivity.this).areNotificationsEnabled()) return false;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                android.app.NotificationManager manager =
-                    (android.app.NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-                android.app.NotificationChannel channel = manager == null ? null :
-                    manager.getNotificationChannel(NativeCallNotifications.CHANNEL_ID);
-                if (channel != null && channel.getImportance() == android.app.NotificationManager.IMPORTANCE_NONE) return false;
-            }
-            return true;
+            return NotificationManagerCompat.from(MainActivity.this).areNotificationsEnabled();
+        }
+
+        @JavascriptInterface public boolean notificationChannelEnabled(String channelId) {
+            if (channelId == null || channelId.trim().isEmpty()) return false;
+            return NativeCallNotifications.isChannelEnabled(MainActivity.this, channelId.trim());
         }
 
         @JavascriptInterface public void openNotificationSettings() {
