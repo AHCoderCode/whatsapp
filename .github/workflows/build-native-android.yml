@@ -22,25 +22,66 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          # Use current command-line tools to avoid the SDK XML v4 warning.
           cmdline-tools-version: "15859902"
-          # The legacy "tools" SDK package is discontinued; request only supported packages.
           packages: "platform-tools"
 
       - name: Install Android SDK packages
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
-      - name: Write Firebase Android configuration
+      - name: Write and validate Firebase Android configuration
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
           if [ -z "$GOOGLE_SERVICES_JSON" ]; then
-            echo "Missing GitHub Actions secret GOOGLE_SERVICES_JSON."
+            echo "::error::Missing GitHub Actions secret GOOGLE_SERVICES_JSON."
+            echo "Add the complete contents of Firebase's google-services.json file as this secret."
             exit 1
           fi
+
           mkdir -p android-native/app
           printf '%s' "$GOOGLE_SERVICES_JSON" > android-native/app/google-services.json
-          python3 -m json.tool android-native/app/google-services.json >/dev/null
+
+          python3 - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          config_path = Path("android-native/app/google-services.json")
+          try:
+              config = json.loads(config_path.read_text(encoding="utf-8"))
+          except Exception:
+              print("::error::GOOGLE_SERVICES_JSON is not valid JSON. Replace it with the complete google-services.json file downloaded from Firebase.")
+              sys.exit(1)
+
+          if not isinstance(config, dict) or not isinstance(config.get("project_info"), dict):
+              if isinstance(config, dict) and (config.get("type") == "service_account" or "private_key" in config or "private_key_id" in config):
+                  print("::error::GOOGLE_SERVICES_JSON contains a Firebase service-account key. That is the wrong file. Use the Android app's google-services.json instead. Keep the service-account key only in Supabase.")
+              else:
+                  print("::error::GOOGLE_SERVICES_JSON is missing the top-level project_info object. Replace it with the complete google-services.json downloaded from Firebase Project settings → Your apps → Android app.")
+              sys.exit(1)
+
+          clients = config.get("client")
+          if not isinstance(clients, list):
+              print("::error::This google-services.json has no client list. Download the configuration for the registered Android app.")
+              sys.exit(1)
+
+          expected_package = "com.ahcodercode.whatsapp"
+          packages = []
+          for client in clients:
+              package_name = (
+                  client.get("client_info", {})
+                  .get("android_client_info", {})
+                  .get("package_name")
+              )
+              if package_name:
+                  packages.append(package_name)
+
+          if expected_package not in packages:
+              print("::error::The Firebase configuration does not include Android package com.ahcodercode.whatsapp. Register that exact package in Firebase, then download a fresh google-services.json and update the GOOGLE_SERVICES_JSON GitHub secret.")
+              sys.exit(1)
+
+          print("Firebase Android configuration validated for com.ahcodercode.whatsapp.")
+          PY
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
