@@ -9,8 +9,8 @@ android {
         applicationId "com.ahcodercode.whatsapp"
         minSdk 24
         targetSdk 35
-        versionCode (providers.gradleProperty("waVersionCode").orNull ?: "4").toInteger()
-        versionName (providers.gradleProperty("waVersionName").orNull ?: "1.3.0")
+        versionCode (project.hasProperty("waVersionCode") ? project.property("waVersionCode").toString().toInteger() : 4)
+        versionName (project.hasProperty("waVersionName") ? project.property("waVersionName").toString() : "1.3.0")
     }
     buildFeatures { buildConfig true }
     signingConfigs {
