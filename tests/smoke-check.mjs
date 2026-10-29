@@ -435,7 +435,7 @@ check("Android notification switches sync Messages, Groups and Calls push prefer
   includes(files.app, 'supportedKeys=["messageNotifications","groupNotifications","callNotifications"]');
   includes(files.push, 'sendAndroidPushToUsers(recipientIds, preferenceColumn, pushPayload)');
   includes(files.push, '.eq(preferenceColumn, true)');
-  includes(files.nativeNotifications, 'MESSAGE_CHANNEL_ID = "wa_messages_v1"');
+  includes(files.nativeNotifications, 'MESSAGE_CHANNEL_ID = "wa_messages_v2"');
 });
 check("signed-in attachments use shared secure storage", () => {
   includes(files.app, 'bridge.uploadBackendAttachment(file,{type:"file"');
