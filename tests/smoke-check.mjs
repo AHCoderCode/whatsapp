@@ -84,10 +84,26 @@ check("in-app update checker validates trusted release APK and checksum before i
   includes(files.buildWorkflow, "APK SHA-256:");
 });
 check("WebView attachment inputs remain clickable and native calls set audio mode", () => {
-  includes(files.app, 'addInput.style.cssText="position:fixed;left:-10000px');
+  includes(files.app, 'addInput.style.cssText="position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none;z-index:-1');
   includes(files.calls, "beginNativeCallAudioSession();");
   includes(files.calls, "endNativeCallAudioSession();");
   includes(files.nativeActivity, "AudioManager.MODE_IN_COMMUNICATION");
+});
+check("attachment menu opens the Android file picker before closing and has a WebView fallback", () => {
+  const start = files.app.indexOf("function runMenuAction");
+  const end = files.app.indexOf('document.addEventListener("click",event=>', start);
+  const source = files.app.slice(start, end);
+  const pickerBranch = source.indexOf('if(["pick-file","pick-image","pick-audio","camera"].includes(action))');
+  const firstClose = source.indexOf("closePopup();");
+  assert.ok(start >= 0 && end > start, "runMenuAction function must exist");
+  assert.ok(pickerBranch >= 0 && pickerBranch < firstClose, "launch the file chooser before detaching the clicked menu item");
+  includes(files.app, "function openAttachmentPicker(kind)");
+  includes(files.app, 'typeof input.showPicker==="function"');
+  includes(files.app, "else input.click()");
+  includes(files.app, 'if(action==="pick-image"){openAttachmentPicker("image");return;}');
+  includes(files.app, 'if(action==="pick-audio"){openAttachmentPicker("audio");return;}');
+  includes(files.nativeActivity, "onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params)");
+  includes(files.nativeActivity, "WebChromeClient.FileChooserParams.parseResult(result, data)");
 });
 check("microphone source errors retry default constraints and explain permission/device failures", () => {
   includes(files.calls, "noiseSuppression:true");
