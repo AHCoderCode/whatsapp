@@ -178,6 +178,9 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       }
     }
   };
+  function beginNativeCallAudioSession(){try{if(window.WhatsAppNativeAndroid&&window.WhatsAppNativeAndroid.beginCallAudio)window.WhatsAppNativeAndroid.beginCallAudio();}catch(error){console.warn("[calls] Native audio setup failed:",error&&error.message||error);}}
+  function setNativeCallSpeaker(enabled){try{if(window.WhatsAppNativeAndroid&&window.WhatsAppNativeAndroid.setCallSpeaker)window.WhatsAppNativeAndroid.setCallSpeaker(!!enabled);}catch(_){}}
+  function endNativeCallAudioSession(){try{if(window.WhatsAppNativeAndroid&&window.WhatsAppNativeAndroid.endCallAudio)window.WhatsAppNativeAndroid.endCallAudio();}catch(_){}}
   async function userMediaWithTimeout(video,ms=20000){
     let timedOut=false,timer=null;
     const request=userMedia(video).then(stream=>{if(timedOut){stream.getTracks().forEach(track=>track.stop());return null;}return stream;});
@@ -227,6 +230,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     stopIncomingRingtone();
     if(pc){try{pc.ontrack=null;pc.onicecandidate=null;pc.onconnectionstatechange=null;pc.close();}catch(_){}}
     pc=null;
+    endNativeCallAudioSession();
     if(localStream)localStream.getTracks().forEach(t=>{try{t.stop();}catch(_){}});
     localStream=null;
     if(remoteStream)remoteStream.getTracks().forEach(t=>{try{t.stop();}catch(_){}});
@@ -292,6 +296,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
   }
   function toggleSpeaker(){
     speakerOn=!speakerOn;
+    setNativeCallSpeaker(speakerOn);
     const audio=$("#wa-call-remote-audio");
     if(audio)audio.volume=speakerOn?1:.45;
     const button=root().querySelector("[data-wa-call='speaker']");
@@ -413,6 +418,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       }
       if(!activeCall||activeCall.id!==newId)return;
       startCallPushReminders(newId,client);
+      beginNativeCallAudioSession();
       const grantedStream=await userMediaWithTimeout(mediaType==="video",20000);
       if(!activeCall||activeCall.id!==newId){grantedStream.getTracks().forEach(track=>track.stop());return;}
       localStream=grantedStream;
@@ -476,6 +482,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     callSetupTimer=setTimeout(()=>{if(activeCall&&activeCall.id===call.id&&phase!=="connected")void endCall("Call setup timed out. Check microphone permission, relay and internet, then try again.");},40000);
     try{
       setPhase("preparing","Requesting microphone permission…");
+      beginNativeCallAudioSession();
       const grantedStream=await userMediaWithTimeout(call.media_type==="video",20000);
       if(!activeCall||activeCall.id!==call.id){grantedStream.getTracks().forEach(track=>track.stop());return;}
       localStream=grantedStream;

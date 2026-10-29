@@ -554,7 +554,7 @@
   function nativeAndroidNotificationsEnabled(settingKey="callNotifications"){
     try{
       if(!isNativeAndroidApp()||!window.WhatsAppNativeAndroid.notificationsEnabled())return false;
-      const channelId=settingKey==="callNotifications"?"wa_incoming_calls_v1":"wa_messages_v1";
+      const channelId=settingKey==="callNotifications"?"wa_incoming_calls_v2":"wa_messages_v2";
       if(typeof window.WhatsAppNativeAndroid.notificationChannelEnabled==="function"&&
         !window.WhatsAppNativeAndroid.notificationChannelEnabled(channelId))return false;
       return true;
@@ -1683,7 +1683,7 @@ function openSharedItemsDialog(chat,kind) {
       const action=t.dataset.dialogAction;
       if(action==="send-poll"){
         if(currentUser&&currentUser.isSupabase){
-          if(window.waAppBridge&&typeof window.waAppBridge.sendBackendPoll==="function")void window.waAppBridge.sendBackendPoll();
+          if(window.waAppBridge&&typeof window.waAppBridge.sendBackendPoll==="function")Promise.resolve(window.waAppBridge.sendBackendPoll()).catch(error=>toast("Could not send the poll: "+String(error&&error.message||"Unknown error")));
           else toast("Secure poll service is still loading. Refresh and try again.");
           return;
         }
@@ -1691,7 +1691,7 @@ function openSharedItemsDialog(chat,kind) {
       }
       if(action==="send-event"){
         if(currentUser&&currentUser.isSupabase){
-          if(window.waAppBridge&&typeof window.waAppBridge.sendBackendEvent==="function")void window.waAppBridge.sendBackendEvent();
+          if(window.waAppBridge&&typeof window.waAppBridge.sendBackendEvent==="function")Promise.resolve(window.waAppBridge.sendBackendEvent()).catch(error=>toast("Could not send the event: "+String(error&&error.message||"Unknown error")));
           else toast("Secure event service is still loading. Refresh and try again.");
           return;
         }
@@ -2163,9 +2163,9 @@ function openSharedItemsDialog(chat,kind) {
   function init() {
     clearLegacyLocalDemoState();
     const addInput=document.createElement("input");
-    addInput.type="file";addInput.id="attachment-input";addInput.hidden=true;addInput.accept="*/*";document.body.appendChild(addInput);
+    addInput.type="file";addInput.id="attachment-input";addInput.accept="*/*";addInput.tabIndex=-1;addInput.setAttribute("aria-hidden","true");addInput.style.cssText="position:fixed;left:-10000px;top:0;width:1px;height:1px;opacity:0";document.body.appendChild(addInput);
     const photoInput=document.createElement("input");
-    photoInput.type="file";photoInput.id="profile-photo-input";photoInput.hidden=true;photoInput.accept="image/*";document.body.appendChild(photoInput);
+    photoInput.type="file";photoInput.id="profile-photo-input";photoInput.accept="image/*";photoInput.tabIndex=-1;photoInput.setAttribute("aria-hidden","true");photoInput.style.cssText="position:fixed;left:-10000px;top:0;width:1px;height:1px;opacity:0";document.body.appendChild(photoInput);
     renderAuth("signup");
     auth.classList.add("hidden");
     const closeBackdrop=document.createElement("style");
