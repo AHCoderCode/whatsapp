@@ -56,7 +56,7 @@ check("current asset version is shared by HTML and service worker", () => {
   includes(files.html, "whatsapp-final-20261029e");
   includes(files.sw, "whatsapp-final-20261029e");
   includes(files.manifest, "whatsapp-final-20261029e");
-  includes(files.sw, "whatsapp-final-shell-v53");
+  includes(files.sw, "whatsapp-final-shell-v54");
 });
 check("Android incoming-call actions launch the Activity directly and can wake the lock screen", () => {
   includes(files.nativeManifest, "android.permission.USE_FULL_SCREEN_INTENT");
