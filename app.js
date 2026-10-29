@@ -539,7 +539,66 @@
     const a=document.createElement("a");a.href=url;a.download=filename;a.click();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
-  async function requestNotificationPermission(settingKey) {
+  function isNativeAndroidApp(){
+    try{return !!(window.WhatsAppNativeAndroid&&typeof window.WhatsAppNativeAndroid.isNativeApp==="function"&&window.WhatsAppNativeAndroid.isNativeApp());}
+    catch(_){return false;}
+  }
+  function nativeAndroidToken(){
+    let token=String(window.__waNativeFCMToken||"").trim();
+    if(!token&&isNativeAndroidApp()){
+      try{token=String(window.WhatsAppNativeAndroid.getFcmToken()||"").trim();}catch(_){}
+    }
+    if(token)window.__waNativeFCMToken=token;
+    return token;
+  }
+  function nativeAndroidNotificationsEnabled(){
+    try{return isNativeAndroidApp()&&!!window.WhatsAppNativeAndroid.notificationsEnabled();}
+    catch(_){return false;}
+  }
+  function openNativeNotificationSettings(){
+    try{if(isNativeAndroidApp()){window.WhatsAppNativeAndroid.openNotificationSettings();return true;}}catch(_){}
+    toast("Open Android Settings → Apps → WhatsApp → Notifications and allow notifications.");
+    return false;
+  }
+  async function enableNativeCallAlerts(options={}){
+    const showDialog=options.showDialog!==false;
+    const showToast=options.showToast===true;
+    if(!isNativeAndroidApp())return false;
+    if(!state||!currentUser||!currentUser.isSupabase)throw new Error("Sign in to your WhatsApp account before enabling call alerts.");
+    if(!nativeAndroidNotificationsEnabled()){
+      if(showDialog)openDialog("Allow Android call notifications","<p class='screen-description'>Android notifications are currently disabled for this app or its Incoming calls notification channel. Enable them in Android Settings so calls can alert you while the app is in the background.</p>","<button class='primary-button' data-action='open-native-notification-settings'>Open Android notification settings</button><button class='secondary-button' data-action='close-dialog'>Not now</button>");
+      return false;
+    }
+    const token=nativeAndroidToken();
+    if(!token){
+      try{window.WhatsAppNativeAndroid.refreshFcmToken();}catch(_){}
+      if(showDialog)openDialog("Preparing native call alerts","<p class='screen-description'>Android is still preparing this device's Firebase push token. Keep the app online, then tap Retry. Do not share the token with anyone.</p>","<button class='primary-button' data-action='retry-native-call-notifications'>Retry</button><button class='secondary-button' data-action='close-dialog'>Not now</button>");
+      else if(showToast)toast("Android is still preparing this device's push token. Reopen the app and retry shortly.");
+      return false;
+    }
+    if(!window.waBackendRegisterAndroidPushToken)throw new Error("The secure native push registration service has not loaded yet. Please retry.");
+    const nextSettings=Object.assign({},state.settings||{},{callNotifications:true,nativeCallNotificationsConfigured:true});
+    await window.waBackendRegisterAndroidPushToken(token,nextSettings);
+    state.settings=Object.assign({},state.settings||{},nextSettings,{notificationsSetupComplete:true});
+    saveState();
+    if(showToast){renderSettings();toast("Native incoming-call alerts are enabled on this phone.");}
+    return true;
+  }
+  window.waNativeAppResumed=function(){
+    if(!isNativeAndroidApp()||!state||!currentUser||!currentUser.isSupabase||!state.settings||!state.settings.callNotifications)return;
+    void enableNativeCallAlerts({showDialog:false,showToast:false}).catch(error=>console.warn("Could not refresh native call alert registration:",error&&error.message||error));
+  };
+  async function requestNotificationPermission(settingKey){
+    if(isNativeAndroidApp()){
+      if(settingKey!=="callNotifications"){
+        state.settings[settingKey]=false;state.settings.notificationsSetupComplete=false;saveState();renderSettings();
+        toast("This Android app currently provides native push for incoming calls. Message and group push alerts are not enabled in the native shell yet.");
+        return false;
+      }
+      state.settings.nativeCallNotificationsConfigured=true;
+      try{return await enableNativeCallAlerts({showDialog:true,showToast:true});}
+      catch(error){state.settings[settingKey]=false;state.settings.notificationsSetupComplete=false;saveState();renderSettings();toast("Could not register native call alerts: "+String(error&&error.message||"Please retry."));return false;}
+    }
     if(typeof Notification==="undefined"){state.settings[settingKey]=false;state.settings.notificationsSetupComplete=false;saveState();renderSettings();toast("This browser does not support device notifications.");return false;}
     let permission=Notification.permission;
     if(permission==="default"){try{permission=await Notification.requestPermission();}catch(_){permission="denied";}}
@@ -560,6 +619,16 @@
   }
   async function enableNotificationsFromPrompt(){
     if(!state||!currentUser||!currentUser.isSupabase){closeDialog();toast("Sign in before enabling device notifications.");return;}
+    if(isNativeAndroidApp()){
+      state.settings.callNotifications=true;
+      state.settings.nativeCallNotificationsConfigured=true;
+      saveState();
+      try{
+        const ready=await enableNativeCallAlerts({showDialog:true,showToast:true});
+        if(ready){closeDialog();renderApp();}
+      }catch(error){console.warn("Native call-alert setup failed:",error&&error.message||error);toast("Could not enable native call alerts. Retry and check your connection.");}
+      return;
+    }
     if(typeof Notification==="undefined"||!("serviceWorker" in navigator)||!("PushManager" in window)){
       toast("This browser does not support background push. Open this app in a current browser that supports notifications.");return;
     }
@@ -585,6 +654,23 @@
   }
   async function promptNotificationSetup(){
     if(!state||!currentUser||!currentUser.isSupabase||$("#dialog-backdrop"))return;
+    if(isNativeAndroidApp()){
+      const settings=state.settings||{};
+      if(settings.nativeCallNotificationsConfigured!==true){
+        settings.callNotifications=true;
+        settings.nativeCallNotificationsConfigured=true;
+        state.settings=settings;
+        saveState();
+      }
+      if(settings.callNotifications){
+        try{await enableNativeCallAlerts({showDialog:true,showToast:false});}
+        catch(error){
+          console.warn("Native Android push registration failed:",error&&error.message||error);
+          openDialog("Could not enable native call alerts","<p class='screen-description'>Your account is signed in, but this phone could not register for incoming-call alerts. Check your connection and retry. If this keeps happening, the Firebase push configuration needs to be checked.</p>","<button class='primary-button' data-action='retry-native-call-notifications'>Retry</button><button class='secondary-button' data-action='close-dialog'>Not now</button>");
+        }
+      }
+      return;
+    }
     const permission=typeof Notification==="undefined"?"unsupported":Notification.permission;
     const settings=state.settings||{};
     const allAlertsEnabled=!!(settings.messageNotifications&&settings.groupNotifications&&settings.callNotifications);
@@ -617,7 +703,33 @@
     openDialog(blocked?"Notifications are blocked":unsupported?"Notifications unavailable":"Enable notifications",body,primary+secondary+"<button class='secondary-button' data-action='close-dialog'>Not now</button>");
   }
 
-  async function testCallAlert(){if(!currentUser||!currentUser.isSupabase){toast("Sign in to a shared WhatsApp account before testing background call alerts.");return;}if(typeof Notification==="undefined"||Notification.permission!=="granted"){toast("Allow notifications for WhatsApp in browser and phone settings first.");return;}if(!window.waBackendTestCallPush){toast("The background notification service has not loaded. Reload WhatsApp and retry.");return;}toast("Background test scheduled for 8 seconds from now — switch to Facebook now and leave WhatsApp closed.");try{const result=await window.waBackendTestCallPush(8);const sent=Number(result&&result.sent||0),failed=Number(result&&result.failed||0),subscriptions=Number(result&&result.subscriptions||0),web=result&&result.web||{},android=result&&result.android||{},webSent=Number(web.sent||0),androidSent=Number(android.sent||0);const detail="Web Push "+webSent+" accepted, "+Number(web.failed||0)+" failed; Android push "+androidSent+" accepted, "+Number(android.failed||0)+" failed.";if(sent>0)toast("Server accepted the delayed test ("+detail+"). If no banner appeared, the push reached the provider but the phone/browser did not display it.");else if(subscriptions===0)toast("No registered device has Calls notifications enabled. "+(web.reason||android.reason||"Re-enable Calls notifications on this account."));else if(failed>0)toast("Push delivery was rejected ("+detail+"). Check the backend result before changing phone settings.");else toast("The server did not accept a device alert ("+detail+"). Keep the result in mind for the next check.");}catch(error){toast("Test call alert failed: "+String(error&&error.message||"notification setup error"));}}
+  async function testCallAlert(){
+    if(!currentUser||!currentUser.isSupabase){toast("Sign in to a shared WhatsApp account before testing background call alerts.");return;}
+    if(isNativeAndroidApp()){
+      state.settings.callNotifications=true;
+      state.settings.nativeCallNotificationsConfigured=true;
+      saveState();
+      try{
+        const ready=await enableNativeCallAlerts({showDialog:true,showToast:false});
+        if(!ready)return;
+      }catch(error){toast("Native call alert setup failed: "+String(error&&error.message||"Please retry."));return;}
+    }else if(typeof Notification==="undefined"||Notification.permission!=="granted"){
+      toast("Allow notifications for WhatsApp in browser and phone settings first.");return;
+    }
+    if(!window.waBackendTestCallPush){toast("The background notification service has not loaded. Reload WhatsApp and retry.");return;}
+    toast("Background test scheduled for 8 seconds from now — switch to Facebook now and leave WhatsApp closed.");
+    try{
+      const result=await window.waBackendTestCallPush(8);
+      const sent=Number(result&&result.sent||0),failed=Number(result&&result.failed||0),subscriptions=Number(result&&result.subscriptions||0);
+      const web=result&&result.web||{},android=result&&result.android||{};
+      const webSent=Number(web.sent||0),androidSent=Number(android.sent||0);
+      const detail="Web Push "+webSent+" accepted, "+Number(web.failed||0)+" failed; Android push "+androidSent+" accepted, "+Number(android.failed||0)+" failed.";
+      if(sent>0)toast("Server accepted the delayed test ("+detail+"). Check whether this phone displayed it in the background.");
+      else if(subscriptions===0)toast("No registered device has Calls notifications enabled. "+(web.reason||android.reason||"Re-enable Calls notifications on this account."));
+      else if(failed>0)toast("Push delivery was rejected ("+detail+"). Check the backend result before changing phone settings.");
+      else toast("The server did not accept a device alert ("+detail+"). Keep the result in mind for the next check.");
+    }catch(error){toast("Test call alert failed: "+String(error&&error.message||"notification setup error"));}
+  }
   function openRingtoneDialog(){const api=window.WhatsAppCalls,info=api&&api.getRingtoneInfo?api.getRingtoneInfo():{name:"Built-in loud ringtone",volume:300},volume=Math.max(25,Math.min(300,Number(info.volume)||300));const body="<p class='screen-description'>Choose the sound this device plays for incoming calls. MP3 files are saved locally in this browser and are not uploaded to your account.</p>"+"<div class='wa-ringtone-current'><span class='wa-ringtone-current-icon'>"+icon("phone")+"</span><span><small>Current ringtone</small><strong id='wa-ringtone-current-name'>"+esc(info.name||"Built-in loud ringtone")+"</strong></span></div>"+"<div class='dialog-field wa-ringtone-volume-field'><label for='wa-ringtone-volume'>Ringtone volume <strong id='wa-ringtone-volume-label'>"+volume+"%</strong></label><input id='wa-ringtone-volume' type='range' min='25' max='300' step='5' value='"+volume+"'><small>300% boosts the ringtone in the app’s audio chain with compression to reduce clipping. Your phone's media volume still controls final loudness.</small></div>"+"<p class='screen-description'>When WhatsApp is closed, your phone uses its normal notification sound and vibration; browsers cannot force a custom MP3 to play in the background on every device. A powered-off phone cannot receive a web call.</p>"+"<input id='wa-ringtone-file-input' type='file' accept='.mp3,audio/mpeg' hidden>";const footer="<button class='secondary-button' data-action='use-default-ringtone'>Use built-in</button>"+"<button class='secondary-button' data-action='preview-ringtone'>Test ringtone</button>"+"<button class='primary-button' data-action='select-ringtone-file'>Choose MP3</button>"+"<button class='secondary-button' data-action='close-dialog'>Done</button>";openDialog("Incoming call ringtone",body,footer);}
 
   function handleSettingOption(title) {
@@ -626,7 +738,16 @@
     if(title==="Theme"){state.settings.dark=!state.settings.dark;saveState();applySettings();renderSettings();toast("Theme updated.");return;}
     const settingByTitle={"Read receipts":"readReceipts","Keep chats archived":"keepArchived","Enter is send":"enterToSend","Media visibility":"mediaVisibility","App lock":"appLock","Reduce motion":"reduceMotion","Keyboard navigation":"keyboardNav","High contrast":"highContrast","Spell check":"spellcheck","Reaction notifications":"reactionNotifications","Security notifications":"securityNotifications","Messages":"messageNotifications","Groups":"groupNotifications","Calls":"callNotifications"};
     if(settingByTitle[title]){
-      const key=settingByTitle[title];state.settings[key]=!state.settings[key];saveState();applySettings();renderSettings();
+      const key=settingByTitle[title];
+      state.settings[key]=!state.settings[key];
+      if(isNativeAndroidApp()&&["messageNotifications","groupNotifications","callNotifications"].includes(key)){
+        if(key==="callNotifications")state.settings.nativeCallNotificationsConfigured=true;
+        else if(state.settings[key]){
+          state.settings[key]=false;
+          toast("Native Android push currently supports incoming-call alerts only.");
+        }
+      }
+      saveState();applySettings();renderSettings();
       if(["messageNotifications","groupNotifications","callNotifications"].includes(key)){
         if(state.settings[key])void requestNotificationPermission(key);
         else if(window.waBackendUpdatePushPreferences)void window.waBackendUpdatePushPreferences(state.settings).catch(error=>console.warn("Push preferences could not sync:",error));
@@ -1349,6 +1470,8 @@ function openSharedItemsDialog(chat,kind) {
     if(action==="profile"){setView("profile");return;}
     if(action==="settings"){settingsTab="account";settingsQuery="";setView("settings");return;}
     if(action==="enable-notifications"){void enableNotificationsFromPrompt();return;}
+    if(action==="open-native-notification-settings"){closeDialog();openNativeNotificationSettings();return;}
+    if(action==="retry-native-call-notifications"){closeDialog();void enableNativeCallAlerts({showDialog:true,showToast:true}).then(ready=>{if(ready)renderApp();}).catch(error=>toast("Could not register native call alerts: "+String(error&&error.message||"Please retry.")));return;}
     if(action==="select-ringtone-file"){const input=$("#wa-ringtone-file-input");if(input)input.click();else toast("Open Settings → Notifications → Ringtone first.");return;}
     if(action==="preview-ringtone"){const api=window.WhatsAppCalls;if(!api||!api.previewRingtone){toast("Ringtone controls are still loading. Refresh and retry.");return;}void api.previewRingtone().then(played=>{if(!played)toast("The browser blocked ringtone playback. Tap Test ringtone again and check device media volume.");}).catch(error=>toast("Could not play the ringtone: "+String(error&&error.message||"Unknown error")));return;}
     if(action==="use-default-ringtone"){const api=window.WhatsAppCalls;if(!api||!api.resetRingtone){toast("Ringtone controls are still loading. Refresh and retry.");return;}void api.resetRingtone().then(()=>{closeDialog();renderSettings();toast("Built-in ringtone selected.");}).catch(error=>toast("Could not reset ringtone: "+String(error&&error.message||"Unknown error")));return;}
