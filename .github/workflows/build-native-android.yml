@@ -5,17 +5,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "android-native/**"
-      - ".github/workflows/build-native-android.yml"
-      - "app.js"
-      - "backend.js"
-      - "index.html"
-      - "sw.js"
-      - "manifest.webmanifest"
-      - "styles.css"
-      - "calls.js"
-      - "updater.js"
 
 permissions:
   contents: write
