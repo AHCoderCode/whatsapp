@@ -7,6 +7,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Color;
+import android.media.AudioAttributes;
+import android.media.Ringtone;
+import android.media.RingtoneManager;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Build;
@@ -28,13 +31,14 @@ public final class IncomingCallActivity extends Activity {
     private String mediaType = "audio";
     private int notificationId = -1;
     private boolean actionTaken;
+    private Ringtone incomingRingtone;
 
     private final Runnable fallbackRunnable = () -> {
         if (!isFinishing() && !actionTaken) launchMainActivity("open");
     };
     private final BroadcastReceiver finishReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
-            if (intent != null && ACTION_FINISH.equals(intent.getAction())) finish();
+            if (intent != null && ACTION_FINISH.equals(intent.getAction())) { stopRinging(); finish(); }
         }
     };
 
@@ -57,6 +61,7 @@ public final class IncomingCallActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(finishReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         else registerReceiver(finishReceiver, filter);
         renderScreen();
+        startRinging();
         handler.postDelayed(fallbackRunnable, 60000);
     }
 
@@ -65,6 +70,7 @@ public final class IncomingCallActivity extends Activity {
         setIntent(intent);
         readIntent(intent);
         renderScreen();
+        startRinging();
     }
 
     private void configureLockScreen() {
@@ -158,9 +164,30 @@ public final class IncomingCallActivity extends Activity {
         setContentView(root);
     }
 
+    private void startRinging() {
+        if (actionTaken) return;
+        try {
+            if (incomingRingtone != null && incomingRingtone.isPlaying()) return;
+            Uri sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE);
+            incomingRingtone = RingtoneManager.getRingtone(this, sound);
+            if (incomingRingtone == null) return;
+            if (Build.VERSION.SDK_INT >= 21) incomingRingtone.setAudioAttributes(new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build());
+            if (Build.VERSION.SDK_INT >= 28) incomingRingtone.setLooping(true);
+            incomingRingtone.play();
+        } catch (Exception error) { android.util.Log.w("WhatsApp", "Native incoming ringtone could not start", error); }
+    }
+
+    private void stopRinging() {
+        try { if (incomingRingtone != null && incomingRingtone.isPlaying()) incomingRingtone.stop(); } catch (Exception ignored) {}
+        incomingRingtone = null;
+    }
+
     private void launchMainActivity(String action) {
         if (actionTaken || callId.isEmpty()) { if (callId.isEmpty()) finish(); return; }
         actionTaken = true;
+        stopRinging();
         handler.removeCallbacks(fallbackRunnable);
         if (notificationId >= 0) NativeCallNotifications.cancel(this, notificationId);
         Uri target = Uri.parse(MainActivity.HOME_URL).buildUpon()
@@ -179,6 +206,7 @@ public final class IncomingCallActivity extends Activity {
 
     @Override protected void onDestroy() {
         handler.removeCallbacks(fallbackRunnable);
+        stopRinging();
         try { unregisterReceiver(finishReceiver); } catch (Exception ignored) {}
         super.onDestroy();
     }
