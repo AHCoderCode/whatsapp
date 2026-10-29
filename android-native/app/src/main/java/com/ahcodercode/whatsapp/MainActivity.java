@@ -4,11 +4,17 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.NotificationManager;
 import android.content.BroadcastReceiver;
+import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
+import android.media.AudioManager;
+import android.provider.MediaStore;
+import java.io.File;
 import android.provider.Settings;
 import android.os.Build;
 import android.os.Bundle;
@@ -21,6 +27,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 import androidx.core.app.NotificationManagerCompat;
 import com.google.firebase.messaging.FirebaseMessaging;
 import org.json.JSONObject;
@@ -29,9 +36,16 @@ import java.util.List;
 
 public final class MainActivity extends Activity {
     public static final String HOME_URL = "https://whatsapp-for.vercel.app/";
-    private static final int REQUEST_NOTIFICATIONS = 8001, REQUEST_MEDIA = 8002, REQUEST_FILE = 8003;
+    private static final int REQUEST_NOTIFICATIONS = 8001, REQUEST_MEDIA = 8002, REQUEST_FILE = 8003, REQUEST_CAPTURE = 8004;
     private WebView webView;
     private ValueCallback<Uri[]> fileChooserCallback;
+    private Uri pendingCaptureUri;
+    private AudioManager callAudioManager;
+    private AudioFocusRequest callAudioFocusRequest;
+    private int previousAudioMode = AudioManager.MODE_NORMAL;
+    private boolean previousSpeakerphoneOn;
+    private boolean callAudioSessionActive;
+    private final AudioManager.OnAudioFocusChangeListener callAudioFocusListener = focusChange -> {};
     private PermissionRequest pendingWebPermissionRequest;
     private String pendingUrl = HOME_URL, fcmToken = "";
     private boolean pageLoaded;
@@ -80,13 +94,35 @@ public final class MainActivity extends Activity {
             @Override public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (fileChooserCallback != null) fileChooserCallback.onReceiveValue(null);
                 fileChooserCallback = callback;
+                if (params != null && params.isCaptureEnabled()) {
+                    try {
+                        Intent capture = createCaptureIntent(params);
+                        if (capture != null) { startActivityForResult(capture, REQUEST_CAPTURE); return true; }
+                    } catch (Exception ignored) { pendingCaptureUri = null; }
+                }
                 try {
-                    startActivityForResult(Intent.createChooser(params.createIntent(), "Choose a file"), REQUEST_FILE);
+                    Intent picker = null;
+                    try { if (params != null) picker = params.createIntent(); } catch (Exception ignored) {}
+                    if (picker == null) {
+                        picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                        picker.addCategory(Intent.CATEGORY_OPENABLE);
+                        picker.setType("*/*");
+                    }
+                    startActivityForResult(Intent.createChooser(picker, "Choose a photo, video, or file"), REQUEST_FILE);
                     return true;
-                } catch (Exception error) {
-                    fileChooserCallback = null;
-                    callback.onReceiveValue(null);
-                    return false;
+                } catch (Exception firstError) {
+                    try {
+                        Intent fallback = new Intent(Intent.ACTION_GET_CONTENT);
+                        fallback.addCategory(Intent.CATEGORY_OPENABLE);
+                        fallback.setType("*/*");
+                        startActivityForResult(Intent.createChooser(fallback, "Choose a file"), REQUEST_FILE);
+                        return true;
+                    } catch (Exception secondError) {
+                        fileChooserCallback = null;
+                        pendingCaptureUri = null;
+                        callback.onReceiveValue(null);
+                        return false;
+                    }
                 }
             }
         });
@@ -137,6 +173,8 @@ public final class MainActivity extends Activity {
         if (intent == null) return;
         applyIncomingCallWindowFlags(intent);
         String url = intent.getStringExtra("waNativeLaunchUrl");
+        int notificationId = intent.getIntExtra("waNotificationId", -1);
+        if (notificationId >= 0) NativeCallNotifications.cancel(this, notificationId);
         if (url != null && isTrustedAppUrl(Uri.parse(url))) pendingUrl = url;
         if (webView != null) webView.loadUrl(pendingUrl);
     }
@@ -145,11 +183,72 @@ public final class MainActivity extends Activity {
         setIntent(intent);
         applyIncomingCallWindowFlags(intent);
         String url = intent.getStringExtra("waNativeLaunchUrl");
+        int notificationId = intent.getIntExtra("waNotificationId", -1);
+        if (notificationId >= 0) NativeCallNotifications.cancel(this, notificationId);
         if (url != null && isTrustedAppUrl(Uri.parse(url))) {
             pendingUrl = url;
             if (webView != null) webView.loadUrl(url);
         }
     }
+    private Intent createCaptureIntent(WebChromeClient.FileChooserParams params) throws java.io.IOException {
+        if (params == null || !params.isCaptureEnabled()) return null;
+        StringBuilder accepted = new StringBuilder();
+        for (String type : params.getAcceptTypes()) if (type != null) accepted.append(type.toLowerCase(java.util.Locale.ROOT)).append(",");
+        boolean video = accepted.toString().contains("video/") && !accepted.toString().contains("image/");
+        File directory = new File(getCacheDir(), "capture");
+        if (!directory.exists() && !directory.mkdirs()) throw new java.io.IOException("Could not prepare camera capture.");
+        File output = File.createTempFile(video ? "wa-video-" : "wa-photo-", video ? ".mp4" : ".jpg", directory);
+        pendingCaptureUri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", output);
+        Intent intent = new Intent(video ? MediaStore.ACTION_VIDEO_CAPTURE : MediaStore.ACTION_IMAGE_CAPTURE);
+        intent.putExtra(MediaStore.EXTRA_OUTPUT, pendingCaptureUri);
+        intent.setClipData(ClipData.newRawUri("WhatsApp camera capture", pendingCaptureUri));
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        return intent;
+    }
+
+    private synchronized void beginNativeCallAudio(boolean useSpeaker) {
+        AudioManager manager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (manager == null) return;
+        if (!callAudioSessionActive) {
+            previousAudioMode = manager.getMode();
+            previousSpeakerphoneOn = manager.isSpeakerphoneOn();
+            callAudioManager = manager;
+            callAudioSessionActive = true;
+        }
+        manager.setMode(AudioManager.MODE_IN_COMMUNICATION);
+        if (Build.VERSION.SDK_INT >= 26) {
+            if (callAudioFocusRequest == null) {
+                callAudioFocusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                    .setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                    .setOnAudioFocusChangeListener(callAudioFocusListener).build();
+            }
+            manager.requestAudioFocus(callAudioFocusRequest);
+        } else {
+            manager.requestAudioFocus(callAudioFocusListener, AudioManager.STREAM_VOICE_CALL, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
+        }
+        manager.setSpeakerphoneOn(useSpeaker);
+    }
+
+    private synchronized void setNativeCallSpeaker(boolean enabled) {
+        if (callAudioManager != null && callAudioSessionActive) {
+            try { callAudioManager.setSpeakerphoneOn(enabled); } catch (Exception ignored) {}
+        }
+    }
+
+    private synchronized void endNativeCallAudio() {
+        AudioManager manager = callAudioManager;
+        if (manager == null || !callAudioSessionActive) return;
+        try {
+            if (Build.VERSION.SDK_INT >= 26 && callAudioFocusRequest != null) manager.abandonAudioFocusRequest(callAudioFocusRequest);
+            else manager.abandonAudioFocus(callAudioFocusListener);
+            manager.setSpeakerphoneOn(previousSpeakerphoneOn);
+            manager.setMode(previousAudioMode);
+        } catch (Exception ignored) {}
+        callAudioSessionActive = false;
+        callAudioManager = null;
+    }
+
     private void refreshFcmToken() {
         try {
             FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
@@ -203,10 +302,13 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onActivityResult(int code, int result, Intent data) {
         super.onActivityResult(code, result, data);
-        if (code == REQUEST_FILE && fileChooserCallback != null) {
+        if ((code == REQUEST_FILE || code == REQUEST_CAPTURE) && fileChooserCallback != null) {
             ValueCallback<Uri[]> callback = fileChooserCallback;
             fileChooserCallback = null;
-            callback.onReceiveValue(result == RESULT_OK ? WebChromeClient.FileChooserParams.parseResult(result, data) : null);
+            Uri captureUri = pendingCaptureUri;
+            pendingCaptureUri = null;
+            if (code == REQUEST_CAPTURE) callback.onReceiveValue(result == RESULT_OK && captureUri != null ? new Uri[]{captureUri} : null);
+            else callback.onReceiveValue(result == RESULT_OK ? WebChromeClient.FileChooserParams.parseResult(result, data) : null);
         }
     }
     @Override protected void onResume() {
@@ -222,6 +324,9 @@ public final class MainActivity extends Activity {
 
     private final class NativeAppBridge {
         @JavascriptInterface public boolean isNativeApp() { return true; }
+        @JavascriptInterface public void beginCallAudio() { try { beginNativeCallAudio(true); } catch (Exception error) { android.util.Log.w("WhatsApp", "Native audio focus failed", error); } }
+        @JavascriptInterface public void setCallSpeaker(boolean enabled) { setNativeCallSpeaker(enabled); }
+        @JavascriptInterface public void endCallAudio() { endNativeCallAudio(); }
 
         @JavascriptInterface public String getFcmToken() {
             if (fcmToken != null && !fcmToken.trim().isEmpty()) return fcmToken.trim();
@@ -280,6 +385,7 @@ public final class MainActivity extends Activity {
         }
 
         @JavascriptInterface public void finishIncomingCallUi() {
+            try { Intent close = new Intent(IncomingCallActivity.ACTION_FINISH); close.setPackage(getPackageName()); sendBroadcast(close); } catch (Exception ignored) {}
             runOnUiThread(() -> applyIncomingCallWindowFlags(null));
         }
 
@@ -294,6 +400,7 @@ public final class MainActivity extends Activity {
         try { unregisterReceiver(tokenReceiver); } catch (Exception ignored) {}
         if (pendingWebPermissionRequest != null) pendingWebPermissionRequest.deny();
         if (fileChooserCallback != null) fileChooserCallback.onReceiveValue(null);
+        endNativeCallAudio();
         if (webView != null) { webView.stopLoading(); webView.destroy(); webView = null; }
         super.onDestroy();
     }

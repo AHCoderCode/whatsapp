@@ -14,8 +14,8 @@ import androidx.core.app.NotificationManagerCompat;
 import java.util.Map;
 
 public final class NativeCallNotifications {
-    public static final String CHANNEL_ID = "wa_incoming_calls_v1";
-    public static final String MESSAGE_CHANNEL_ID = "wa_messages_v1";
+    public static final String CHANNEL_ID = "wa_incoming_calls_v2";
+    public static final String MESSAGE_CHANNEL_ID = "wa_messages_v2";
     private NativeCallNotifications() {}
 
     public static void ensureChannel(Context context) {
@@ -75,6 +75,9 @@ public final class NativeCallNotifications {
         int id = callId.isEmpty() ? 83001 : (callId.hashCode() & 0x7fffffff);
         if (id == 0) id = 83001;
 
+        PendingIntent openIntent = (!test && !callId.isEmpty())
+            ? IncomingCallActivity.pendingIntent(context, callId, caller, media, id)
+            : CallNotificationActionReceiver.pendingIntent(context, callId, "open", id);
         NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.sym_action_call)
             .setContentTitle(title).setContentText(body)
@@ -86,18 +89,22 @@ public final class NativeCallNotifications {
             .setOnlyAlertOnce(false)
             .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE))
             .setVibrate(new long[]{0, 500, 250, 500, 250, 800})
-            .setContentIntent(CallNotificationActionReceiver.pendingIntent(context, callId, "open", id))
+            .setContentIntent(openIntent)
             .setWhen(System.currentTimeMillis());
         if (!test && !callId.isEmpty()) {
             // Full-screen pending intent is an Activity PendingIntent so Android
             // can launch the answer screen over the lock screen for an incoming call.
-            builder.setFullScreenIntent(CallNotificationActionReceiver.pendingIntent(context, callId, "open", id), true);
+            builder.setFullScreenIntent(openIntent, true);
             builder.addAction(new NotificationCompat.Action.Builder(android.R.drawable.sym_action_call, "Accept",
                 CallNotificationActionReceiver.pendingIntent(context, callId, "accept", id)).build());
             builder.addAction(new NotificationCompat.Action.Builder(android.R.drawable.ic_menu_close_clear_cancel, "Decline",
                 CallNotificationActionReceiver.pendingIntent(context, callId, "decline", id)).build());
         }
         try { NotificationManagerCompat.from(context).notify(id, builder.build()); } catch (SecurityException ignored) {}
+    }
+
+    public static void cancel(Context context, int notificationId) {
+        try { NotificationManagerCompat.from(context).cancel(notificationId); } catch (Exception ignored) {}
     }
 
     private static void showMessage(Context context, Map<String, String> data) {
