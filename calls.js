@@ -188,12 +188,26 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     }catch(error){
       const name=String(error&&error.name||"");
       if(!["NotReadableError","AbortError","OverconstrainedError"].includes(name))throw mediaPermissionError(error,video);
-      // Some Android/WebView audio stacks reject enhancement constraints even
-      // when the microphone is available. Retry once with browser defaults.
+      // Android WebView can transiently fail while its audio input is being
+      // released. Wait briefly, then retry with default capture constraints.
+      await new Promise(resolve=>setTimeout(resolve,350));
       try{
         return await navigator.mediaDevices.getUserMedia({audio:true,video:video?{facingMode:"user"}:false});
       }catch(fallbackError){
-        throw mediaPermissionError(fallbackError&&fallbackError.name?fallbackError:error,video);
+        const fallbackName=String(fallbackError&&fallbackError.name||"");
+        if(!["NotReadableError","AbortError","OverconstrainedError"].includes(fallbackName))throw mediaPermissionError(fallbackError,video);
+        // A final delayed microphone-only retry avoids carrying camera/audio
+        // enhancement requests into devices whose WebView stack is recovering.
+        await new Promise(resolve=>setTimeout(resolve,650));
+        try{
+          if(video){
+            return await navigator.mediaDevices.getUserMedia({audio:true,video:{facingMode:"user"}});
+          }
+          return await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+        }catch(lastError){
+          const failed=lastError&&lastError.name?lastError:fallbackError&&fallbackError.name?fallbackError:error;
+          throw mediaPermissionError(failed,video);
+        }
       }
     }
   };
@@ -398,11 +412,27 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     if(busy||activeCall)return say("Finish the current call before starting another.");
     if(!person||!person.id||person.id===current.id)return say("Choose a valid contact.");
     if(person.type==="group"||person.groupId)return say("Group calls are not included in this one-to-one calling build yet.");
-    busy=true;activeCall={id:"pending-"+Date.now(),caller_id:current.id,callee_id:person.id,media_type:mediaType,direction:"outgoing",peer:person};setPhase("preparing","Requesting "+(mediaType==="video"?"camera and microphone":"microphone")+" permission…");
+    busy=true;
+    activeCall={id:"pending-"+Date.now(),caller_id:current.id,callee_id:person.id,media_type:mediaType,direction:"outgoing",peer:person};
+    setPhase("preparing","Checking microphone"+(mediaType==="video"?" and camera":"")+" before alerting the other phone…");
     const pendingId=activeCall.id;
     let newId="";
     try{
-      const {data,error}=await client.from("aeroshell_calls").insert({caller_id:current.id,callee_id:person.id,media_type:mediaType}).select("id,caller_id,callee_id,status,created_at,updated_at,media_type,group_call_id").single();
+      // Open the local media device before creating a server call or sending a
+      // push. Previously the callee was alerted first, so a local microphone
+      // failure produced a brief ring and then a misleading ended-call alert.
+      // Do not change Android's communication audio mode until capture is ready:
+      // some WebView/audio stacks fail to open the microphone during that transition.
+      const grantedStream=await userMediaWithTimeout(mediaType==="video",20000);
+      if(!activeCall||activeCall.id!==pendingId){
+        grantedStream.getTracks().forEach(track=>track.stop());
+        return;
+      }
+      localStream=grantedStream;
+
+      const {data,error}=await client.from("aeroshell_calls")
+        .insert({caller_id:current.id,callee_id:person.id,media_type:mediaType})
+        .select("id,caller_id,callee_id,status,created_at,updated_at,media_type,group_call_id").single();
       if(error||!data)throw error||new Error("Could not create the call.");
       newId=data.id;
       if(!activeCall||activeCall.id!==pendingId){
@@ -412,9 +442,9 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       activeCall=Object.assign({},data,{direction:"outgoing",peer:person});
       renderCallOverlay("Calling @"+(person.username||person.name)+"…");
       ringTimer=null; // Keep the call active until either side ends it.
-      // Complete the server-side push before media permission can fail and
-      // end the call row. This is the alert path used while the recipient is
-      // using another app, where page audio is not reliable.
+
+      // Only send the incoming-call alert after this phone has a live local
+      // media stream. If microphone capture failed, the recipient is not rung.
       try{
         const pushResult=await withCallTimeout(
           client.functions.invoke("whatsapp-push",{body:{action:"notify-call",callId:newId}}),
@@ -430,24 +460,18 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
           const reason=subscriptions<1
             ?"no enabled call-alert subscription"
             :"the push provider did not confirm delivery";
-          // A background-alert delivery warning is not a call/media failure.
-          // Keep call setup running and avoid showing a misleading error toast.
           console.warn("Background call alert was not confirmed; continuing call setup:",reason,delivery);
         }else if(failed>0){
           console.warn("Some background call alerts failed:",delivery);
         }
       }catch(pushError){
         console.warn("Initial background call alert dispatch failed:",pushError&&pushError.message||pushError);
-        // Push delivery can be delayed while a screen is off; keep trying without converting it into a call error.
       }
       if(!activeCall||activeCall.id!==newId)return;
       startCallPushReminders(newId,client);
       beginNativeCallAudioSession();
-      const grantedStream=await userMediaWithTimeout(mediaType==="video",20000);
-      if(!activeCall||activeCall.id!==newId){grantedStream.getTracks().forEach(track=>track.stop());return;}
-      localStream=grantedStream;
       setPhase("preparing","Preparing the secure relay…");
-      const servers=await withCallTimeout(relayServers(data.id),12000,"Secure relay setup timed out. Check the TURN configuration and connection, then try again.");
+      const servers=await withCallTimeout(relayServers(newId),12000,"Secure relay setup timed out. Check the TURN configuration and connection, then try again.");
       if(!activeCall||activeCall.id!==newId)return;
       setPhase("preparing","Starting the audio connection…");
       makePeer(activeCall,servers);
@@ -515,10 +539,11 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     callSetupTimer=setTimeout(()=>{if(activeCall&&activeCall.id===call.id&&phase!=="connected")void endCall("Call setup timed out. Check microphone permission, relay and internet, then try again.");},40000);
     try{
       setPhase("preparing","Requesting microphone permission…");
-      beginNativeCallAudioSession();
       const grantedStream=await userMediaWithTimeout(call.media_type==="video",20000);
       if(!activeCall||activeCall.id!==call.id){grantedStream.getTracks().forEach(track=>track.stop());return;}
       localStream=grantedStream;
+      // Capture the microphone before switching Android into communication mode.
+      beginNativeCallAudioSession();
       setPhase("preparing","Preparing the secure relay…");
       const servers=await withCallTimeout(relayServers(call.id),12000,"Secure relay setup timed out. Check TURN configuration and connection, then try again.");
       if(!activeCall||activeCall.id!==call.id){localStream.getTracks().forEach(track=>track.stop());localStream=null;return;}
