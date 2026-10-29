@@ -370,7 +370,7 @@ check("outgoing calls acquire local media before creating a call row or alerting
   assert.ok(mediaPrompt >= 0 && insert > mediaPrompt, "capture must succeed before creating a remote call row");
   assert.ok(push > insert, "the remote call alert must happen after the local call row and successful capture");
   assert.ok(nativeAudio > mediaPrompt, "native communication audio routing must not start before microphone capture");
-  includes(source, "Only send the incoming-call alert after this phone has a live local media stream.");
+  includes(source, "If microphone capture failed, the recipient is not rung.");
 });
 check("incoming calls acquire microphone before switching Android to communication audio mode", () => {
   const start = files.calls.indexOf("async function acceptCall");
@@ -383,7 +383,7 @@ check("incoming calls acquire microphone before switching Android to communicati
 check("transient Android audio capture failures retry with delayed default constraints", () => {
   includes(files.calls, 'await new Promise(resolve=>setTimeout(resolve,350))');
   includes(files.calls, 'await new Promise(resolve=>setTimeout(resolve,650))');
-  includes(files.calls, "Android WebView can transiently fail while its audio input is being released.");
+  includes(files.calls, "released. Wait briefly, then retry with default capture constraints.");
 });
 check("call notification action can be queued until offer arrives", () => {
   includes(files.calls, "runPendingNotificationAction");
