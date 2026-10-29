@@ -512,6 +512,23 @@ check("call-ended push dismisses matching Android and browser incoming-call UI",
   includes(files.nativeNotifications, '"call-ended".equals(kind)');
   includes(files.nativeNotifications, 'endIncomingCall(context, value(data, "callId", ""))');
 });
+check("native Accept actions reach the call controller after WebView startup", () => {
+  includes(files.nativeActivity, "rememberPendingNativeCallAction(intent, url);");
+  includes(files.nativeActivity, "dispatchPendingNativeCallAction");
+  includes(files.nativeActivity, "api.handleNotificationAction({kind:'call',callId:");
+  includes(files.calls, "window.WhatsAppCalls={");
+  includes(files.calls, "if(pending&&pending.kind===\"call\"&&pending.callId)");
+});
+check("accept, decline and hang-up use verified call-state transitions", () => {
+  includes(files.calls, 'client.functions.invoke("whatsapp-push",{body:{action:"transition-call",callId:String(call.id),status:nextStatus}})');
+  includes(files.calls, 'await transitionCallStatus(call,"accepted",client,current)');
+  includes(files.calls, 'await transitionCallStatus(call,"rejected")');
+  includes(files.calls, 'await transitionCallStatus(call,"ended")');
+  includes(files.push, "async function transitionCall(userId: string, body: any)");
+  includes(files.push, 'body.action === "transition-call"');
+  includes(files.push, 'call.callee_id !== userId');
+  includes(files.push, "await notifyCallEnded(userId, { callId })");
+});
 check("chat attachment menu has a dedicated audio picker using private storage", () => {
   includes(files.app, '{icon:"music",label:"Audio",action:"pick-audio"}');
   includes(files.app, 'if(action==="pick-audio")');

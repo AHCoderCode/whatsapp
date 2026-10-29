@@ -431,6 +431,69 @@ async function notifyCallEnded(userId: string, body: any) {
   };
 }
 
+async function transitionCall(userId: string, body: any) {
+  if (!admin) throw new Error("Push service is unavailable.");
+  const callId = String(body?.callId || "");
+  const nextStatus = String(body?.status || "");
+  if (!uuidPattern.test(callId)) throw new Error("A valid call ID is required.");
+  if (!["accepted", "rejected", "ended"].includes(nextStatus)) throw new Error("Invalid call status transition.");
+
+  const { data: call, error } = await admin.from("aeroshell_calls")
+    .select("id,caller_id,callee_id,status,media_type,group_call_id")
+    .eq("id", callId).maybeSingle();
+  if (error) throw error;
+  if (!call || call.group_call_id || (call.caller_id !== userId && call.callee_id !== userId)) {
+    return { ok: false, status: call?.status || "missing", reason: "call-not-active-or-not-participant" };
+  }
+  if ((nextStatus === "accepted" || nextStatus === "rejected") && call.callee_id !== userId) {
+    return { ok: false, status: call.status, reason: "only-callee-can-respond" };
+  }
+
+  if (call.status === nextStatus) return { ok: true, status: call.status, changed: false };
+  const terminalStatuses = ["rejected", "ended"];
+  if (terminalStatuses.includes(call.status)) {
+    if (terminalStatuses.includes(nextStatus)) {
+      let push: any = { sent: 0, reason: "already-ended" };
+      try { push = await notifyCallEnded(userId, { callId }); }
+      catch (pushError: any) { console.error("[whatsapp-push] Could not repeat end-call push:", clean(pushError?.message || pushError, 180)); }
+      return { ok: true, status: call.status, changed: false, push };
+    }
+    return { ok: false, status: call.status, reason: "call-not-active" };
+  }
+
+  const allowedStatuses = nextStatus === "ended" ? ["ringing", "accepted"] : ["ringing"];
+  if (!allowedStatuses.includes(call.status)) return { ok: false, status: call.status, reason: "call-state-changed" };
+  const { data: updated, error: updateError } = await admin.from("aeroshell_calls")
+    .update({ status: nextStatus, updated_at: new Date().toISOString() })
+    .eq("id", callId).eq("status", call.status)
+    .select("id,caller_id,callee_id,status,media_type,group_call_id").maybeSingle();
+  if (updateError) throw updateError;
+
+  if (!updated) {
+    const { data: latest, error: latestError } = await admin.from("aeroshell_calls")
+      .select("id,status").eq("id", callId).maybeSingle();
+    if (latestError) throw latestError;
+    if (latest && latest.status === nextStatus) return { ok: true, status: latest.status, changed: false };
+    if (latest && terminalStatuses.includes(nextStatus) && terminalStatuses.includes(latest.status)) {
+      let push: any = { sent: 0, reason: "already-ended" };
+      try { push = await notifyCallEnded(userId, { callId }); }
+      catch (pushError: any) { console.error("[whatsapp-push] Could not repeat end-call push:", clean(pushError?.message || pushError, 180)); }
+      return { ok: true, status: latest.status, changed: false, push };
+    }
+    return { ok: false, status: latest?.status || "missing", reason: "call-state-changed" };
+  }
+
+  let push: any = { sent: 0, reason: "not-needed" };
+  if (nextStatus === "rejected" || nextStatus === "ended") {
+    try { push = await notifyCallEnded(userId, { callId }); }
+    catch (pushError: any) {
+      // The status change is authoritative even if a push provider is temporarily unavailable.
+      console.error("[whatsapp-push] Call status changed but end-call push failed:", clean(pushError?.message || pushError, 180));
+    }
+  }
+  return { ok: true, status: updated.status, changed: true, push };
+}
+
 async function recordPushReceipt(body: any) {
   const probeId = String(body?.probeId || "");
   const stage = String(body?.stage || "");
@@ -542,6 +605,7 @@ Deno.serve(async (req: Request) => {
     }
     if (body.action === "notify-message") return response(await notifyMessage(user.id, body));
     if (body.action === "notify-call") return response(await notifyCall(user.id, body));
+    if (body.action === "transition-call") return response(await transitionCall(user.id, body));
     if (body.action === "notify-call-ended") return response(await notifyCallEnded(user.id, body));
     if (body.action === "test-call-push") return response(await testCallPush(user.id, body.delaySeconds));
     return response({ error: "Unknown action." }, 400);

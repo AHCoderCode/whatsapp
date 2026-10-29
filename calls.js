@@ -494,9 +494,8 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     }catch(error){
       const wasCancelled=!activeCall||(newId?activeCall.id!==newId:activeCall.id!==pendingId);
       if(newId)try{
-        const {error:endedError}=await client.from("aeroshell_calls").update({status:"ended"}).eq("id",newId);
-        if(!endedError)void notifyCallEnded({id:newId},client);
-      }catch(_){}
+        await transitionCallStatus({id:newId,caller_id:current.id,callee_id:person.id},"ended",client,current);
+      }catch(statusError){console.warn("[calls] Failed call cleanup was not confirmed:",statusError&&statusError.message||statusError);}
       cleanupLocal();
       if(!wasCancelled)say(error instanceof Error?error.message:"Call could not start.");
     }finally{busy=false;}
@@ -545,7 +544,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     }
     acceptRequested=false;
     stopIncomingRingtone();
-    const current=me(),client=db(),call=activeCall;busy=true;
+    const current=me(),client=db(),call=activeCall;let statusAccepted=false;busy=true;
     if(ringTimer!==null)clearTimeout(ringTimer);ringTimer=null;
     callSetupTimer=setTimeout(()=>{if(activeCall&&activeCall.id===call.id&&phase!=="connected")void endCall("Call setup timed out. Check microphone permission, relay and internet, then try again.");},40000);
     try{
@@ -564,8 +563,8 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       await withCallTimeout(pc.setRemoteDescription({type:"offer",sdp:offer}),8000,"The caller's connection offer timed out. Ask them to call again.");
       if(!activeCall||activeCall.id!==call.id)return;
       await withCallTimeout(flushCandidates(),8000,"The relay candidates could not be prepared in time.");
-      const {data,error}=await withCallTimeout(client.from("aeroshell_calls").update({status:"accepted"}).eq("id",call.id).eq("callee_id",current.id).eq("status","ringing").select("id,status").maybeSingle(),8000,"The server did not accept the call in time.");
-      if(error||!data)throw new Error("This call is no longer available.");
+      await transitionCallStatus(call,"accepted",client,current);
+      statusAccepted=true;
       if(!activeCall||activeCall.id!==call.id)return;
       const answer=await withCallTimeout(pc.createAnswer(),8000,"The call answer could not be created.");
       await withCallTimeout(pc.setLocalDescription(answer),8000,"The local call description timed out.");
@@ -573,10 +572,8 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       await withCallTimeout(sendSignal(call,"answer",{type:"answer",sdp:pc.localDescription.sdp}),8000,"The call answer could not be delivered. Check the connection and try again.");
       setPhase("connecting","Connecting through the secure relay…");
     }catch(error){
-      try{
-        const {error:endedError}=await client.from("aeroshell_calls").update({status:activeCall&&activeCall.status==="accepted"?"ended":"rejected"}).eq("id",call.id).in("status",["ringing","accepted"]);
-        if(!endedError)void notifyCallEnded(call,client);
-      }catch(_){}
+      try{await transitionCallStatus(call,statusAccepted?"ended":"rejected",client,current);}
+      catch(statusError){console.warn("[calls] Failed acceptance cleanup was not confirmed:",statusError&&statusError.message||statusError);}
       cleanupLocal();say(error instanceof Error?error.message:"Could not accept this call.");
     }
     finally{busy=false;}
@@ -588,23 +585,81 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       if(error)console.warn("[calls] End-of-call push could not be sent:",error.message||error);
     }catch(error){console.warn("[calls] End-of-call push request failed:",error&&error.message||error);}
   }
+  async function transitionCallStatus(call,nextStatus,client=db(),current=me()){
+    if(!call||!call.id)throw new Error("The call ID is missing.");
+    if(!["accepted","rejected","ended"].includes(nextStatus))throw new Error("Invalid call-state transition.");
+    if(!client||!current||!current.id||!current.isSupabase)throw new Error("Your WhatsApp session is not ready. Reopen the app while connected to the internet.");
+    if(nextStatus==="accepted"&&String(call.callee_id)!==String(current.id))throw new Error("Only the person receiving this call can accept it.");
+    if(nextStatus==="rejected"&&String(call.callee_id)!==String(current.id))throw new Error("Only the person receiving this call can decline it.");
+    if(nextStatus==="ended"&&String(call.caller_id)!==String(current.id)&&String(call.callee_id)!==String(current.id))throw new Error("You are not a participant in this call.");
+    const allowedStatuses=nextStatus==="ended"?["ringing","accepted"]:["ringing"];
+    let serverFailure=null;
+    try{
+      const result=await withCallTimeout(
+        client.functions.invoke("whatsapp-push",{body:{action:"transition-call",callId:String(call.id),status:nextStatus}}),
+        8000,
+        "The call server did not confirm the status change in time."
+      );
+      if(!result.error&&result.data&&result.data.ok&&result.data.status===nextStatus){
+        return {status:result.data.status,changed:!!result.data.changed};
+      }
+      serverFailure=result.error||new Error(result.data&&result.data.reason||"The call server did not confirm the status change.");
+    }catch(error){serverFailure=error;}
+    console.warn("[calls] Server call-state transition failed; checking the database fallback:",serverFailure&&serverFailure.message||serverFailure);
+    let directFailure=null;
+    try{
+      const result=await withCallTimeout(
+        client.from("aeroshell_calls").update({status:nextStatus,updated_at:new Date().toISOString()})
+          .eq("id",call.id).in("status",allowedStatuses).select("id,status").maybeSingle(),
+        8000,
+        "The call status update timed out."
+      );
+      if(result.error)directFailure=result.error;
+      else if(result.data){
+        if(nextStatus==="rejected"||nextStatus==="ended")void notifyCallEnded(call,client);
+        return {status:result.data.status,changed:true};
+      }
+    }catch(error){directFailure=error;}
+    try{
+      const latest=await withCallTimeout(
+        client.from("aeroshell_calls").select("id,status").eq("id",call.id).maybeSingle(),
+        6000,
+        "Could not verify the latest call status."
+      );
+      const state=latest&&latest.data&&latest.data.status;
+      if(!latest.error&&state===nextStatus)return {status:state,changed:false};
+      if(!latest.error&&(nextStatus==="rejected"||nextStatus==="ended")&&["rejected","ended"].includes(state)){
+        return {status:state,changed:false};
+      }
+    }catch(error){directFailure=directFailure||error;}
+    console.error("[calls] Call status transition was not confirmed:",directFailure&&directFailure.message||directFailure);
+    throw new Error(nextStatus==="accepted"
+      ?"The call was not accepted by the server. Check the connection and try again."
+      :"WhatsApp could not confirm that the call ended. Check the internet on this phone, then try again.");
+  }
   async function declineCall(expired){
-    const call=activeCall,client=db();let changed=false;
-    if(call&&client)try{
-      const {error}=await client.from("aeroshell_calls").update({status:"rejected"}).eq("id",call.id).eq("status","ringing");
-      changed=!error;
-    }catch(_){}
-    if(changed)void notifyCallEnded(call,client);
+    const call=activeCall;
+    if(call){
+      try{await transitionCallStatus(call,"rejected");}
+      catch(error){
+        console.warn("[calls] Decline was not confirmed:",error&&error.message||error);
+        say(error instanceof Error?error.message:"Could not notify the other phone that the call was declined. Check your internet and retry.");
+        return;
+      }
+    }
     cleanupLocal();if(!expired)say("Call declined.");
   }
   async function endCall(message){
-    const call=activeCall,client=db(),current=me();busy=true;let changed=false;
-    if(call&&client&&current)try{
-      const {error}=await client.from("aeroshell_calls").update({status:"ended"}).eq("id",call.id).in("status",["ringing","accepted"]);
-      changed=!error;
-    }catch(_){}
-    if(changed)void notifyCallEnded(call,client);
-    cleanupLocal();if(message)say(message);
+    const call=activeCall;
+    busy=true;
+    let transitionError=null;
+    if(call&&!String(call.id).startsWith("pending-")){
+      try{await transitionCallStatus(call,"ended");}
+      catch(error){transitionError=error;console.warn("[calls] End-call status was not confirmed:",error&&error.message||error);}
+    }
+    cleanupLocal();
+    if(message)say(message);
+    if(transitionError)say("The call ended on this phone, but the server could not confirm it. Check the internet connection.");
   }
   function toggleMute(){
     muted=!muted;if(localStream)localStream.getAudioTracks().forEach(t=>t.enabled=!muted);updateMuteButton();
@@ -652,6 +707,28 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
         if(row.status==="accepted"&&tracked.direction==="outgoing"&&phase==="outgoing")setPhase("connecting","Connecting through the secure relay…");
         if(tracked.direction==="incoming"&&phase==="incoming"&&!incomingOffer)await recoverIncomingOffer(tracked.id,current.id,client);
         return;
+      }
+      const pending=pendingNotificationAction;
+      if(pending&&pending.kind==="call"&&pending.callId){
+        const {data:target,error:targetError}=await client.from("aeroshell_calls")
+          .select("id,caller_id,callee_id,status,created_at,media_type,group_call_id")
+          .eq("id",pending.callId).eq("callee_id",current.id).maybeSingle();
+        if(!targetError&&target){
+          if(target.status==="ringing"&&!target.group_call_id){
+            await showIncomingCallRecord(target);
+            if(activeCall&&String(activeCall.id)===String(target.id)&&phase==="incoming"&&!incomingOffer)await recoverIncomingOffer(target.id,current.id,client);
+            else if(activeCall&&String(activeCall.id)===String(target.id))runPendingNotificationAction();
+            return;
+          }
+          if(["rejected","ended"].includes(target.status)){
+            pendingNotificationAction=null;acceptRequested=false;
+            return;
+          }
+          if(target.status==="accepted"&&pending.action==="accept"){
+            pendingNotificationAction=null;acceptRequested=false;
+            return;
+          }
+        }
       }
       const {data:rows,error}=await client.from("aeroshell_calls")
         .select("id,caller_id,callee_id,status,created_at,media_type,group_call_id")

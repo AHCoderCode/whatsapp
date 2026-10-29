@@ -60,6 +60,9 @@ public final class MainActivity extends Activity {
     private final AudioManager.OnAudioFocusChangeListener callAudioFocusListener = focusChange -> {};
     private PermissionRequest pendingWebPermissionRequest;
     private String pendingUrl = HOME_URL, fcmToken = "";
+    private String pendingNativeCallId = "", pendingNativeCallAction = "";
+    private int pendingNativeCallDispatchAttempts;
+    private boolean pendingNativeCallDispatching;
     private boolean pageLoaded;
 
     private final BroadcastReceiver tokenReceiver = new BroadcastReceiver() {
@@ -96,7 +99,11 @@ public final class MainActivity extends Activity {
             }
             @Override public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                if (isTrustedAppUrl(Uri.parse(url))) { pageLoaded = true; publishFcmToken(); }
+                if (isTrustedAppUrl(Uri.parse(url))) {
+                    pageLoaded = true;
+                    publishFcmToken();
+                    if (!pendingNativeCallId.isEmpty()) webView.postDelayed(MainActivity.this::dispatchPendingNativeCallAction, 250);
+                }
             }
         });
         webView.setWebChromeClient(new WebChromeClient() {
@@ -186,6 +193,7 @@ public final class MainActivity extends Activity {
         if (intent == null) return;
         applyIncomingCallWindowFlags(intent);
         String url = intent.getStringExtra("waNativeLaunchUrl");
+        rememberPendingNativeCallAction(intent, url);
         int notificationId = intent.getIntExtra("waNotificationId", -1);
         if (notificationId >= 0) NativeCallNotifications.cancel(this, notificationId);
         if (url != null && isTrustedAppUrl(Uri.parse(url))) pendingUrl = url;
@@ -196,12 +204,55 @@ public final class MainActivity extends Activity {
         setIntent(intent);
         applyIncomingCallWindowFlags(intent);
         String url = intent.getStringExtra("waNativeLaunchUrl");
+        rememberPendingNativeCallAction(intent, url);
         int notificationId = intent.getIntExtra("waNotificationId", -1);
         if (notificationId >= 0) NativeCallNotifications.cancel(this, notificationId);
         if (url != null && isTrustedAppUrl(Uri.parse(url))) {
             pendingUrl = url;
             if (webView != null) webView.loadUrl(url);
         }
+    }
+
+    private void rememberPendingNativeCallAction(Intent intent, String launchUrl) {
+        Uri uri = null;
+        try {
+            if (launchUrl != null && !launchUrl.trim().isEmpty()) uri = Uri.parse(launchUrl);
+            else if (intent != null && intent.getData() != null) uri = intent.getData();
+        } catch (Exception ignored) {}
+        if (uri == null || !"call".equals(uri.getQueryParameter("waPushKind"))) return;
+        String callId = uri.getQueryParameter("waCallId");
+        if (callId == null || callId.trim().isEmpty()) return;
+        String action = uri.getQueryParameter("waPushAction");
+        if (!"accept".equals(action) && !"decline".equals(action) && !"open".equals(action)) action = "open";
+        pendingNativeCallId = callId.trim();
+        pendingNativeCallAction = action;
+        pendingNativeCallDispatchAttempts = 0;
+        pendingNativeCallDispatching = false;
+    }
+
+    private void dispatchPendingNativeCallAction() {
+        if (webView == null || pendingNativeCallId.isEmpty() || pendingNativeCallDispatching) return;
+        pendingNativeCallDispatching = true;
+        int attempt = ++pendingNativeCallDispatchAttempts;
+        String script = "(function(){var api=window.WhatsAppCalls;"
+            + "if(!api||typeof api.handleNotificationAction!=='function')return false;"
+            + "api.handleNotificationAction({kind:'call',callId:" + JSONObject.quote(pendingNativeCallId)
+            + ",action:" + JSONObject.quote(pendingNativeCallAction) + "});return true;})()";
+        webView.evaluateJavascript(script, value -> {
+            pendingNativeCallDispatching = false;
+            if ("true".equals(value)) {
+                pendingNativeCallId = "";
+                pendingNativeCallAction = "";
+                pendingNativeCallDispatchAttempts = 0;
+            } else if (pendingNativeCallDispatchAttempts < 12 && webView != null) {
+                webView.postDelayed(MainActivity.this::dispatchPendingNativeCallAction, 300);
+            } else {
+                android.util.Log.w("WhatsApp", "Native call action could not be forwarded to the call controller after WebView startup.");
+                pendingNativeCallId = "";
+                pendingNativeCallAction = "";
+                pendingNativeCallDispatchAttempts = 0;
+            }
+        });
     }
     private Intent createCaptureIntent(WebChromeClient.FileChooserParams params) throws java.io.IOException {
         if (params == null || !params.isCaptureEnabled()) return null;
