@@ -16,7 +16,7 @@
   let incomingOffer=null, callChannel=null, channelUser="", pendingSignals=new Map(), seenSignals=new Set();
   let incomingPollTimer=null,incomingPollBusy=false,incomingPollUser="",incomingPollVisibilityHandler=null,incomingPollLastErrorAt=0;
   let callTimer=null, ringTimer=null, callSetupTimer=null, callPushReminderTimer=null, callStart=0, elapsed=0, muted=false, cameraOff=false, speakerOn=true, busy=false;
-  let pendingNotificationAction=null;
+  let pendingNotificationAction=null, acceptRequested=false;
 const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
   let ringtoneAudio=null,ringtoneObjectUrl="",ringtoneRequestId=0,ringtoneWanted=false,ringtoneStartPromise=null,previewRingtoneTimer=null,builtInRingtoneBlob=null;
   let ringtoneAudioContext=null,ringtoneGain=null,ringtoneCompressor=null,ringtoneSource=null;
@@ -112,8 +112,17 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     if(!pending||pending.kind!=="call"||!activeCall||activeCall.direction!=="incoming")return;
     if(pending.callId&&String(pending.callId)!==String(activeCall.id))return;
     if(pending.action==="accept"){
-      if(phase!=="incoming"||!incomingOffer)return;
-      pendingNotificationAction=null;void acceptCall();return;
+      if(phase!=="incoming")return;
+      // A native Accept tap may arrive before the caller's offer has reached
+      // Supabase/WebView. Keep the real call screen visible while we recover it.
+      if(!incomingOffer){
+        acceptRequested=true;
+        renderCallOverlay("Waiting for the caller to connect…");
+        return;
+      }
+      pendingNotificationAction=null;
+      void acceptCall();
+      return;
     }
     if(pending.action==="decline"){
       pendingNotificationAction=null;void declineCall(false);return;
@@ -237,6 +246,8 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
   }
   function cleanupLocal() {
     clearTimers();
+    acceptRequested=false;
+    pendingNotificationAction=null;
     stopIncomingRingtone();
     if(pc){try{pc.ontrack=null;pc.onicecandidate=null;pc.onconnectionstatechange=null;pc.close();}catch(_){}}
     pc=null;
@@ -255,8 +266,9 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     const host=root();
     if(!activeCall){host.innerHTML="";return;}
     const peer=callPeer(activeCall)||{};
-    const incoming=phase==="incoming", video=activeCall.media_type==="video";
-    const status=notice||(incoming?"Incoming "+(video?"video":"voice")+" call":phase==="outgoing"?"Calling @"+(peer.username||peer.name||"contact")+"…":phase==="connecting"?"Connecting through the secure relay…":phase==="connected"?formatTime(elapsed):"Preparing call…");
+    const waitingForOffer=phase==="incoming"&&acceptRequested;
+    const incoming=phase==="incoming"&&!acceptRequested, video=activeCall.media_type==="video";
+    const status=notice||(waitingForOffer?"Waiting for the caller to connect…":incoming?"Incoming "+(video?"video":"voice")+" call":phase==="outgoing"?"Calling @"+(peer.username||peer.name||"contact")+"…":phase==="connecting"?"Connecting through the secure relay…":phase==="connected"?formatTime(elapsed):"Preparing call…");
     if(incoming){
       const waiting=!incomingOffer;
       if(!activeCall.notificationShown){activeCall.notificationShown=true;void notifyIncomingCall(activeCall,peer);}
@@ -269,7 +281,8 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       "<div class='wa-call-audio-stage'><div class='wa-call-avatar'>"+esc(peer.avatar||String(peer.name||peer.username||"U").slice(0,2).toUpperCase())+"</div><h2>"+esc(peer.name||peer.username||"Contact")+"</h2><p>"+esc(status)+"</p><audio id='wa-call-remote-audio' autoplay playsinline></audio></div>")+
       "<div class='wa-call-security'><span>" + bridge.icon("lock") + "</span> WebRTC media · Relay-only connection</div>"+
       "<div class='wa-call-controls'>"+
-      (incoming?"<button class='wa-call-control decline' type='button' data-wa-call='decline' aria-label='Decline call'>" + bridge.icon("phone") + "<span>Decline</span></button><button class='wa-call-control accept' type='button' data-wa-call='accept' aria-label='Accept call'>"+(video?bridge.icon("video"):bridge.icon("phone"))+"<span>Accept</span></button>":
+      (waitingForOffer?"<button class='wa-call-control decline' type='button' data-wa-call='decline' aria-label='Cancel call acceptance'>" + bridge.icon("phone") + "<span>Cancel</span></button>":
+      incoming?"<button class='wa-call-control decline' type='button' data-wa-call='decline' aria-label='Decline call'>" + bridge.icon("phone") + "<span>Decline</span></button><button class='wa-call-control accept' type='button' data-wa-call='accept' aria-label='Accept call'>"+(video?bridge.icon("video"):bridge.icon("phone"))+"<span>Accept</span></button>":
       (phase==="connected"||phase==="connecting"||phase==="outgoing"||phase==="preparing"?
       "<button class='wa-call-control "+(muted?"active":"")+"' type='button' data-wa-call='mute' aria-label='Toggle microphone'>"+bridge.icon("mic")+"<span>"+(muted?"Unmute":"Mute")+"</span></button>"+
       (video?"<button class='wa-call-control "+(cameraOff?"active":"")+"' type='button' data-wa-call='camera' aria-label='Toggle camera'>"+bridge.icon("video")+"<span>"+(cameraOff?"Camera on":"Camera off")+"</span></button>":"<button class='wa-call-control "+(speakerOn?"active":"")+"' type='button' data-wa-call='speaker' aria-label='Toggle speaker volume'>"+bridge.icon("volume")+"<span>"+(speakerOn?"Speaker":"Lower volume")+"</span></button>")+
@@ -489,7 +502,13 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
   }
   async function acceptCall(){
     if(!activeCall||phase!=="incoming"||busy)return;
-    if(!incomingOffer){pendingNotificationAction={kind:"call",callId:String(activeCall.id),action:"accept"};renderCallOverlay("Waiting for the caller to connect…");return;}
+    if(!incomingOffer){
+      pendingNotificationAction={kind:"call",callId:String(activeCall.id),action:"accept"};
+      acceptRequested=true;
+      renderCallOverlay("Waiting for the caller to connect…");
+      return;
+    }
+    acceptRequested=false;
     stopIncomingRingtone();
     const current=me(),client=db(),call=activeCall;busy=true;
     if(ringTimer!==null)clearTimeout(ringTimer);ringTimer=null;
@@ -660,8 +679,32 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
         if(status==="SUBSCRIBED")console.info("[calls] Live call events connected.");
         else if(status==="CHANNEL_ERROR"||status==="TIMED_OUT"||status==="CLOSED")console.warn("[calls] Realtime call events unavailable; foreground recovery remains active.",status,error&&error.message||"");
       });
-    // Recover offers that arrived while this device was offline; only a real offer opens the dialog.
+    // First recover the exact call selected by the native Accept/Decline action.
+    // Do not rely only on the newest five ringing calls: the target may be older
+    // if another incoming call was created at almost the same time.
     void (async()=>{
+      const pending=pendingNotificationAction;
+      if(pending&&pending.kind==="call"&&pending.callId){
+        const {data:target,error:targetError}=await client.from("aeroshell_calls")
+          .select("id,caller_id,callee_id,status,created_at,media_type,group_call_id")
+          .eq("id",pending.callId).eq("callee_id",current.id).maybeSingle();
+        if(!targetError&&target&&!target.group_call_id&&target.status==="ringing"){
+          if(!activeCall)await showIncomingCallRecord(target);
+          const {data:targetOffers}=await client.from("aeroshell_call_signals")
+            .select("id,call_id,from_user_id,to_user_id,kind,payload,created_at")
+            .eq("call_id",target.id).eq("to_user_id",current.id).eq("kind","offer")
+            .order("created_at",{ascending:true}).limit(1);
+          if(targetOffers&&targetOffers[0])await receiveSignal(targetOffers[0]);
+          if(activeCall&&String(activeCall.id)===String(target.id))runPendingNotificationAction();
+          return;
+        }
+        if(!targetError&&target&&target.status!=="ringing"){
+          pendingNotificationAction=null;
+          acceptRequested=false;
+          say("This call is no longer available.");
+        }
+      }
+      // Also recover offers that arrived while this device was offline.
       const {data,error}=await client.from("aeroshell_calls").select("id,caller_id,callee_id,status,created_at,media_type,group_call_id").eq("callee_id",current.id).eq("status","ringing").order("created_at",{ascending:false}).limit(5);
       if(error||!data)return;
       for(const call of data){
