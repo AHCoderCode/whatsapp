@@ -13,6 +13,7 @@ import java.util.Map;
 
 public final class NativeCallNotifications {
     public static final String CHANNEL_ID = "wa_incoming_calls_v1";
+    public static final String MESSAGE_CHANNEL_ID = "wa_messages_v1";
     private NativeCallNotifications() {}
 
     public static void ensureChannel(Context context) {
@@ -32,9 +33,37 @@ public final class NativeCallNotifications {
         manager.createNotificationChannel(channel);
     }
 
+    public static void ensureMessageChannel(Context context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager == null || manager.getNotificationChannel(MESSAGE_CHANNEL_ID) != null) return;
+        NotificationChannel channel = new NotificationChannel(MESSAGE_CHANNEL_ID, "Messages and groups", NotificationManager.IMPORTANCE_HIGH);
+        channel.setDescription("Notifications for new direct messages, group messages, photos, videos and files.");
+        channel.enableVibration(true);
+        channel.setVibrationPattern(new long[]{0, 250, 150, 250});
+        channel.setLockscreenVisibility(NotificationCompat.VISIBILITY_PRIVATE);
+        Uri sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+        AudioAttributes attrs = new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build();
+        channel.setSound(sound, attrs);
+        manager.createNotificationChannel(channel);
+    }
+
+    public static boolean isChannelEnabled(Context context, String channelId) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true;
+        NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager == null) return false;
+        NotificationChannel channel = manager.getNotificationChannel(channelId);
+        return channel == null || channel.getImportance() != NotificationManager.IMPORTANCE_NONE;
+    }
+
     public static void showIncomingCall(Context context, Map<String, String> data) {
-        ensureChannel(context);
-        if (!"call".equals(value(data, "kind", "call"))) return;
+        String kind = value(data, "kind", "call");
+        if ("call".equals(kind)) { ensureChannel(context); showCall(context, data); }
+        else if ("message".equals(kind)) showMessage(context, data);
+    }
+
+    private static void showCall(Context context, Map<String, String> data) {
         String callId = value(data, "callId", "");
         boolean test = "true".equalsIgnoreCase(value(data, "test", "false"));
         String caller = value(data, "callerName", "Contact");
@@ -64,6 +93,26 @@ public final class NativeCallNotifications {
                 CallNotificationActionReceiver.pendingIntent(context, callId, "decline", id)).build());
         }
         try { NotificationManagerCompat.from(context).notify(id, builder.build()); } catch (SecurityException ignored) {}
+    }
+
+    private static void showMessage(Context context, Map<String, String> data) {
+        ensureMessageChannel(context);
+        String messageId=value(data,"messageId",""), chatId=value(data,"chatId","");
+        String title=value(data,"title","WhatsApp"), body=value(data,"body","You have a new message.");
+        int id=messageId.isEmpty()?(chatId.isEmpty()?83002:chatId.hashCode()):messageId.hashCode();
+        if(id==0)id=83002;
+        Uri.Builder target=Uri.parse(MainActivity.HOME_URL).buildUpon();
+        if(!chatId.isEmpty())target.appendQueryParameter("waChatId",chatId);
+        Intent launch=new Intent(context,MainActivity.class);
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        launch.putExtra("waNativeLaunchUrl",target.build().toString());
+        PendingIntent openApp=PendingIntent.getActivity(context,id,launch,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        NotificationCompat.Builder builder=new NotificationCompat.Builder(context,MESSAGE_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_notify_chat).setContentTitle(title).setContentText(body)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE).setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE).setAutoCancel(true).setOngoing(false)
+            .setOnlyAlertOnce(false).setContentIntent(openApp).setWhen(System.currentTimeMillis());
+        try { NotificationManagerCompat.from(context).notify(id,builder.build()); } catch (SecurityException ignored) {}
     }
 
     private static String value(Map<String, String> data, String key, String fallback) {
