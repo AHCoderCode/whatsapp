@@ -166,7 +166,8 @@ public final class MainActivity extends Activity {
             if (launchUrl != null) {
                 Uri uri = Uri.parse(launchUrl);
                 incomingCall = "call".equals(uri.getQueryParameter("waPushKind"))
-                    && uri.getQueryParameter("waCallId") != null;
+                    && uri.getQueryParameter("waCallId") != null
+                    && !"decline".equalsIgnoreCase(uri.getQueryParameter("waPushAction"));
             }
         }
         if (Build.VERSION.SDK_INT >= 27) {
