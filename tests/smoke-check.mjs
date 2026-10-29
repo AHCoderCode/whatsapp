@@ -450,5 +450,25 @@ check("signed-in events and polls use shared backend workflows", () => {
   includes(files.backend, 'bridge.voteBackendPoll=votePoll');
   includes(files.backend, 'bridge.respondBackendEvent=respondToEvent');
 });
+check("lock-screen calls do not dismiss the keyguard or auto-open the main app", () => {
+  excludes(files.incomingActivity, "FLAG_DISMISS_KEYGUARD");
+  excludes(files.incomingActivity, 'handler.postDelayed(fallbackRunnable, 60000)');
+  includes(files.incomingActivity, 'launch.putExtra("waNativeIncomingCall", !"decline".equals(action))');
+  includes(files.nativeActivity, '!"decline".equalsIgnoreCase(uri.getQueryParameter("waPushAction"))');
+});
+check("call-ended push dismisses matching Android and browser incoming-call UI", () => {
+  includes(files.calls, 'action:"notify-call-ended"');
+  includes(files.push, "async function notifyCallEnded(");
+  includes(files.push, 'body.action === "notify-call-ended"');
+  includes(files.sw, 'if (kind === "call-ended")');
+  includes(files.nativeNotifications, '"call-ended".equals(kind)');
+  includes(files.nativeNotifications, 'endIncomingCall(context, value(data, "callId", ""))');
+});
+check("chat attachment menu has a dedicated audio picker using private storage", () => {
+  includes(files.app, '{icon:"music",label:"Audio",action:"pick-audio"}');
+  includes(files.app, 'if(action==="pick-audio")');
+  includes(files.app, 'input.accept="audio/*"');
+  includes(files.backend, 'db.storage.from(ATTACHMENT_BUCKET).upload(path,uploadFile');
+});
 console.log("\n" + passed + " passed, " + failed + " failed.");
 if (failed) process.exitCode = 1;
