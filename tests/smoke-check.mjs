@@ -49,7 +49,7 @@ check("current asset version is shared by HTML and service worker", () => {
   includes(files.html, "whatsapp-final-20261029a");
   includes(files.sw, "whatsapp-final-20261029a");
   includes(files.manifest, "whatsapp-final-20261029a");
-  includes(files.sw, "whatsapp-final-shell-v49");
+  includes(files.sw, "whatsapp-final-shell-v50");
 });
 check("hidden call pages show a fallback if Web Push is delayed", () => {
   includes(files.calls, 'const tag="wa-call-"+String(call.id);');
