@@ -22,7 +22,8 @@ const files = {
   pushMigration: read("supabase/migrations/20261028123000_whatsapp_device_push_notifications.sql"),
   deviceMigration: read("supabase/migrations/20261028130000_whatsapp_linked_devices.sql"),
   signalFallbackMigration: read("supabase/migrations/20261030081609_add_webrtc_direct_fallback_signal_kinds.sql"),
-  signalFallbackRlsMigration: read("supabase/migrations/20261030081801_extend_webrtc_direct_fallback_signaling_rls.sql")
+  signalFallbackRlsMigration: read("supabase/migrations/20261030081801_extend_webrtc_direct_fallback_signaling_rls.sql"),
+  signalFallbackTriggerMigration: read("supabase/migrations/20261030082258_allow_authenticated_webrtc_fallback_signal_types.sql")
 };
 let passed = 0;
 let failed = 0;
@@ -174,9 +175,13 @@ check("failed TURN calls coordinate an encrypted direct ICE fallback", () => {
   for (const kind of ["fallback-request", "fallback-offer", "fallback-answer", "fallback-ice"]) {
     includes(files.signalFallbackMigration, "'" + kind + "'::text");
     includes(files.signalFallbackRlsMigration, "kind = '" + kind + "'");
+    includes(files.signalFallbackTriggerMigration, "new.kind = '" + kind + "'");
   }
   includes(files.signalFallbackRlsMigration, 'to authenticated');
   includes(files.signalFallbackRlsMigration, "private.aeroshell_chat_actor_is_valid()");
+  includes(files.signalFallbackTriggerMigration, "security definer");
+  includes(files.signalFallbackTriggerMigration, "auth.uid()");
+  includes(files.signalFallbackTriggerMigration, "recent_signals >= 200");
 });
 check("optional feed failures cannot hide direct chats", () => {
   includes(files.backend, "if(profileResult.error)throw profileResult.error;");
