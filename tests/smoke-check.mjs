@@ -20,7 +20,8 @@ const files = {
   manifest: read("manifest.webmanifest"),
   push: read("supabase/functions/whatsapp-push/index.ts"),
   pushMigration: read("supabase/migrations/20261028123000_whatsapp_device_push_notifications.sql"),
-  deviceMigration: read("supabase/migrations/20261028130000_whatsapp_linked_devices.sql")
+  deviceMigration: read("supabase/migrations/20261028130000_whatsapp_linked_devices.sql"),
+  signalFallbackMigration: read("supabase/migrations/20261030081000_add_webrtc_direct_fallback_signal_kinds.sql")
 };
 let passed = 0;
 let failed = 0;
@@ -158,6 +159,20 @@ check("call setup has bounded permission/relay/signaling waits", () => {
   includes(files.calls, "function withCallTimeout(promise,ms,message)");
   includes(files.calls, "Preparing the secure relay…");
   includes(files.calls, "callSetupTimer=setTimeout(");
+});
+check("failed TURN calls coordinate an encrypted direct ICE fallback", () => {
+  includes(files.calls, 'const DIRECT_FALLBACK_ICE_SERVERS=[{urls:"stun:stun.relay.metered.ca:80"}];');
+  includes(files.calls, 'connection.setConfiguration({iceServers:DIRECT_FALLBACK_ICE_SERVERS,iceTransportPolicy:"all",iceCandidatePoolSize:0});');
+  includes(files.calls, "connection.restartIce()");
+  includes(files.calls, '"fallback-request"');
+  includes(files.calls, '"fallback-offer"');
+  includes(files.calls, '"fallback-answer"');
+  includes(files.calls, '"fallback-ice"');
+  includes(files.calls, "network address may be visible");
+  excludes(files.calls, "No direct-connection fallback was attempted.");
+  for (const kind of ["fallback-request", "fallback-offer", "fallback-answer", "fallback-ice"]) {
+    includes(files.signalFallbackMigration, "'" + kind + "'::text");
+  }
 });
 check("optional feed failures cannot hide direct chats", () => {
   includes(files.backend, "if(profileResult.error)throw profileResult.error;");
