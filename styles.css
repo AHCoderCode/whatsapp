@@ -624,3 +624,66 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:
   .wa-call-history-action{width:32px;height:32px}
   .wa-call-history-heading{padding:13px 12px}
 }
+
+
+/* Contact info screen: isolate profile rows from generic settings/list styling. */
+.details-layout{display:flex;flex:1 1 0;width:100%;max-width:100%;min-width:0;min-height:0;overflow:hidden}
+.details-header{flex:0 0 64px;min-width:0}
+.details-header h2{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.details-content{display:block;flex:1 1 auto;width:100%;max-width:100%;min-width:0;min-height:0;box-sizing:border-box;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.details-content>*{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+.details-content .section-card{min-width:0;max-width:100%;overflow:hidden}
+.wa-contact-details-card,.wa-contact-options-card{width:100%;min-width:0;max-width:100%}
+.wa-contact-details-list,.wa-contact-options-list{display:flex;flex-direction:column;width:100%;min-width:0;max-width:100%}
+.wa-contact-detail-row{appearance:none;-webkit-appearance:none;display:grid;grid-template-columns:24px minmax(0,1fr) 38px;align-items:center;gap:12px;width:100%;min-width:0;max-width:100%;min-height:66px;margin:0;padding:10px 14px;border:0;border-bottom:1px solid #edf0f1;border-radius:0;background:#fff;color:#172b25;text-align:left;font:inherit;white-space:normal}
+.wa-contact-detail-row:last-child{border-bottom:0}
+.wa-contact-detail-button{cursor:pointer}
+.wa-contact-detail-icon{display:grid;place-items:center;width:24px;height:24px;color:#667781}
+.wa-contact-detail-icon svg{display:block;width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.8}
+.wa-contact-detail-copy{display:flex;flex:1 1 auto;flex-direction:column;gap:4px;min-width:0;max-width:100%;overflow:hidden}
+.wa-contact-detail-copy small{display:block;color:#667781;font-size:11px;line-height:1.35}
+.wa-contact-detail-copy strong{display:block;max-width:100%;color:#172b25;font-size:13px;font-weight:550;line-height:1.4;white-space:normal;overflow-wrap:anywhere;word-break:normal}
+.wa-contact-inline-action,.wa-contact-inline-placeholder{display:grid;place-items:center;width:36px;height:36px;min-width:36px;justify-self:end;border:0;border-radius:50%;background:transparent;color:#008f70}
+.wa-contact-inline-action{cursor:pointer}
+.wa-contact-inline-action svg,.wa-contact-inline-placeholder svg{display:block;width:18px;height:18px;stroke:currentColor;fill:none}
+.wa-contact-inline-action:active{background:#e6f5ed}
+.wa-contact-options-card>.section-card-title{padding:16px 16px 10px}
+.wa-contact-option-row{appearance:none;-webkit-appearance:none;display:grid;grid-template-columns:24px minmax(0,1fr) 18px;align-items:center;gap:12px;width:100%;min-width:0;max-width:100%;min-height:68px;margin:0;padding:12px 16px;border:0;border-bottom:1px solid #edf0f1;border-radius:0;background:#fff;color:#172b25;text-align:left;font:inherit;white-space:normal;cursor:pointer;touch-action:manipulation}
+.wa-contact-option-row:last-child{border-bottom:0}
+.wa-contact-option-row:active{background:#f3faf6}
+.wa-contact-option-icon{display:grid;place-items:center;width:24px;height:24px;min-width:24px;color:#667781}
+.wa-contact-option-icon svg{display:block;width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.8}
+.wa-contact-option-copy{display:flex;flex:1 1 auto;flex-direction:column;gap:4px;min-width:0;max-width:100%;overflow:hidden}
+.wa-contact-option-copy strong{display:block;min-width:0;max-width:100%;color:#172b25;font-size:13px;font-weight:600;line-height:1.35;white-space:normal;overflow-wrap:anywhere;word-break:normal}
+.wa-contact-option-copy small{display:block;min-width:0;max-width:100%;color:#667781;font-size:11px;line-height:1.4;white-space:normal;overflow-wrap:anywhere;word-break:normal}
+.wa-contact-option-chevron{display:grid;place-items:center;width:18px;height:22px;min-width:18px;color:#8a999e}
+.wa-contact-option-chevron svg{display:block;width:17px;height:17px;stroke:currentColor;fill:none}
+.wa-contact-option-row:focus-visible,.wa-contact-detail-button:focus-visible,.wa-contact-inline-action:focus-visible{outline:2px solid #008f70;outline-offset:-2px}
+.wa-contact-option-row.danger-setting-row .wa-contact-option-icon,.wa-contact-option-row.danger-setting-row .wa-contact-option-copy strong{color:#c73545!important}
+.theme-dark .wa-contact-detail-row,.theme-dark .wa-contact-option-row{border-color:#28363d;background:#111b21;color:#e9edef}
+.theme-dark .wa-contact-detail-copy strong,.theme-dark .wa-contact-option-copy strong{color:#e9edef}
+.theme-dark .wa-contact-detail-copy small,.theme-dark .wa-contact-option-copy small{color:#aebac1}
+.theme-dark .wa-contact-detail-icon,.theme-dark .wa-contact-option-icon,.theme-dark .wa-contact-option-chevron{color:#aebac1}
+.theme-dark .wa-contact-inline-action{color:#65d5a4}
+@media(max-width:700px){
+  .main-pane>.details-layout{display:flex!important;flex:1 1 auto!important;width:100%!important;max-width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;overflow:hidden!important}
+  .details-header{height:58px;flex-basis:58px;padding:0 10px;gap:10px}
+  .details-header h2{font-size:17px}
+  .details-content{width:100%;padding:12px 10px calc(20px + env(safe-area-inset-bottom));}
+  .wa-contact-detail-row{grid-template-columns:22px minmax(0,1fr) 36px;gap:9px;min-height:64px;padding:10px 11px}
+  .wa-contact-option-row{grid-template-columns:22px minmax(0,1fr) 16px;gap:9px;min-height:68px;padding:12px 11px}
+  .wa-contact-option-icon{width:22px;min-width:22px}
+  .wa-contact-option-icon svg{width:20px;height:20px}
+  .wa-contact-option-chevron{width:16px;min-width:16px}
+  .contact-hero-modern{padding:20px 12px 18px}
+  .contact-hero-modern h3{overflow-wrap:anywhere}
+  .hero-actions{width:100%;min-width:0}
+  .hero-action{min-width:0}
+}
+@media(max-width:380px){
+  .details-content{padding-left:8px;padding-right:8px}
+  .wa-contact-option-row{grid-template-columns:21px minmax(0,1fr) 15px;gap:8px;padding-left:9px;padding-right:9px}
+  .wa-contact-detail-row{grid-template-columns:21px minmax(0,1fr) 34px;gap:8px;padding-left:9px;padding-right:9px}
+  .wa-contact-option-copy strong{font-size:12px}
+  .wa-contact-option-copy small{font-size:10px}
+}

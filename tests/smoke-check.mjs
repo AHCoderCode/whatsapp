@@ -56,14 +56,35 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261030c");
-  includes(files.sw, "whatsapp-final-20261030c");
-  includes(files.manifest, "whatsapp-final-20261030c");
-  includes(files.sw, "whatsapp-final-shell-v56");
+  includes(files.html, "whatsapp-final-20261030d");
+  includes(files.sw, "whatsapp-final-20261030d");
+  includes(files.manifest, "whatsapp-final-20261030d");
+  includes(files.sw, "whatsapp-final-shell-v57");
 });
 check("mobile settings use a full-width account detail pane", () => {
   includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
   includes(files.css, ".setting-option-copy{flex:1 1 0;min-width:0");
+});
+check("contact profile uses consistent, semantic More options buttons", () => {
+  includes(files.app, "wa-contact-options-card");
+  includes(files.app, "wa-contact-option-row");
+  for (const action of ["toggle-favorite","toggle-mute","disappearing","report-chat","block-chat","clear-chat","remove-contact"]) {
+    includes(files.app, action);
+  }
+  includes(files.app, "More options");
+});
+check("contact info is full-width and independently scrollable on mobile", () => {
+  includes(files.css, ".main-pane>.details-layout{display:flex!important;flex:1 1 auto!important");
+  includes(files.css, ".details-content{width:100%;max-width:100%;min-width:0");
+  includes(files.css, "grid-template-columns:22px minmax(0,1fr) 16px");
+  includes(files.css, ".wa-contact-option-copy strong{display:block;min-width:0;max-width:100%");
+  includes(files.css, "overflow-y:auto;overscroll-behavior:contain");
+});
+check("contact details copy and edit controls have separate tap targets", () => {
+  includes(files.app, "wa-contact-detail-row");
+  includes(files.app, "wa-contact-inline-action");
+  includes(files.app, "copy-chat-username");
+  includes(files.app, "copy-chat-phone");
 });
 check("Calls history has dedicated responsive rows", () => {
   includes(files.app, "wa-call-history-row");
