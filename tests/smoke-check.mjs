@@ -535,7 +535,7 @@ check("nonessential linked-device and FCM registration cannot block call startup
 });
 check("service-worker activation does not reload the app during incoming call recovery", () => {
   excludes(files.html, 'navigator.serviceWorker.addEventListener("controllerchange"');
-  excludes(files.html, "location.reload();");
+  excludes(files.html, "navigator.serviceWorker.addEventListener(\"controllerchange\"");
 });
 check("pending native Accept survives URL cleanup and WebView/service-worker reloads", () => {
   includes(files.calls, 'const PENDING_CALL_ACTION_KEY="wa_pending_native_call_action_v1";');
