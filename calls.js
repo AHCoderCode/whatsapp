@@ -945,6 +945,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     decline:()=>declineCall(false),
     handleNotificationAction,
     restorePendingNotificationAction,
+    hasPendingNotificationAction:()=>!!pendingNotificationAction,
     resume:()=>{if(me()&&me().isSupabase){void restorePendingNotificationAction().catch(error=>console.warn("[calls] Cold-start call restoration failed:",error&&error.message||error));void pollIncomingCallState();}},
     cleanup:()=>{cleanupLocal();stopIncomingCallPolling();if(callChannel&&db())void db().removeChannel(callChannel);callChannel=null;channelUser="";},
     getPhase:()=>phase

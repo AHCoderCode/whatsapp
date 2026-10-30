@@ -537,6 +537,10 @@ check("service-worker activation does not reload the app during incoming call re
   excludes(files.html, 'navigator.serviceWorker.addEventListener("controllerchange"');
   excludes(files.html, "navigator.serviceWorker.addEventListener(\"controllerchange\"");
 });
+check("call action presence is exported for startup gating", () => {
+  includes(files.calls, "hasPendingNotificationAction:()=>!!pendingNotificationAction");
+  includes(files.backend, "hasPendingNotificationAction&&window.WhatsAppCalls.hasPendingNotificationAction()");
+});
 check("auth bootstrap waits for the exact pending incoming call before showing Chats", () => {
   includes(files.backend, "hasPendingNotificationAction&&window.WhatsAppCalls.hasPendingNotificationAction()");
   includes(files.backend, "await withTimeout(window.WhatsAppCalls.subscribe(),6500");
@@ -565,7 +569,7 @@ check("pending native Accept survives URL cleanup and WebView/service-worker rel
 check("incoming call recovery resumes an already-accepted call after a WebView reload", () => {
   includes(files.calls, 'target.status==="accepted"&&pending.action==="accept"');
   includes(files.calls, 'row.status==="accepted"&&pending&&pending.kind==="call"');
-  includes(files.calls, 'if(!activeCall)await showIncomingCallRecord(target);');
+  includes(files.calls, 'if(!activeCall||String(activeCall.id)!==String(target.id))await showIncomingCallRecord(target);');
   includes(files.calls, "clearPendingNotificationAction();");
   includes(files.nativeActivity, "window.WhatsAppCalls&&window.WhatsAppCalls.resume");
 });
@@ -574,7 +578,7 @@ check("accept, decline and hang-up use verified call-state transitions", () => {
   includes(files.calls, 'await transitionCallStatus(call,"accepted",client,current)');
   includes(files.calls, 'await transitionCallStatus(call,"rejected")');
   includes(files.calls, 'await transitionCallStatus(call,"ended")');
-  includes(files.push, "async function transitionCall(userId: string, body: any)");
+  includes(files.push, "async function transitionCall(userId: string, body: any, authorization: string)");
   includes(files.push, 'body.action === "transition-call"');
   includes(files.push, 'call.callee_id !== userId');
   includes(files.push, "await notifyCallEnded(userId, { callId })");
