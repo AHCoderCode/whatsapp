@@ -56,10 +56,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261029e");
-  includes(files.sw, "whatsapp-final-20261029e");
-  includes(files.manifest, "whatsapp-final-20261029e");
-  includes(files.sw, "whatsapp-final-shell-v54");
+  includes(files.html, "whatsapp-final-20261030b");
+  includes(files.sw, "whatsapp-final-20261030b");
+  includes(files.manifest, "whatsapp-final-20261030b");
+  includes(files.sw, "whatsapp-final-shell-v55");
 });
 check("Android incoming-call actions launch the Activity directly and can wake the lock screen", () => {
   includes(files.nativeManifest, "android.permission.USE_FULL_SCREEN_INTENT");
