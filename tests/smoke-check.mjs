@@ -60,7 +60,7 @@ check("current asset version is shared by HTML and service worker", () => {
   includes(files.html, "whatsapp-final-20261030g");
   includes(files.sw, "whatsapp-final-20261030g");
   includes(files.manifest, "whatsapp-final-20261030g");
-  includes(files.sw, "whatsapp-final-shell-v59");
+  includes(files.sw, "whatsapp-final-shell-v60");
 });
 check("mobile settings use a full-width account detail pane", () => {
   includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
