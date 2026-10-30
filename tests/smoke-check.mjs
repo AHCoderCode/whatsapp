@@ -590,7 +590,7 @@ check("pending native Accept survives URL cleanup and WebView/service-worker rel
 check("incoming call recovery resumes an already-accepted call after a WebView reload", () => {
   includes(files.calls, 'target.status==="accepted"&&pending.action==="accept"');
   includes(files.calls, 'row.status==="accepted"&&pendingMatches&&pending.action==="accept"');
-  includes(files.calls, 'if(!activeCall||String(activeCall.id)!==String(target.id))await showIncomingCallRecord(target);');
+  includes(files.calls, 'if(!activeCall||String(activeCall.id)!==String(target.id))await showIncomingCallRecord(target,{force:true});');
   includes(files.calls, "clearPendingNotificationAction();");
   includes(files.nativeActivity, "window.WhatsAppCalls&&window.WhatsAppCalls.resume");
 });
