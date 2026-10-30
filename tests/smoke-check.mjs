@@ -425,7 +425,7 @@ check("outgoing calls acquire local media before creating a call row or alerting
   assert.ok(mediaPrompt >= 0 && insert > mediaPrompt, "capture must succeed before creating a remote call row");
   assert.ok(push > insert, "the remote call alert must happen after the local call row and successful capture");
   assert.ok(nativeAudio >= 0 && nativeAudio < mediaPrompt, "native communication audio routing must be ready before microphone capture");
-  includes(source, "If microphone capture failed, the recipient is not rung.");
+  includes(source, "Notify the callee after local media is ready");
 });
 check("native Android manifest declares audio-settings permission for WebRTC routing", () => {
   includes(files.nativeManifest, 'android.permission.RECORD_AUDIO');
