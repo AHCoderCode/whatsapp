@@ -441,7 +441,8 @@ async function transitionCall(userId: string, body: any, authorization: string) 
       publishableKey = keys.default || Object.values(keys)[0] || publishableKey;
     } catch (_) {}
   }
-  const bearer = String(authorization || "").replace(/^Bearer\\s+/i, "").trim();
+  const authHeader = String(authorization || "").trim();
+  const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
   if (!publishableKey || !bearer) throw new Error("A signed-in participant is required.");
   const userClient = createClient(SUPABASE_URL, publishableKey, {
     auth: { persistSession: false, autoRefreshToken: false },

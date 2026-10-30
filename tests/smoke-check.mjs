@@ -541,6 +541,27 @@ check("call action presence is exported for startup gating", () => {
   includes(files.calls, "hasPendingNotificationAction:()=>!!pendingNotificationAction");
   includes(files.backend, "hasPendingNotificationAction&&window.WhatsAppCalls.hasPendingNotificationAction()");
 });
+check("native Accept recovers exact call even when a stale call object exists", () => {
+  includes(files.calls, "showIncomingCallRecord(target,{force:true})");
+  includes(files.calls, "pendingRecoveryPromise");
+  includes(files.calls, "if(activeCall&&String(activeCall.id)!==String(target.id))");
+});
+check("incoming call screen renders before caller profile lookup finishes", () => {
+  const start=files.calls.indexOf("async function showIncomingCallRecord");
+  const end=files.calls.indexOf("function mediaPermissionError",start);
+  const source=files.calls.slice(start,end);
+  assert.ok(source.indexOf("activeCall=Object.assign")<source.indexOf("client.from(\"aeroshell_profiles\")"));
+  includes(source,"return activeCall;");
+});
+check("call Accept does not select a chat while call restoration is pending", () => {
+  includes(files.backend,"callActionPending");
+  includes(files.backend,"if(targetId&&!callActionPending)");
+  includes(files.backend,"else if(targetId&&callActionPending)");
+});
+check("call-transition Edge Function parses one Bearer prefix", () => {
+  includes(files.push,'authHeader.toLowerCase().startsWith("bearer ")');
+  includes(files.push,'authHeader.slice(7).trim()');
+});
 check("auth bootstrap waits for the exact pending incoming call before showing Chats", () => {
   includes(files.backend, "hasPendingNotificationAction&&window.WhatsAppCalls.hasPendingNotificationAction()");
   includes(files.backend, "await withTimeout(window.WhatsAppCalls.subscribe(),6500");

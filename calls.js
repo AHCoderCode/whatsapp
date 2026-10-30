@@ -13,6 +13,7 @@
     return element;
   };
   let activeCall=null, phase="idle", pc=null, localStream=null, remoteStream=null;
+  let pendingRecoveryPromise=null;
   let incomingOffer=null, callChannel=null, channelUser="", pendingSignals=new Map(), seenSignals=new Set();
   let incomingPollTimer=null,incomingPollBusy=false,incomingPollUser="",incomingPollVisibilityHandler=null,incomingPollLastErrorAt=0;
   let callTimer=null, ringTimer=null, callSetupTimer=null, callPushReminderTimer=null, callStart=0, elapsed=0, muted=false, cameraOff=false, speakerOn=true, busy=false;
@@ -162,24 +163,47 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     }
     if(data.kind!=="call")return;
     setPendingNotificationAction({kind:"call",callId:String(data.callId||""),action:data.action||"open"});
-    runPendingNotificationAction();
-    if(!activeCall)void pollIncomingCallState({force:true});
-  }
-  async function showIncomingCallRecord(row){
     const current=me(),client=db();
-    const pending=pendingNotificationAction;
-    const resumingAcceptedCall=!!(row&&row.status==="accepted"&&pending&&pending.kind==="call"&&pending.action==="accept"&&String(pending.callId)===String(row.id));
-    if(!current||!client||!row||row.callee_id!==current.id||(row.status!=="ringing"&&!resumingAcceptedCall)||row.group_call_id||activeCall)return;
-    let peer=(appState()?.chats||[]).find(person=>String(person.id)===String(row.caller_id));
-    if(!peer){
-      try{const result=await client.from("aeroshell_profiles").select("id,username,display_name,avatar_data").eq("id",row.caller_id).maybeSingle();const p=result.data;if(p)peer={id:p.id,username:p.username,name:p.display_name||p.username,avatarData:p.avatar_data||""};}catch(_){}
+    if(current&&current.isSupabase&&client){
+      void recoverPendingNotificationCall(current,client).catch(error=>{
+        console.warn("[calls] Native call action recovery failed:",error&&error.message||error);
+        void pollIncomingCallState({force:true});
+      });
+    }else{
+      void pollIncomingCallState({force:true});
     }
-    if(activeCall)return;
-    peer=peer||{id:row.caller_id,username:"contact",name:"Contact"};
+  }
+  async function showIncomingCallRecord(row,options={}){
+    const current=me(),client=db(),pending=pendingNotificationAction;
+    const pendingMatches=!!(pending&&pending.kind==="call"&&String(pending.callId)===String(row&&row.id));
+    const acceptedResume=!!(row&&row.status==="accepted"&&pendingMatches&&pending.action==="accept");
+    if(!current||!client||!row||row.callee_id!==current.id||(row.status!=="ringing"&&!acceptedResume)||row.group_call_id)return null;
+    if(activeCall){
+      if(String(activeCall.id)===String(row.id))return activeCall;
+      if(!options.force)return null;
+      if(phase==="connected"||(pc&&pc.connectionState==="connected")){
+        say("Another call is already connected on this device. End it before accepting a different call.");
+        return null;
+      }
+      const keepPending=pendingNotificationAction;
+      cleanupLocal();
+      if(keepPending)setPendingNotificationAction(keepPending);
+    }
+    // Render the actual call UI before loading cosmetic caller profile details.
+    const peer={id:row.caller_id,username:"contact",name:"Contact"};
     activeCall=Object.assign({},row,{direction:"incoming",peer});
-    incomingOffer=null;phase="incoming";void startIncomingRingtone();renderCallOverlay();runPendingNotificationAction();
+    incomingOffer=null;phase="incoming";acceptRequested=false;
+    void startIncomingRingtone();
+    renderCallOverlay();
+    runPendingNotificationAction();
     try{if(navigator.vibrate)navigator.vibrate([180,80,180]);}catch(_){}
-    ringTimer=null; // Wait for accept/decline or a caller-ended event.
+    ringTimer=null;
+    void client.from("aeroshell_profiles").select("id,username,display_name,avatar_data")
+      .eq("id",row.caller_id).maybeSingle().then(({data,error})=>{
+        if(error||!data||!activeCall||String(activeCall.id)!==String(row.id))return;
+        activeCall.peer={id:data.id,username:data.username,name:data.display_name||data.username,avatarData:data.avatar_data||""};
+        renderCallOverlay();
+      }).catch(error=>console.warn("[calls] Caller profile lookup failed:",error&&error.message||error));
     return activeCall;
   }
   function mediaPermissionError(error,video){
@@ -706,33 +730,9 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     if(!error&&data&&data[0])await receiveSignal(data[0]);
   }
   async function restorePendingNotificationAction(){
-    const pending=pendingNotificationAction,current=me(),client=db();
-    if(!pending||pending.kind!=="call"||!pending.callId||!current||!current.isSupabase||!client)return false;
-    const {data:row,error}=await withCallTimeout(
-      client.from("aeroshell_calls").select("id,caller_id,callee_id,status,created_at,media_type,group_call_id")
-        .eq("id",pending.callId).eq("callee_id",current.id).maybeSingle(),
-      8000,
-      "The incoming call could not be restored from the server."
-    );
-    if(error)throw error;
-    if(!row||row.group_call_id||!["ringing","accepted"].includes(row.status)||
-       (row.status==="accepted"&&pending.action!=="accept")){
-      if(row&&["rejected","ended"].includes(row.status))clearPendingNotificationAction();
-      return false;
-    }
-    await showIncomingCallRecord(row);
-    if(!activeCall||String(activeCall.id)!==String(row.id))return false;
-    const {data:offers,error:offerError}=await withCallTimeout(
-      client.from("aeroshell_call_signals").select("id,call_id,from_user_id,to_user_id,kind,payload,created_at")
-        .eq("call_id",row.id).eq("to_user_id",current.id).eq("kind","offer")
-        .order("created_at",{ascending:true}).limit(1),
-      8000,
-      "The caller's connection offer could not be recovered."
-    );
-    if(offerError)throw offerError;
-    if(offers&&offers[0])await receiveSignal(offers[0]);
-    if(activeCall&&String(activeCall.id)===String(row.id))runPendingNotificationAction();
-    return !!(activeCall&&String(activeCall.id)===String(row.id));
+    const current=me(),client=db();
+    if(!pendingNotificationAction||!current||!current.isSupabase||!client)return false;
+    return recoverPendingNotificationCall(current,client);
   }
   async function pollIncomingCallState(options={}){
     const current=me(),client=db();
@@ -826,31 +826,52 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
   }
   async function recoverPendingNotificationCall(current,client){
     const pending=pendingNotificationAction;
-    if(!pending||pending.kind!=="call"||!pending.callId)return false;
-    try{
-      const {data:target,error:targetError}=await client.from("aeroshell_calls")
-        .select("id,caller_id,callee_id,status,created_at,media_type,group_call_id")
-        .eq("id",pending.callId).eq("callee_id",current.id).maybeSingle();
-      if(targetError){console.warn("[calls] Exact notification call lookup failed:",targetError.message||targetError);return false;}
-      if(!target)return false;
-      const resumable=!target.group_call_id&&(target.status==="ringing"||(target.status==="accepted"&&pending.action==="accept"));
-      if(resumable){
-        if(!activeCall||String(activeCall.id)!==String(target.id))await showIncomingCallRecord(target);
-        if(!activeCall||String(activeCall.id)!==String(target.id))return false;
-        const {data:offers,error:offerError}=await client.from("aeroshell_call_signals")
-          .select("id,call_id,from_user_id,to_user_id,kind,payload,created_at")
+    if(!pending||pending.kind!=="call"||!pending.callId||!current||!client)return false;
+    if(pendingRecoveryPromise)return pendingRecoveryPromise;
+    pendingRecoveryPromise=(async()=>{
+      const {data:target,error:targetError}=await withCallTimeout(
+        client.from("aeroshell_calls").select("id,caller_id,callee_id,status,created_at,media_type,group_call_id")
+          .eq("id",pending.callId).eq("callee_id",current.id).maybeSingle(),
+        8000,
+        "The incoming call could not be restored from the server."
+      );
+      if(targetError)throw targetError;
+      if(!target||target.group_call_id||!["ringing","accepted"].includes(target.status)||
+         (target.status==="accepted"&&pending.action!=="accept")){
+        if(target&&["rejected","ended"].includes(target.status)){clearPendingNotificationAction();acceptRequested=false;}
+        return false;
+      }
+      if(activeCall&&String(activeCall.id)!==String(target.id)){
+        if(phase==="connected"||(pc&&pc.connectionState==="connected")){
+          say("Another call is already connected on this device. End it before accepting a different call.");
+          return false;
+        }
+        const keepPending=pendingNotificationAction;
+        cleanupLocal();
+        if(keepPending)setPendingNotificationAction(keepPending);
+      }
+      if(!activeCall||String(activeCall.id)!==String(target.id))await showIncomingCallRecord(target,{force:true});
+      if(!activeCall||String(activeCall.id)!==String(target.id))return false;
+      if(pending.action==="accept"){acceptRequested=true;renderCallOverlay("Waiting for the caller to connect…");}
+      const {data:offers,error:offerError}=await withCallTimeout(
+        client.from("aeroshell_call_signals").select("id,call_id,from_user_id,to_user_id,kind,payload,created_at")
           .eq("call_id",target.id).eq("to_user_id",current.id).eq("kind","offer")
-          .order("created_at",{ascending:true}).limit(1);
-        if(offerError)console.warn("[calls] Incoming offer recovery will retry:",offerError.message||offerError);
-        else if(offers&&offers[0])await receiveSignal(offers[0]);
-        if(activeCall&&String(activeCall.id)===String(target.id))runPendingNotificationAction();
-        return true;
+          .order("created_at",{ascending:true}).limit(1),
+        8000,
+        "The caller connection offer could not be recovered."
+      );
+      if(offerError)throw offerError;
+      if(offers&&offers[0]){
+        // Reattach the exact offer even if an earlier realtime callback marked it seen.
+        incomingOffer=offers[0];phase="incoming";acceptRequested=false;
+        renderCallOverlay();runPendingNotificationAction();
+      }else if(pending.action==="accept"){
+        acceptRequested=true;renderCallOverlay("Waiting for the caller to connect…");
       }
-      if(["rejected","ended"].includes(target.status)||(target.status==="accepted"&&pending.action!=="accept")){
-        clearPendingNotificationAction();acceptRequested=false;
-      }
-      return false;
-    }catch(error){console.warn("[calls] Pending notification recovery failed:",error&&error.message||error);return false;}
+      return !!(activeCall&&String(activeCall.id)===String(target.id));
+    })();
+    try{return await pendingRecoveryPromise;}
+    finally{pendingRecoveryPromise=null;}
   }
 
   async function subscribe(){
@@ -946,7 +967,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     handleNotificationAction,
     restorePendingNotificationAction,
     hasPendingNotificationAction:()=>!!pendingNotificationAction,
-    resume:()=>{if(me()&&me().isSupabase){void restorePendingNotificationAction().catch(error=>console.warn("[calls] Cold-start call restoration failed:",error&&error.message||error));void pollIncomingCallState();}},
+    resume:()=>{if(me()&&me().isSupabase){void restorePendingNotificationAction().catch(error=>console.warn("[calls] Cold-start call restoration failed:",error&&error.message||error));void pollIncomingCallState({force:true});}},
     cleanup:()=>{cleanupLocal();stopIncomingCallPolling();if(callChannel&&db())void db().removeChannel(callChannel);callChannel=null;channelUser="";},
     getPhase:()=>phase
   };

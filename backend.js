@@ -485,11 +485,15 @@
     try{
       const params=new URLSearchParams(location.search);
       const targetId=params.get("waChatId");
-      if(targetId){
+      const callActionPending=!!(window.WhatsAppCalls&&window.WhatsAppCalls.hasPendingNotificationAction&&window.WhatsAppCalls.hasPendingNotificationAction());
+      if(targetId&&!callActionPending){
         params.delete("waChatId");
         history.replaceState(history.state,"",location.pathname+(params.toString()?"?"+params.toString():"")+location.hash);
         const target=(appState()?.chats||[]).find(chat=>String(chat.id)===String(targetId));
         if(target)bridge.selectChat(target.id);
+      }else if(targetId&&callActionPending){
+        params.delete("waChatId");
+        history.replaceState(history.state,"",location.pathname+(params.toString()?"?"+params.toString():"")+location.hash);
       }
     }catch(_){}
     setTimeout(()=>{if(bridge.promptNotificationSetup)void bridge.promptNotificationSetup();},650);
