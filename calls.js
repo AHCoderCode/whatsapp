@@ -520,7 +520,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
   }
   function makePeer(call,servers) {
     const client=db(),current=me(),peer=call.caller_id===current.id?call.callee_id:call.caller_id;
-    const connection=new RTCPeerConnection({iceServers:servers,iceTransportPolicy:"relay",iceCandidatePoolSize:0});
+    const connection=new RTCPeerConnection({iceServers:servers,iceTransportPolicy:"relay",iceCandidatePoolSize:1});
     pc=connection;
     remoteStream=new MediaStream();
     connection.ontrack=event=>{
@@ -597,32 +597,35 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       renderCallOverlay("Calling @"+(person.username||person.name)+"…");
       ringTimer=null; // Keep the call active until either side ends it.
 
-      // Only send the incoming-call alert after this phone has a live local
-      // media stream. If microphone capture failed, the recipient is not rung.
-      try{
-        const pushResult=await withCallTimeout(
-          client.functions.invoke("whatsapp-push",{body:{action:"notify-call",callId:newId}}),
-          6000,
-          "Background call alert dispatch timed out."
-        );
-        if(pushResult.error)throw pushResult.error;
-        const delivery=pushResult.data||{};
-        const subscriptions=Number(delivery.subscriptions||0);
-        const sent=Number(delivery.sent||0);
-        const failed=Number(delivery.failed||0);
-        if(sent<1){
-          const reason=subscriptions<1
-            ?"no enabled call-alert subscription"
-            :"the push provider did not confirm delivery";
-          console.warn("Background call alert was not confirmed; continuing call setup:",reason,delivery);
-        }else if(failed>0){
-          console.warn("Some background call alerts failed:",delivery);
+      // Notify the callee after local media is ready, but do not make ICE setup wait
+      // for the push provider. Push delivery and TURN credential retrieval are independent.
+      void (async()=>{
+        try{
+          const pushResult=await withCallTimeout(
+            client.functions.invoke("whatsapp-push",{body:{action:"notify-call",callId:newId}}),
+            6000,
+            "Background call alert dispatch timed out."
+          );
+          if(pushResult.error)throw pushResult.error;
+          const delivery=pushResult.data||{};
+          const subscriptions=Number(delivery.subscriptions||0);
+          const sent=Number(delivery.sent||0);
+          const failed=Number(delivery.failed||0);
+          if(sent<1){
+            const reason=subscriptions<1
+              ?"no enabled call-alert subscription"
+              :"the push provider did not confirm delivery";
+            console.warn("Background call alert was not confirmed; continuing call setup:",reason,delivery);
+          }else if(failed>0){
+            console.warn("Some background call alerts failed:",delivery);
+          }
+        }catch(pushError){
+          console.warn("Initial background call alert dispatch failed:",pushError&&pushError.message||pushError);
+        }finally{
+          if(activeCall&&activeCall.id===newId&&phase!=="connected")startCallPushReminders(newId,client);
         }
-      }catch(pushError){
-        console.warn("Initial background call alert dispatch failed:",pushError&&pushError.message||pushError);
-      }
+      })();
       if(!activeCall||activeCall.id!==newId)return;
-      startCallPushReminders(newId,client);
       setPhase("preparing","Preparing the secure relay…");
       const servers=await withCallTimeout(relayServers(newId),12000,"Secure relay setup timed out. Check the TURN configuration and connection, then try again.");
       if(!activeCall||activeCall.id!==newId)return;
@@ -719,13 +722,17 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     if(ringTimer!==null)clearTimeout(ringTimer);ringTimer=null;
     callSetupTimer=setTimeout(()=>{if(activeCall&&activeCall.id===call.id&&phase!=="connected")void endCall("Call setup timed out. Check microphone permission, relay and internet, then try again.");},40000);
     try{
-      setPhase("preparing","Preparing Android call audio and requesting microphone permission…");
+      setPhase("preparing","Preparing the secure relay and requesting microphone permission…");
+      // Relay credentials are fetched only after the user taps Accept. The promise
+      // is started before the Android permission prompt, so both waits overlap.
+      const relaySetup=relayServers(call.id).then(servers=>({servers}),error=>({error}));
       beginNativeCallAudioSession();
       const grantedStream=await userMediaWithTimeout(call.media_type==="video",20000);
       if(!activeCall||activeCall.id!==call.id){grantedStream.getTracks().forEach(track=>track.stop());return;}
       localStream=grantedStream;
-      setPhase("preparing","Preparing the secure relay…");
-      const servers=await withCallTimeout(relayServers(call.id),12000,"Secure relay setup timed out. Check TURN configuration and connection, then try again.");
+      const relayResult=await withCallTimeout(relaySetup,12000,"Secure relay setup timed out. Check TURN configuration and connection, then try again.");
+      if(relayResult.error)throw relayResult.error;
+      const servers=relayResult.servers;
       if(!activeCall||activeCall.id!==call.id){localStream.getTracks().forEach(track=>track.stop());localStream=null;return;}
       setPhase("preparing","Joining the audio connection…");
       makePeer(call,servers);

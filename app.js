@@ -990,21 +990,32 @@
   function renderCalls() {
     const rows = currentUser && currentUser.isSupabase && state && Array.isArray(state.calls) ? state.calls : [];
     const description = currentUser && currentUser.isSupabase
-      ? "Call history from your account. Voice and video calls require the other contact to accept."
-      : "Your call history will appear here when you sign in to your account.";
-    main.innerHTML = "<section class='section-screen'>" +
-      screenHeader("Calls","<button class='icon-button' data-action='new-call' aria-label='New call'>" + icon("phone") + "</button>") +
-      "<div class='screen-content'><p class='screen-description'>" + description + "</p><div class='section-card'>" +
-      (rows.length ? rows.map((row,index) => "<button class='setting-row' data-action='call-entry' data-call-name='" +
-        esc(row.name) + "' data-chat-id='" + esc(row.contactId || "") + "' data-media-type='" + esc(row.mediaType || "audio") + "'>" +
-        avatarHTML({name:row.name,avatar:row.avatar || index+1}) +
-        "<span class='setting-copy'><span class='setting-title'>" + esc(row.name) + "</span><span class='setting-subtitle'>" +
-        icon(row.type === "outgoing" ? "forward" : "reply") + " " + esc(row.time) +
-        "</span></span><span class='end-icon'>" + icon("phone") + "</span></button>").join("") :
-        "<div class='empty-state'>No calls yet. Start a call from an accepted contact's chat.</div>") +
-      "</div></div></section>";
+      ? "Your recent voice and video calls. Tap a person to call them again."
+      : "Sign in to see call history and call your accepted contacts.";
+    const history = rows.length ? rows.map((row,index) => {
+      const name = row.name || "Unknown contact";
+      const outgoing = row.type === "outgoing";
+      const video = row.mediaType === "video";
+      return "<button type='button' class='wa-call-history-row' data-action='call-entry' data-call-name='" +
+        esc(name) + "' data-chat-id='" + esc(row.contactId || "") + "' data-media-type='" + esc(video ? "video" : "audio") + "'>" +
+        "<div class='wa-call-history-avatar'>" + avatarHTML({name,avatar:row.avatar || index+1}) + "</div>" +
+        "<span class='wa-call-history-copy'><strong>" + esc(name) + "</strong>" +
+        "<span class='wa-call-history-meta'><span class='wa-call-history-direction'>" +
+        icon(outgoing ? "forward" : "reply") + (outgoing ? "Outgoing" : "Incoming") +
+        "</span><span class='wa-call-history-separator'>·</span><time>" + esc(row.time || "Recent call") +
+        "</time><span class='wa-call-history-kind'>" + icon(video ? "video" : "phone") +
+        (video ? "Video call" : "Voice call") + "</span></span></span>" +
+        "<span class='wa-call-history-action' aria-hidden='true'>" + icon("phone") + "</span></button>";
+    }).join("") : "<div class='wa-call-history-empty'><span class='wa-call-history-empty-icon'>" + icon("phone") +
+      "</span><strong>No calls yet</strong><span>Your calls will appear here. Start one from an accepted contact.</span>" +
+      "<button type='button' class='primary-button' data-action='new-call'>Start a call</button></div>";
+    main.innerHTML = "<section class='section-screen wa-calls-screen'>" +
+      screenHeader("Calls","<button type='button' class='primary-button wa-call-new-button' data-action='new-call'>" + icon("phone") + "<span>New call</span></button>") +
+      "<div class='screen-content wa-calls-content'><p class='screen-description wa-calls-description'>" + description +
+      "</p><div class='section-card wa-call-history-card'><div class='wa-call-history-heading'><h3>Recent calls</h3>" +
+      "<span>" + (rows.length ? rows.length + (rows.length === 1 ? " call" : " calls") : "Call history") +
+      "</span></div><div class='wa-call-history-list'>" + history + "</div></div></div></section>";
   }
-
   function renderCommunities() {
     if(currentUser&&currentUser.isSupabase){
       const communities=state.backendCommunities||[];

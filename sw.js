@@ -1,20 +1,20 @@
-const CACHE_NAME = "whatsapp-final-shell-v55";
+const CACHE_NAME = "whatsapp-final-shell-v56";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/app.js?v=whatsapp-final-20261030b",
-  "/backend.js?v=whatsapp-final-20261030b",
-  "/calls.js?v=whatsapp-final-20261030b",
-  "/updater.js?v=whatsapp-final-20261030b",
-  "/styles.css?v=whatsapp-final-20261030b",
-  "/manifest.webmanifest?v=whatsapp-final-20261030b",
-  "/whatsapp-favicon.svg?v=whatsapp-final-20261030b",
+  "/app.js?v=whatsapp-final-20261030c",
+  "/backend.js?v=whatsapp-final-20261030c",
+  "/calls.js?v=whatsapp-final-20261030c",
+  "/updater.js?v=whatsapp-final-20261030c",
+  "/styles.css?v=whatsapp-final-20261030c",
+  "/manifest.webmanifest?v=whatsapp-final-20261030c",
+  "/whatsapp-favicon.svg?v=whatsapp-final-20261030c",
   "/icon.svg",
   "/icon-192.svg",
   "/icon-512.svg",
-  "/icon.svg?v=whatsapp-final-20261030b",
-  "/icon-192.svg?v=whatsapp-final-20261030b",
-  "/icon-512.svg?v=whatsapp-final-20261030b",
+  "/icon.svg?v=whatsapp-final-20261030c",
+  "/icon-192.svg?v=whatsapp-final-20261030c",
+  "/icon-512.svg?v=whatsapp-final-20261030c",
 ];
 
 self.addEventListener("install", event => {

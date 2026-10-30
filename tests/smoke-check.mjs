@@ -56,10 +56,25 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261030b");
-  includes(files.sw, "whatsapp-final-20261030b");
-  includes(files.manifest, "whatsapp-final-20261030b");
-  includes(files.sw, "whatsapp-final-shell-v55");
+  includes(files.html, "whatsapp-final-20261030c");
+  includes(files.sw, "whatsapp-final-20261030c");
+  includes(files.manifest, "whatsapp-final-20261030c");
+  includes(files.sw, "whatsapp-final-shell-v56");
+});
+check("mobile settings use a full-width account detail pane", () => {
+  includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
+  includes(files.css, ".setting-option-copy{flex:1 1 0;min-width:0");
+});
+check("Calls history has dedicated responsive rows", () => {
+  includes(files.app, "wa-call-history-row");
+  includes(files.app, "wa-call-history-direction");
+  includes(files.css, ".wa-call-history-list{");
+});
+check("call setup overlaps push, TURN and microphone waits without disabling relay-only ICE", () => {
+  includes(files.calls, 'iceTransportPolicy:"relay",iceCandidatePoolSize:1');
+  includes(files.calls, 'action:"notify-call",callId:newId');
+  includes(files.calls, "const relaySetup=relayServers(call.id).then");
+  includes(files.calls, "startCallPushReminders(newId,client)");
 });
 check("Android incoming-call actions launch the Activity directly and can wake the lock screen", () => {
   includes(files.nativeManifest, "android.permission.USE_FULL_SCREEN_INTENT");

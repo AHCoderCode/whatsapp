@@ -552,3 +552,75 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:
 .wa-native-update-dismiss{background:#f0f2f5;color:#3b4a54}
 .wa-native-update-message{display:block;flex-basis:100%;font-size:12px;color:#7b2d22;line-height:1.4}
 @media(max-width:480px){.wa-native-update-banner{align-items:flex-start;flex-wrap:wrap}.wa-native-update-copy{flex-basis:100%}.wa-native-update-actions{width:100%;justify-content:flex-end}.wa-native-update-message{width:100%}}
+
+
+/* Mobile settings: keep the detail pane full width so long account actions
+   never collapse into a one-character column. */
+@media(max-width:700px){
+  .settings-layout{display:flex!important;flex-direction:column!important;grid-template-columns:minmax(0,1fr)!important;width:100%;min-width:0}
+  .settings-list{display:flex;flex:0 0 auto;flex-direction:row;align-items:center;gap:4px;width:100%;max-width:100%;min-width:0;padding:7px 8px;overflow-x:auto;overflow-y:hidden;border-right:0;border-bottom:1px solid #e4e7e9;scrollbar-width:none;-webkit-overflow-scrolling:touch;white-space:nowrap}
+  .settings-list::-webkit-scrollbar{display:none}
+  .settings-list-header{display:none}
+  .settings-nav-item{width:auto;min-width:max-content;flex:0 0 auto;min-height:40px;padding:8px 12px;gap:7px;border-radius:20px;white-space:nowrap}
+  .settings-nav-item svg{height:17px;width:17px}
+  .settings-nav-item span{font-size:12px;white-space:nowrap}
+  .settings-detail{display:flex;flex:1 1 auto;width:100%;max-width:100%;min-width:0;min-height:0;overflow:hidden}
+  .settings-detail-header{height:50px;flex-basis:50px;padding:0 14px}
+  .settings-detail-content{min-width:0;padding:12px 11px max(20px,env(safe-area-inset-bottom))}
+  .setting-option{display:flex;width:100%;max-width:100%;min-width:0;min-height:68px;align-items:center;gap:10px;padding:12px 11px}
+  .setting-option-copy{flex:1 1 0;min-width:0;overflow:hidden;white-space:normal}
+  .setting-option-copy strong,.setting-option-copy span{max-width:100%;white-space:normal;overflow-wrap:anywhere;word-break:normal}
+  .wa-settings-profile-card{width:100%;max-width:100%;min-width:0}
+  .wa-profile-field{width:100%;max-width:100%;min-width:0}
+  .wa-profile-field>span{min-width:0;overflow-wrap:anywhere}
+}
+@media(max-width:380px){
+  .settings-nav-item{gap:6px;padding:8px 10px}
+  .setting-option{gap:8px;padding:11px 9px}
+  .setting-option .row-icon{width:20px;flex:0 0 20px}
+}
+
+/* Calls history: predictable columns and readable metadata on narrow phones. */
+.wa-calls-content{width:100%;min-width:0;max-width:100%}
+.wa-calls-description{max-width:680px;line-height:1.55}
+.wa-call-new-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:0 12px;white-space:nowrap}
+.wa-call-new-button svg{width:17px;height:17px;stroke:currentColor;fill:none}
+.wa-call-history-card{width:100%;min-width:0;max-width:100%;overflow:hidden}
+.wa-call-history-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 16px;border-bottom:1px solid #eef1f2}
+.wa-call-history-heading h3{margin:0;font-size:14px;font-weight:650;color:#172b25}
+.wa-call-history-heading>span{flex:0 0 auto;color:#667781;font-size:11px}
+.wa-call-history-list{display:flex;flex-direction:column;min-width:0}
+.wa-call-history-row{appearance:none;-webkit-appearance:none;display:grid;grid-template-columns:48px minmax(0,1fr) 38px;align-items:center;gap:12px;width:100%;min-width:0;min-height:72px;padding:11px 14px;border:0;border-bottom:1px solid #edf0f1;background:#fff;color:#111b21;text-align:left;font:inherit;cursor:pointer}
+.wa-call-history-row:last-child{border-bottom:0}
+.wa-call-history-row:active{background:#f4faf7}
+.wa-call-history-avatar{display:grid;place-items:center;width:46px;height:46px;min-width:0}
+.wa-call-history-avatar .avatar{width:46px;height:46px;flex:0 0 46px}
+.wa-call-history-copy{display:flex;flex-direction:column;gap:5px;min-width:0;overflow:hidden}
+.wa-call-history-copy>strong{display:block;min-width:0;overflow:hidden;color:#172b25;font-size:14px;font-weight:600;text-overflow:ellipsis;white-space:nowrap}
+.wa-call-history-meta{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap;color:#667781;font-size:11px;line-height:1.35}
+.wa-call-history-direction,.wa-call-history-kind{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.wa-call-history-direction svg,.wa-call-history-kind svg{width:13px;height:13px;flex:0 0 13px;stroke:currentColor;fill:none}
+.wa-call-history-separator{color:#aab4b8}
+.wa-call-history-meta time{font-variant-numeric:tabular-nums}
+.wa-call-history-action{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:#e9f7f0;color:#008f70}
+.wa-call-history-action svg{width:17px;height:17px;stroke:currentColor;fill:none}
+.wa-call-history-empty{display:flex;flex-direction:column;align-items:center;gap:9px;padding:28px 18px;text-align:center}
+.wa-call-history-empty-icon{display:grid;place-items:center;width:48px;height:48px;border-radius:50%;background:#e8f6ee;color:#008f70}
+.wa-call-history-empty-icon svg{width:22px;height:22px;stroke:currentColor;fill:none}
+.wa-call-history-empty strong{font-size:15px;color:#172b25}
+.wa-call-history-empty>span:not(.wa-call-history-empty-icon){max-width:300px;color:#667781;font-size:12px;line-height:1.5}
+.wa-call-history-empty .primary-button{min-height:40px;margin-top:4px;border-radius:10px}
+.theme-dark .wa-call-history-heading{border-color:#28363d}
+.theme-dark .wa-call-history-heading h3,.theme-dark .wa-call-history-copy>strong{color:#e9edef}
+.theme-dark .wa-call-history-row{background:#111b21;color:#e9edef;border-color:#28363d}
+.theme-dark .wa-call-history-row:active{background:#1b3029}
+.theme-dark .wa-call-history-action,.theme-dark .wa-call-history-empty-icon{background:#173c32;color:#65d5a4}
+.theme-dark .wa-call-history-empty strong{color:#e9edef}
+@media(max-width:420px){
+  .wa-calls-content{padding:14px 10px}
+  .wa-call-new-button{min-height:36px;padding:0 9px;font-size:12px}
+  .wa-call-history-row{grid-template-columns:42px minmax(0,1fr) 34px;gap:9px;padding:10px}
+  .wa-call-history-avatar,.wa-call-history-avatar .avatar{width:40px;height:40px;flex-basis:40px}
+  .wa-call-history-action{width:32px;height:32px}
+  .wa-call-history-heading{padding:13px 12px}
+}
