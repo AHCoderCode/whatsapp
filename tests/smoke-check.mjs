@@ -19,6 +19,7 @@ const files = {
   css: read("styles.css"),
   manifest: read("manifest.webmanifest"),
   push: read("supabase/functions/whatsapp-push/index.ts"),
+  turn: read("supabase/functions/master-chat-turn-credentials/index.ts"),
   pushMigration: read("supabase/migrations/20261028123000_whatsapp_device_push_notifications.sql"),
   deviceMigration: read("supabase/migrations/20261028130000_whatsapp_linked_devices.sql"),
   signalFallbackMigration: read("supabase/migrations/20261030081609_add_webrtc_direct_fallback_signal_kinds.sql"),
@@ -56,10 +57,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261030d");
-  includes(files.sw, "whatsapp-final-20261030d");
-  includes(files.manifest, "whatsapp-final-20261030d");
-  includes(files.sw, "whatsapp-final-shell-v57");
+  includes(files.html, "whatsapp-final-20261030e");
+  includes(files.sw, "whatsapp-final-20261030e");
+  includes(files.manifest, "whatsapp-final-20261030e");
+  includes(files.sw, "whatsapp-final-shell-v58");
 });
 check("mobile settings use a full-width account detail pane", () => {
   includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
@@ -669,6 +670,37 @@ check("chat attachment menu has a dedicated audio picker using private storage",
   includes(files.app, 'if(action==="pick-audio")');
   includes(files.app, 'audio:"audio/*"');
   includes(files.backend, 'db.storage.from(ATTACHMENT_BUCKET).upload(path,uploadFile');
+});
+check("TURN relay config respects Metered account region and includes all four transport routes", () => {
+  excludes(files.turn, 'endpoint.searchParams.set("region", "asia")');
+  includes(files.turn, "const seenEndpoints = new Set<string>()");
+  includes(files.turn, '"turn:" + hostname + ":80"');
+  includes(files.turn, '"turn:" + hostname + ":80?transport=tcp"');
+  includes(files.turn, '"turn:" + hostname + ":443"');
+  includes(files.turn, '"turns:" + hostname + ":443?transport=tcp"');
+  includes(files.turn, "seenEndpoints.add(urls)");
+});
+check("Android call session acquires a bounded CPU wake lock and releases it on cleanup", () => {
+  includes(files.nativeManifest, 'android.permission.WAKE_LOCK');
+  includes(files.nativeActivity, "PowerManager.PARTIAL_WAKE_LOCK");
+  includes(files.nativeActivity, "callCpuWakeLock.acquire(3L * 60L * 60L * 1000L)");
+  includes(files.nativeActivity, "releaseCallCpuWakeLock();");
+});
+check("people search result buttons stay aligned inside responsive contact cards", () => {
+  includes(files.app, "friend-search-result-card");
+  includes(files.app, "friend-search-result-copy");
+  includes(files.app, "friend-search-result-action");
+  includes(files.css, "grid-template-columns:46px minmax(0,1fr) auto");
+  includes(files.css, ".friend-search-result-action>button");
+  includes(files.app, "data-action='send-contact-request'");
+});
+check("New Group and New Community remain available from the overflow menu", () => {
+  includes(files.app, 'label:"New group",action:"new-group"');
+  includes(files.app, 'label:"New community",action:"new-community"');
+  includes(files.app, 'if(action==="new-group"){createGroupDialog();return;}');
+  includes(files.app, 'if(action==="new-community"){createCommunityDialog();return;}');
+  includes(files.backend, "aeroshell_create_group");
+  includes(files.backend, "async function createCommunity");
 });
 console.log("\n" + passed + " passed, " + failed + " failed.");
 if (failed) process.exitCode = 1;

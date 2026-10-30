@@ -1,5 +1,7 @@
 package com.ahcodercode.whatsapp;
 
+import android.os.PowerManager;
+
 import android.Manifest;
 import android.app.Activity;
 import android.app.NotificationManager;
@@ -53,6 +55,7 @@ public final class MainActivity extends Activity {
     private ValueCallback<Uri[]> fileChooserCallback;
     private Uri pendingCaptureUri;
     private AudioManager callAudioManager;
+    private PowerManager.WakeLock callCpuWakeLock;
     private AudioFocusRequest callAudioFocusRequest;
     private int previousAudioMode = AudioManager.MODE_NORMAL;
     private boolean previousSpeakerphoneOn;
@@ -287,6 +290,25 @@ public final class MainActivity extends Activity {
         return intent;
     }
 
+    private synchronized void acquireCallCpuWakeLock() {
+        PowerManager manager = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        if (manager == null) return;
+        if (callCpuWakeLock != null && callCpuWakeLock.isHeld()) return;
+        callCpuWakeLock = manager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
+            getPackageName() + ":WhatsAppCall");
+        callCpuWakeLock.setReferenceCounted(false);
+        // Bounded timeout prevents a leaked wake lock holding the CPU indefinitely.
+        callCpuWakeLock.acquire(3L * 60L * 60L * 1000L);
+    }
+
+    private synchronized void releaseCallCpuWakeLock() {
+        PowerManager.WakeLock wakeLock = callCpuWakeLock;
+        callCpuWakeLock = null;
+        if (wakeLock != null && wakeLock.isHeld()) {
+            try { wakeLock.release(); } catch (RuntimeException ignored) {}
+        }
+    }
+
     private synchronized boolean beginNativeCallAudio(boolean useSpeaker) {
         AudioManager manager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         if (manager == null) return false;
@@ -312,10 +334,12 @@ public final class MainActivity extends Activity {
                 manager.requestAudioFocus(callAudioFocusListener, AudioManager.STREAM_VOICE_CALL, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
             }
             manager.setSpeakerphoneOn(useSpeaker);
+            acquireCallCpuWakeLock();
             callAudioSessionActive = true;
             return true;
         } catch (RuntimeException error) {
             android.util.Log.e("WhatsApp", "Native call audio setup failed", error);
+            releaseCallCpuWakeLock();
             if (!hadActiveSession) {
                 try {
                     manager.setSpeakerphoneOn(previousSpeakerphoneOn);
@@ -338,7 +362,10 @@ public final class MainActivity extends Activity {
 
     private synchronized void endNativeCallAudio() {
         AudioManager manager = callAudioManager;
-        if (manager == null || !callAudioSessionActive) return;
+        if (manager == null || !callAudioSessionActive) {
+            releaseCallCpuWakeLock();
+            return;
+        }
         try {
             if (Build.VERSION.SDK_INT >= 26 && callAudioFocusRequest != null) manager.abandonAudioFocusRequest(callAudioFocusRequest);
             else manager.abandonAudioFocus(callAudioFocusListener);
@@ -347,6 +374,7 @@ public final class MainActivity extends Activity {
         } catch (Exception ignored) {}
         callAudioSessionActive = false;
         callAudioManager = null;
+        releaseCallCpuWakeLock();
     }
 
 

@@ -53,3 +53,12 @@ The project README documents the following known limitations; this UI audit does
 ## Sign-off rule
 
 Do not label the app “works on every device” based only on a successful build or source smoke suite. Mark a device/browser as verified only after testing that specific environment with two signed-in accounts and recording the result.
+
+
+## Call reliability and Find People follow-up
+
+The October 30 follow-up hardens the Metered ICE server configuration. The Edge Function no longer overrides the workspace/credential region with a fixed Asia value; it derives the relay hostname returned by Metered and supplies all four documented transport variants (UDP and TCP on port 80, UDP on port 443, and TLS/TCP on port 443). The Android shell now holds a bounded partial CPU wake lock for an active native call and releases it with native call-audio cleanup. This is intended to reduce WebRTC/Realtime interruption while the screen is locked; it cannot override carrier restrictions, OEM background policies, disabled notification channels, or networks that block every TURN route.
+
+Find People result cards now keep their contact action inside a dedicated responsive row with a full-size labelled button. New Group and New Community remain available from the overflow menu and continue to call their existing Supabase create flows.
+
+The automated suite adds source assertions for TURN transport coverage, native wake-lock acquisition/release, responsive contact actions, and the group/community entry points. It does not simulate a TURN allocation or prove a completed call. A real two-account call over separate Wi-Fi/mobile networks, followed by screen-lock and accept/decline tests on physical Android devices, remains required for sign-off.

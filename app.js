@@ -1246,15 +1246,15 @@
             String(request.requestUserId) === String(person.id) || normalizeUsername(request.username) === normalizeUsername(person.username));
           const self = String(person.id) === String(currentUser.id);
           let action;
-          if (self) action = "<button class='secondary-button' disabled>Your account</button>";
-          else if (friend) action = "<button class='primary-button' data-action='open-found-chat' data-chat-id='" + esc(friend.id) + "'>Open chat</button>";
-          else if (incoming) action = "<button class='primary-button' data-action='accept-found-request' data-request-id='" + esc(incoming.id) + "'>Accept request</button>";
-          else if (sent) action = "<button class='secondary-button' disabled>Request sent</button>";
-          else action = "<button class='primary-button' data-action='send-contact-request' data-contact-username='" + esc(person.username) + "'>Send contact request</button>";
+          if (self) action = "<button type='button' class='secondary-button' disabled>Your account</button>";
+          else if (friend) action = "<button type='button' class='primary-button' data-action='open-found-chat' data-chat-id='" + esc(friend.id) + "'>Open chat</button>";
+          else if (incoming) action = "<button type='button' class='primary-button' data-action='accept-found-request' data-request-id='" + esc(incoming.id) + "'>Accept request</button>";
+          else if (sent) action = "<button type='button' class='secondary-button' disabled>Request sent</button>";
+          else action = "<button type='button' class='primary-button' data-action='send-contact-request' data-contact-username='" + esc(person.username) + "'>Send contact request</button>";
           const name = esc(person.name || person.username || "User");
           const username = esc("@" + String(person.username || ""));
-          const number = person.phone ? "<span>" + esc(person.phone) + "</span>" : "";
-          return "<div class='request-card'>" + bridge.avatarHTML(person) + "<div class='request-info'><strong>" + name + "</strong><span>" + username + "</span>" + number + "</div>" + action + "</div>";
+          const number = person.phone ? "<span class='friend-search-result-number'>" + esc(person.phone) + "</span>" : "";
+          return "<article class='friend-search-result-card'>" + bridge.avatarHTML(person) + "<div class='friend-search-result-copy'><strong>" + name + "</strong><span>" + username + "</span>" + number + "</div><div class='friend-search-result-action'>" + action + "</div></article>";
         }).join("");
         resultBox.innerHTML = "<div class='search-result-summary' role='status'>Found " + found.length + " matching account" + (found.length === 1 ? "" : "s") + ".</div>" + cards;
       } catch (error) {
