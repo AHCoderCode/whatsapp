@@ -459,14 +459,22 @@
     if(error)throw error;if(!data)throw new Error("No messaging profile exists for this account. Sign out and create a messaging account.");
     const sessionUser=Object.assign({},authUser,{isSupabase:true});
     bridge.setBackendUser(sessionUser,data);
+    // A notification Accept must not wait for the full chat list, linked-device
+    // registration, or FCM token registration. Restore the exact call first.
+    if(window.WhatsAppCalls&&typeof window.WhatsAppCalls.restorePendingNotificationAction==="function"){
+      void window.WhatsAppCalls.restorePendingNotificationAction().catch(callError=>{
+        console.warn("[calls] Early incoming-call restoration failed:",callError&&callError.message||callError);
+      });
+    }
     await loadData(false);
-    try{if(!(await registerCurrentDevice()))return;}catch(deviceError){console.warn("Could not register linked device:",deviceError&&deviceError.message||deviceError);}
-    // Native Android passes its FCM token to the page. Register after the signed-in
-    // Supabase user has been restored so each push token belongs to the correct account.
+    // These registrations are useful but are not prerequisites for showing or
+    // accepting a call. Run them in the background so startup cannot stall.
+    void registerCurrentDevice().catch(deviceError=>console.warn("Could not register linked device:",deviceError&&deviceError.message||deviceError));
     const nativeToken=String(window.__waNativeFCMToken||"").trim();
     if(nativeToken){
-      try{await registerNativeAndroidPushToken(nativeToken,appState()?.settings||{});}
-      catch(nativeError){console.warn("Could not register native Android push token:",nativeError&&nativeError.message||nativeError);}
+      void registerNativeAndroidPushToken(nativeToken,appState()?.settings||{}).catch(nativeError=>{
+        console.warn("Could not register native Android push token:",nativeError&&nativeError.message||nativeError);
+      });
     }
     // Notification clicks can open a fresh tab; wait for authenticated chat data before routing.
     try{

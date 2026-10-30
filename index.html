@@ -242,17 +242,10 @@
   window.addEventListener("wa-startup-finished",function(){window.clearTimeout(startupWatchdog);},{once:true});
 })();
 if("serviceWorker" in navigator){
-  const releaseKey="whatsapp_release_20261029c";
-  navigator.serviceWorker.addEventListener("controllerchange",()=>{
-    try{
-      if(sessionStorage.getItem(releaseKey)!=="1"){
-        sessionStorage.setItem(releaseKey,"1");
-        location.reload();
-      }
-    }catch(_){}
-  });
+  // Do not reload an authenticated page when the service worker takes control.
+  // Cold-start notification actions are persisted and restored by the auth bootstrap.
   window.addEventListener("load",()=>{
-    navigator.serviceWorker.register("/sw.js?v=whatsapp-final-20261029e",{updateViaCache:"none"})
+    navigator.serviceWorker.register("/sw.js?v=whatsapp-final-20261030a",{updateViaCache:"none"})
       .then(registration=>registration.update().catch(()=>{}))
       .catch(()=>{});
   });

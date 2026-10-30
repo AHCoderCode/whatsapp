@@ -705,6 +705,35 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       .order("created_at",{ascending:true}).limit(1);
     if(!error&&data&&data[0])await receiveSignal(data[0]);
   }
+  async function restorePendingNotificationAction(){
+    const pending=pendingNotificationAction,current=me(),client=db();
+    if(!pending||pending.kind!=="call"||!pending.callId||!current||!current.isSupabase||!client)return false;
+    const {data:row,error}=await withCallTimeout(
+      client.from("aeroshell_calls").select("id,caller_id,callee_id,status,created_at,media_type,group_call_id")
+        .eq("id",pending.callId).eq("callee_id",current.id).maybeSingle(),
+      8000,
+      "The incoming call could not be restored from the server."
+    );
+    if(error)throw error;
+    if(!row||row.group_call_id||!["ringing","accepted"].includes(row.status)||
+       (row.status==="accepted"&&pending.action!=="accept")){
+      if(row&&["rejected","ended"].includes(row.status))clearPendingNotificationAction();
+      return false;
+    }
+    await showIncomingCallRecord(row);
+    if(!activeCall||String(activeCall.id)!==String(row.id))return false;
+    const {data:offers,error:offerError}=await withCallTimeout(
+      client.from("aeroshell_call_signals").select("id,call_id,from_user_id,to_user_id,kind,payload,created_at")
+        .eq("call_id",row.id).eq("to_user_id",current.id).eq("kind","offer")
+        .order("created_at",{ascending:true}).limit(1),
+      8000,
+      "The caller's connection offer could not be recovered."
+    );
+    if(offerError)throw offerError;
+    if(offers&&offers[0])await receiveSignal(offers[0]);
+    if(activeCall&&String(activeCall.id)===String(row.id))runPendingNotificationAction();
+    return !!(activeCall&&String(activeCall.id)===String(row.id));
+  }
   async function pollIncomingCallState(){
     const current=me(),client=db();
     if(!current||!current.isSupabase||!client||document.visibilityState==="hidden"||incomingPollBusy)return;
@@ -896,7 +925,8 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     accept:()=>acceptCall(),
     decline:()=>declineCall(false),
     handleNotificationAction,
-    resume:()=>{if(me()&&me().isSupabase)void pollIncomingCallState();},
+    restorePendingNotificationAction,
+    resume:()=>{if(me()&&me().isSupabase){void restorePendingNotificationAction().catch(error=>console.warn("[calls] Cold-start call restoration failed:",error&&error.message||error));void pollIncomingCallState();}},
     cleanup:()=>{cleanupLocal();stopIncomingCallPolling();if(callChannel&&db())void db().removeChannel(callChannel);callChannel=null;channelUser="";},
     getPhase:()=>phase
   };

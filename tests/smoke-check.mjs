@@ -519,6 +519,24 @@ check("native Accept actions reach the call controller after WebView startup", (
   includes(files.calls, "window.WhatsAppCalls={");
   includes(files.calls, "if(pending&&pending.kind===\"call\"&&pending.callId)");
 });
+check("cold-start Accept restores the exact call before chat hydration", () => {
+  includes(files.calls, "async function restorePendingNotificationAction()");
+  includes(files.calls, 'eq("id",pending.callId).eq("callee_id",current.id).maybeSingle()');
+  includes(files.calls, "await showIncomingCallRecord(row);");
+  includes(files.calls, "if(offers&&offers[0])await receiveSignal(offers[0]);");
+  includes(files.calls, "restorePendingNotificationAction,");
+  includes(files.backend, "void window.WhatsAppCalls.restorePendingNotificationAction()");
+  assert.ok(files.backend.indexOf("restorePendingNotificationAction()") < files.backend.indexOf("await loadData(false);"));
+});
+check("nonessential linked-device and FCM registration cannot block call startup", () => {
+  includes(files.backend, "void registerCurrentDevice().catch");
+  includes(files.backend, "void registerNativeAndroidPushToken(nativeToken");
+  excludes(files.backend, "try{if(!(await registerCurrentDevice()))return;}");
+});
+check("service-worker activation does not reload the app during incoming call recovery", () => {
+  excludes(files.html, 'navigator.serviceWorker.addEventListener("controllerchange"');
+  excludes(files.html, "location.reload();");
+});
 check("pending native Accept survives URL cleanup and WebView/service-worker reloads", () => {
   includes(files.calls, 'const PENDING_CALL_ACTION_KEY="wa_pending_native_call_action_v1";');
   includes(files.calls, "localStorage.setItem(PENDING_CALL_ACTION_KEY");
