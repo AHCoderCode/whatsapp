@@ -287,7 +287,7 @@ check("incoming call ringtones support a persistent custom MP3 and a loud built-
 });
 check("incoming calls start ringing and the top Accept action queues until the offer arrives", () => {
   includes(files.calls, 'void startIncomingRingtone();');
-  includes(files.calls, 'pendingNotificationAction={kind:"call",callId:String(activeCall.id),action:"accept"}');
+  includes(files.calls, 'setPendingNotificationAction({kind:"call",callId:String(activeCall.id),action:"accept"});');
   includes(files.calls, "data-wa-call='accept' aria-label='Accept call'>Accept</button>");
   assert.ok(!files.calls.includes('(waiting?"disabled":"")'), "Accept must remain available while the caller prepares the offer");
   includes(files.calls, 'stopIncomingRingtone();');
