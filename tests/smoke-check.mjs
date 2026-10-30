@@ -21,8 +21,8 @@ const files = {
   push: read("supabase/functions/whatsapp-push/index.ts"),
   pushMigration: read("supabase/migrations/20261028123000_whatsapp_device_push_notifications.sql"),
   deviceMigration: read("supabase/migrations/20261028130000_whatsapp_linked_devices.sql"),
-  signalFallbackMigration: read("supabase/migrations/20261030081000_add_webrtc_direct_fallback_signal_kinds.sql"),
-  signalFallbackRlsMigration: read("supabase/migrations/20261030081800_extend_webrtc_direct_fallback_signaling_rls.sql")
+  signalFallbackMigration: read("supabase/migrations/20261030081609_add_webrtc_direct_fallback_signal_kinds.sql"),
+  signalFallbackRlsMigration: read("supabase/migrations/20261030081801_extend_webrtc_direct_fallback_signaling_rls.sql")
 };
 let passed = 0;
 let failed = 0;
