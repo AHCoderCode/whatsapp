@@ -450,7 +450,12 @@
       subscribe(me.id);
       subscribePresence(me.id);
       refreshPresenceUI();
-      if(window.WhatsAppCalls)window.WhatsAppCalls.subscribe();
+      if(window.WhatsAppCalls&&typeof window.WhatsAppCalls.subscribe==="function"){
+        if(window.WhatsAppCalls.hasPendingNotificationAction&&window.WhatsAppCalls.hasPendingNotificationAction()){
+          try{await withTimeout(window.WhatsAppCalls.subscribe(),6500,"Incoming call recovery took too long.");}
+          catch(callRecoveryError){console.warn("[backend] Incoming call recovery continues in the foreground:",callRecoveryError&&callRecoveryError.message||callRecoveryError);}
+        }else{void window.WhatsAppCalls.subscribe();}
+      }
     }catch(error){if(!quiet)say(safeError(error,"Could not load messaging data from Supabase."));}
     finally{loading=false;if(refreshQueued){refreshQueued=false;queueMicrotask(()=>void loadData(true));}}
   }

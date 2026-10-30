@@ -431,14 +431,28 @@ async function notifyCallEnded(userId: string, body: any) {
   };
 }
 
-async function transitionCall(userId: string, body: any) {
-  if (!admin) throw new Error("Push service is unavailable.");
+async function transitionCall(userId: string, body: any, authorization: string) {
+  if (!admin || !SUPABASE_URL) throw new Error("Push service is unavailable.");
+  const publishableKeysRaw = Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") || "";
+  let publishableKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+  if (publishableKeysRaw) {
+    try {
+      const keys = JSON.parse(publishableKeysRaw) as Record<string, string>;
+      publishableKey = keys.default || Object.values(keys)[0] || publishableKey;
+    } catch (_) {}
+  }
+  const bearer = String(authorization || "").replace(/^Bearer\\s+/i, "").trim();
+  if (!publishableKey || !bearer) throw new Error("A signed-in participant is required.");
+  const userClient = createClient(SUPABASE_URL, publishableKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: "Bearer " + bearer } }
+  });
   const callId = String(body?.callId || "");
   const nextStatus = String(body?.status || "");
   if (!uuidPattern.test(callId)) throw new Error("A valid call ID is required.");
   if (!["accepted", "rejected", "ended"].includes(nextStatus)) throw new Error("Invalid call status transition.");
 
-  const { data: call, error } = await admin.from("aeroshell_calls")
+  const { data: call, error } = await userClient.from("aeroshell_calls")
     .select("id,caller_id,callee_id,status,media_type,group_call_id")
     .eq("id", callId).maybeSingle();
   if (error) throw error;
@@ -463,14 +477,14 @@ async function transitionCall(userId: string, body: any) {
 
   const allowedStatuses = nextStatus === "ended" ? ["ringing", "accepted"] : ["ringing"];
   if (!allowedStatuses.includes(call.status)) return { ok: false, status: call.status, reason: "call-state-changed" };
-  const { data: updated, error: updateError } = await admin.from("aeroshell_calls")
+  const { data: updated, error: updateError } = await userClient.from("aeroshell_calls")
     .update({ status: nextStatus, updated_at: new Date().toISOString() })
     .eq("id", callId).eq("status", call.status)
     .select("id,caller_id,callee_id,status,media_type,group_call_id").maybeSingle();
   if (updateError) throw updateError;
 
   if (!updated) {
-    const { data: latest, error: latestError } = await admin.from("aeroshell_calls")
+    const { data: latest, error: latestError } = await userClient.from("aeroshell_calls")
       .select("id,status").eq("id", callId).maybeSingle();
     if (latestError) throw latestError;
     if (latest && latest.status === nextStatus) return { ok: true, status: latest.status, changed: false };
@@ -605,7 +619,7 @@ Deno.serve(async (req: Request) => {
     }
     if (body.action === "notify-message") return response(await notifyMessage(user.id, body));
     if (body.action === "notify-call") return response(await notifyCall(user.id, body));
-    if (body.action === "transition-call") return response(await transitionCall(user.id, body));
+    if (body.action === "transition-call") return response(await transitionCall(user.id, body, req.headers.get("Authorization") || ""));
     if (body.action === "notify-call-ended") return response(await notifyCallEnded(user.id, body));
     if (body.action === "test-call-push") return response(await testCallPush(user.id, body.delaySeconds));
     return response({ error: "Unknown action." }, 400);

@@ -537,6 +537,24 @@ check("service-worker activation does not reload the app during incoming call re
   excludes(files.html, 'navigator.serviceWorker.addEventListener("controllerchange"');
   excludes(files.html, "navigator.serviceWorker.addEventListener(\"controllerchange\"");
 });
+check("auth bootstrap waits for the exact pending incoming call before showing Chats", () => {
+  includes(files.backend, "hasPendingNotificationAction&&window.WhatsAppCalls.hasPendingNotificationAction()");
+  includes(files.backend, "await withTimeout(window.WhatsAppCalls.subscribe(),6500");
+  includes(files.calls, "async function recoverPendingNotificationCall(current,client)");
+  includes(files.calls, "const restored=await recoverPendingNotificationCall(current,client);");
+  includes(files.calls, 'target.status==="accepted"&&pending.action==="accept"');
+});
+check("native call actions force recovery during Android visibility transitions", () => {
+  includes(files.calls, "pollIncomingCallState({force:true})");
+  includes(files.calls, "(!options.force&&document.visibilityState===\"hidden\")");
+  includes(files.calls, "hasPendingNotificationAction:()=>!!pendingNotificationAction");
+});
+check("call status Edge Function uses authenticated JWT for auth.uid trigger checks", () => {
+  includes(files.push, "async function transitionCall(userId: string, body: any, authorization: string)");
+  includes(files.push, 'global: { headers: { Authorization: "Bearer " + bearer } }');
+  includes(files.push, 'userClient.from("aeroshell_calls")');
+  includes(files.push, 'transitionCall(user.id, body, req.headers.get("Authorization") || "")');
+});
 check("pending native Accept survives URL cleanup and WebView/service-worker reloads", () => {
   includes(files.calls, 'const PENDING_CALL_ACTION_KEY="wa_pending_native_call_action_v1";');
   includes(files.calls, "localStorage.setItem(PENDING_CALL_ACTION_KEY");
