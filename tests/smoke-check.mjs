@@ -57,9 +57,9 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261030f");
-  includes(files.sw, "whatsapp-final-20261030f");
-  includes(files.manifest, "whatsapp-final-20261030f");
+  includes(files.html, "whatsapp-final-20261030g");
+  includes(files.sw, "whatsapp-final-20261030g");
+  includes(files.manifest, "whatsapp-final-20261030g");
   includes(files.sw, "whatsapp-final-shell-v59");
 });
 check("mobile settings use a full-width account detail pane", () => {
