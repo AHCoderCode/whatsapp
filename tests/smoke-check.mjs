@@ -75,7 +75,7 @@ check("contact profile uses consistent, semantic More options buttons", () => {
 });
 check("contact info is full-width and independently scrollable on mobile", () => {
   includes(files.css, ".main-pane>.details-layout{display:flex!important;flex:1 1 auto!important");
-  includes(files.css, ".details-content{width:100%;max-width:100%;min-width:0");
+  includes(files.css, ".details-content{display:block;flex:1 1 auto;width:100%;max-width:100%;min-width:0");
   includes(files.css, "grid-template-columns:22px minmax(0,1fr) 16px");
   includes(files.css, ".wa-contact-option-copy strong{display:block;min-width:0;max-width:100%");
   includes(files.css, "overflow-y:auto;overscroll-behavior:contain");
