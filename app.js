@@ -934,9 +934,9 @@
     if(!chat){renderWelcome();return;}
     const history=Array.isArray(chat.messages)?chat.messages:[];
     const attachments=history.filter(m=>m&&m.attachmentPath);
-    const mediaCount=attachments.filter(m=>/^image\\//i.test(m.attachmentMime||"")||/^video\\//i.test(m.attachmentMime||"")||/^audio\\//i.test(m.attachmentMime||"")||m.attachmentType==="voice").length;
+    const mediaCount=attachments.filter(m=>/^image\//i.test(m.attachmentMime||"")||/^video\//i.test(m.attachmentMime||"")||/^audio\//i.test(m.attachmentMime||"")||m.attachmentType==="voice").length;
     const documentCount=attachments.length-mediaCount;
-    const linkCount=history.reduce((total,m)=>total+((String(m.text||"").match(/https?:\\/\\/[^\\s<>"']+/gi)||[]).length),0);
+    const linkCount=history.reduce((total,m)=>total+((String(m.text||"").match(/https?:\/\/[^\s<>"']+/gi)||[]).length),0);
     const actions="<div class='hero-actions'><button type='button' class='hero-action' data-action='voice-call'>"+icon("phone")+"<span>Audio</span></button><button type='button' class='hero-action' data-action='video-call'>"+icon("video")+"<span>Video</span></button><button type='button' class='hero-action' data-action='search-in-chat'>"+icon("search")+"<span>Search</span></button></div>";
     const detailRow=(iconName,label,value,action,actionIcon,actionLabel)=>{
       return "<div class='wa-contact-detail-row'><span class='wa-contact-detail-icon'>"+icon(iconName)+"</span><span class='wa-contact-detail-copy'><small>"+esc(label)+"</small><strong>"+esc(value)+"</strong></span>"+
