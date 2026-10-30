@@ -73,3 +73,12 @@ The Communities and Channels screens now have prominent labelled creation button
 Camera capture is now camera-first. The Android WebView marks the next chooser as an explicit camera request and launches the native image-capture intent; if no camera activity can handle it, the app falls back to an in-app camera preview through getUserMedia. Non-native mobile browsers use the in-app camera preview when mediaDevices is available, with the capture-attribute picker as a compatibility fallback. Camera permission, available hardware, browser support, and OEM policies still vary by device; no source test can prove that every physical camera works.
 
 The source smoke suite includes regression checks for attachment actions, the Add contact route, community/channel plus controls, the existing backend channel create/follow workflow, Android native camera intent, and the in-app camera fallback. These automated checks validate source structure and responsive CSS; they do not replace visual checks on physical Android, iOS, tablet, and desktop devices.
+
+
+## October 30 final navigation and lists update
+
+The final UI pass completes custom chat lists: users can create a named list, choose the conversations included, select the list as a filter, edit its name and membership, and remove it. Examples include Family, Work, and Wishlist. Custom list definitions are stored in the current signed-in browser/device's local preferences; they are not synchronised through Supabase and will not automatically appear on another device.
+
+Contact Requests now has a prominent **Find people** button in its header. Calls → New call presents an alphabetically ordered, searchable list of accepted one-to-one contacts for both voice and video calls. The Channels screen opens on **Your channels**, with separate **Discover channels** and **Create channel** actions. The Updates shortcut is labelled **Channels** and explains both entry points. Channel creation continues to use the existing Supabase create-and-follow operation for signed-in accounts.
+
+The UI/CSS pass adds narrow-screen wrapping and scrolling for custom list chips, list selection, call contact rows, channel actions, and the Find people button. Source smoke checks cover these routes. These are source-level checks only; a manual visual and two-account/two-device pass is still required for device sign-off.

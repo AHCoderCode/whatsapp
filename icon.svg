@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="WhatsApp-style messaging icon">
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="WhatsApp app icon">
   <rect width="512" height="512" rx="112" fill="#25D366"/>
-  <path d="M256 67c-104 0-188 80-188 179 0 35 11 68 31 96L76 421l83-21c29 16 62 25 97 25 104 0 188-80 188-179S360 67 256 67Z" fill="none" stroke="#fff" stroke-width="27" stroke-linejoin="round"/>
+  <path d="M256 67c-104 0-188 80-188 179 0 35 11 68 31 96L76 421l83-21c29 16 62 25 97 25 104 0 188-80 188-179S360 67 256 67Z" fill="none" stroke="#fff" stroke-width="29" stroke-linejoin="round"/>
   <path d="M192 155c-7-12-15-12-23-4l-18 21c-9 11-7 30 4 52 27 52 68 91 119 117 22 11 41 13 52 3l22-18c8-7 7-16-4-23l-36-22c-9-5-17-4-24 4l-13 15c-27-13-47-34-61-61l14-14c7-7 8-15 3-24l-21-38c-4-7-8-8-14-8Z" fill="#fff"/>
 </svg>

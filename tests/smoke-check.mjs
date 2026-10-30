@@ -740,5 +740,32 @@ check("Camera is forced through Android native capture with an in-app camera fal
   includes(files.nativeActivity, "window.__waCameraCaptureFallback");
   includes(files.nativeManifest, 'android.hardware.camera" android:required="false"');
 });
+check("Custom chat lists support selected chats, editing, filtering and local preference persistence", () => {
+  includes(files.app, "function openCustomListDialog(existingList)");
+  includes(files.app, "name='custom-list-chat'");
+  includes(files.app, 'filter.startsWith("list:")');
+  includes(files.app, 'filter="list:"+String(saved.id)');
+  includes(files.app, "openManageCustomListsDialog");
+  includes(files.html, 'id="custom-filter-chips"');
+  includes(files.app, "customLists:[]");
+});
+check("Contact requests exposes a prominent responsive Find people button", () => {
+  includes(files.app, "request-find-people-button");
+  includes(files.app, "data-action='find-friends'");
+  includes(files.css, ".request-find-people-button{");
+});
+check("New voice and video call selectors search accepted one-to-one contacts", () => {
+  includes(files.calls, 'filter(person=>person.type==="person")');
+  includes(files.calls, "wa-call-picker-search");
+  includes(files.calls, "data-wa-call-person");
+  includes(files.calls, "No matching contacts found.");
+});
+check("Channels opens on Your channels with separate Discover and Create actions", () => {
+  includes(files.app, "Your channels");
+  includes(files.app, "wa-channel-discover-wide");
+  includes(files.app, "wa-create-channel-cta");
+  includes(files.app, 'settingRow("channels","Channels","Create a channel or discover channels to follow","nav-channels")');
+  includes(files.backend, "async function createChannel()");
+});
 console.log("\n" + passed + " passed, " + failed + " failed.");
 if (failed) process.exitCode = 1;

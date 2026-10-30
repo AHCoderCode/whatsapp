@@ -115,3 +115,8 @@ The native app checks the public GitHub Releases feed when the app opens and ret
 Keep the keystore and passwords private and backed up securely; never commit them to this public repository. Without these secrets, Actions continues to build the debug APK but deliberately does not publish an update-incompatible release. APKs signed by temporary GitHub runner debug keys are not suitable as a permanent update channel; switching such an installation may require a one-time uninstall/reinstall, which resets device-local data. Messages already in Supabase remain in your cloud account.
 
 SHA-256 verifies that a downloaded file matches the release's declared checksum; it is not a malware scan or an absolute safety guarantee. Review code and ship only releases you trust.
+
+
+### Custom chat lists
+
+Create custom chat lists such as **Family**, **Work**, or **Wishlist**, choose which conversations appear in each list, and edit or remove a list later. Custom list definitions are saved in the current signed-in browser/device's local preferences; they are not synchronised to other devices through Supabase.

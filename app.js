@@ -332,6 +332,10 @@
         if (filter==="favorites" && !chat.favorite) return false;
         if (filter==="groups" && chat.type!=="group") return false;
         if (filter==="locked" && !chat.locked) return false;
+        if (filter.startsWith("list:")) {
+          const customList=(state.customLists||[]).find(item=>String(item.id)===filter.slice(5));
+          if (!customList || !(customList.chatIds||[]).map(String).includes(String(chat.id))) return false;
+        }
       }
       const q = (searchQuery || "").trim().toLowerCase();
       if (q && ![chat.name,chat.username,chat.phone,chat.preview].join(" ").toLowerCase().includes(q)) return false;
@@ -345,6 +349,8 @@
     $("#chat-search-row").style.display = isChatList ? "flex" : "none";
     $("#chat-filter-row").style.display = isChatList && !archivedMode && view==="chats" ? "flex" : "none";
     $("#requests-strip").style.display = isChatList && !archivedMode && view==="chats" ? "flex" : "none";
+    const customFilterHost=$("#custom-filter-chips");
+    if(customFilterHost)customFilterHost.innerHTML=(state.customLists||[]).map(item=>"<button type='button' class='filter-chip custom-list-chip' data-filter='list:"+esc(item.id)+"' aria-pressed='"+(filter==="list:"+String(item.id)&&!archivedMode?"true":"false")+"'>"+esc(item.name)+"</button>").join("");
     $$(".filter-chip").forEach(b=>{b.classList.toggle("active",b.dataset.filter===filter&&!archivedMode);b.setAttribute("aria-pressed",b.dataset.filter===filter&&!archivedMode?"true":"false");});
     $("#sidebar-list-scroll").style.display = isChatList ? "block" : "none";
     $("#chat-list").style.display = isChatList ? "block" : "none";
@@ -531,7 +537,7 @@
     const sent=state.sentRequests||[];
     const receivedHtml=received.length?received.map(r=>"<div class='request-card'>"+avatarHTML(r)+"<div class='request-info'><strong>"+esc(r.name)+"</strong><span>@"+esc(r.username)+" · "+esc(r.phone)+"</span><span>"+esc(r.note||"Would like to connect")+" · "+esc(r.time||"Recently")+"</span></div><div class='request-actions'><button class='accept-request' data-action='accept-request' data-request-id='"+esc(r.id)+"'>Accept</button><button class='decline-request' data-action='decline-request' data-request-id='"+esc(r.id)+"'>Decline</button></div></div>").join(""):"<div class='empty-state'>No new contact requests.<br>When someone asks to connect, they will appear here.</div>";
     const sentHtml=sent.length?sent.map(r=>"<div class='request-card'>"+avatarHTML(r)+"<div class='request-info'><strong>"+esc(r.name)+"</strong><span>@"+esc(r.username)+" · "+esc(r.phone)+"</span><span>Request sent · Pending</span></div><div class='request-actions'><button class='decline-request' data-action='cancel-request' data-request-id='"+esc(r.id)+"'>Cancel</button></div></div>").join(""):"<div class='empty-state'>No outgoing requests.</div>";
-    main.innerHTML="<section class='section-screen'>"+screenHeader("Contact requests","<button class='primary-button' data-action='find-friends'>"+icon("user-plus")+" Find people</button>")+"<div class='screen-content'><p class='screen-description'>Manage connection requests. Requests are shared across devices. Accepting connects the two accounts; declining or cancelling updates the server.</p><div class='request-section-label'>RECEIVED · "+received.length+"</div><div class='section-card'>"+receivedHtml+"</div><div class='request-section-label'>SENT · "+sent.length+"</div><div class='section-card'>"+sentHtml+"</div><div class='screen-description'>Contact requests use this app’s own account directory and are not linked to other messaging services.</div></div></section>";
+    main.innerHTML="<section class='section-screen'>"+screenHeader("Contact requests","<button type='button' class='primary-button request-find-people-button' data-action='find-friends'>"+icon("user-plus")+"<span>Find people</span></button>")+"<div class='screen-content'><p class='screen-description'>Manage connection requests. Requests are shared across devices. Accepting connects the two accounts; declining or cancelling updates the server.</p><div class='request-section-label'>RECEIVED · "+received.length+"</div><div class='section-card'>"+receivedHtml+"</div><div class='request-section-label'>SENT · "+sent.length+"</div><div class='section-card'>"+sentHtml+"</div><div class='screen-description'>Contact requests use this app’s own account directory and are not linked to other messaging services.</div></div></section>";
   }
   function downloadLocalJson(filename, object) {
     const blob=new Blob([JSON.stringify(object,null,2)],{type:"application/json"});
@@ -1010,7 +1016,7 @@
       "<div class='section-card'><h3 class='section-card-title'>Recent updates</h3>" +
       (recent || "<div class='empty-state'>No contact status updates yet.</div>") +
       "</div><div class='section-card'><h3 class='section-card-title'>Channels</h3>" +
-      settingRow("channels","Discover channels","Follow updates from channels you choose","nav-channels") +
+      settingRow("channels","Channels","Create a channel or discover channels to follow","nav-channels") +
       "</div></div></section>";
   }
 
@@ -1623,6 +1629,21 @@ function openSharedItemsDialog(chat,kind) {
       catch(fallbackError){console.error("[attachments] Could not open the native picker:",fallbackError&&fallbackError.message||fallbackError);if(kind==="camera")void openCameraPreviewFallback();else toast("Android could not open the file picker. Reopen WhatsApp and try again.");}
     }
   }
+  function openCustomListDialog(existingList) {
+    const list=existingList||null;
+    const selected=new Set((list&&list.chatIds||[]).map(String));
+    const chats=(state.chats||[]).filter(chat=>!chat.archived);
+    const choices=chats.map(chat=>"<label class='custom-list-choice'>"+avatarHTML(chat)+"<span class='custom-list-choice-copy'><strong>"+esc(chat.name)+"</strong><small>"+(chat.type==="group"?"Group conversation":"@"+esc(chat.username||"contact"))+"</small></span><input type='checkbox' name='custom-list-chat' value='"+esc(chat.id)+"' "+(selected.has(String(chat.id))?"checked":"")+"></label>").join("");
+    const body="<p class='screen-description'>Give your list a name, then choose the chats that should appear in it. You can change the selection later.</p><div class='dialog-field'><label for='list-name'>List name</label><input id='list-name' maxlength='30' value='"+esc(list&&list.name||"")+"' placeholder='e.g. Work, Family, Wishlist' autocomplete='off'></div><div class='custom-list-picker-heading'><strong>Choose chats</strong><span>"+chats.length+" available</span></div><div class='custom-list-choice-list'>"+(choices||"<div class='empty-state'>Your chats will appear here when you connect with people or create a group.</div>")+"</div>";
+    const action=list?"update-list":"create-list";
+    const footer="<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='"+action+"' "+(list?"data-list-id='"+esc(list.id)+"'":"")+">"+(list?"Save list":"Create list")+"</button>";
+    openDialog(list?"Edit list":"Create chat list",body,footer);
+  }
+  function openManageCustomListsDialog() {
+    const lists=state.customLists||[];
+    const rows=lists.map(item=>"<div class='custom-list-manage-row'><span class='custom-list-manage-icon'>"+icon("chat")+"</span><span class='custom-list-manage-copy'><strong>"+esc(item.name)+"</strong><small>"+(item.chatIds||[]).length+" chats</small></span><button type='button' class='secondary-button' data-action='edit-list' data-list-id='"+esc(item.id)+"'>Edit</button><button type='button' class='danger-button' data-action='remove-list' data-list-id='"+esc(item.id)+"' aria-label='Remove "+esc(item.name)+"'>Remove</button></div>").join("");
+    openDialog("Manage lists",rows||"<div class='empty-state'>No custom lists yet. Create one to organise your conversations.</div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");
+  }
   function handleAction(action,el) {
     const chat=findChat(el.dataset.chatId)||currentChat();
     if(action==="rename-contact" && chat && chat.type==="person"){
@@ -1691,8 +1712,9 @@ function openSharedItemsDialog(chat,kind) {
     if(action==="accounts-center"){toast("Accounts Center is a visual demo only.");return;}
     if(action==="filter-all"){filter="all";searchQuery="";$("#chat-search").value="";renderSidebar();closePopup();return;}
     if(action==="search-media"){toast("Media search UI preview.");return;}
-    if(action==="new-list"){openDialog("Create chat list","<div class='dialog-field'><label for='list-name'>List name</label><input id='list-name' maxlength='30' placeholder='Create a list'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='create-list'>Create</button>");return;}
-    if(action==="manage-lists"){openDialog("Manage lists",state.customLists.length?state.customLists.map(l=>"<div class='setting-row'>"+icon("chat")+"<span class='setting-copy'><span class='setting-title'>"+esc(l.name)+"</span></span><button class='secondary-button' data-action='remove-list' data-list-id='"+esc(l.id)+"'>Remove</button></div>").join(""):"<div class='empty-state'>No custom lists yet.</div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;}
+    if(action==="new-list"){openCustomListDialog(null);return;}
+    if(action==="edit-list"){const item=(state.customLists||[]).find(row=>String(row.id)===String(el.dataset.listId));if(item)openCustomListDialog(item);return;}
+    if(action==="manage-lists"){openManageCustomListsDialog();return;}
     if(action==="toggle-favorite"||action==="toggle-unread"||action==="toggle-pin"||action==="toggle-mute"||action==="toggle-archive"||action==="lock-chat"||action==="toggle-lock"||action==="delete-chat"||action==="clear-chat"||action==="chat-info"||action==="chat-search"||action==="search-in-chat"||action==="disappearing"||action==="block-chat"||action==="report-chat"||action==="select-messages"||action==="star-message"||action==="pinned-preview"||action==="unpin-message"||action==="pin-message"||action==="edit-message"||action==="reply-message"||action==="forward-message"||action==="copy-message"||action==="delete-message"||action==="voice-call"||action==="video-call"||action==="shared-media"||action==="shared-links"||action==="shared-documents"||action==="edit-group"||action==="edit-group-description"||action==="edit-contact-about"||action==="copy-chat-phone"||action==="copy-chat-username"){useAction(action,chat);return;}
     if(action==="attachment-preview"){toast("This item is a local frontend preview.");return;}
     if(action==="share-contact"){showShareContactDialog();return;}
@@ -1966,7 +1988,21 @@ function openSharedItemsDialog(chat,kind) {
         if(c&&kind==="report-chat")c.reported=true;
         saveState();closeDialog();renderMain();toast("Demo action saved locally.");return;
       }
-      if(action==="create-list"){const name=$("#list-name").value.trim();if(!name){toast("Enter a list name.");return;}state.customLists.push({id:uid("list"),name:name});saveState();closeDialog();toast("Custom list created.");return;}
+      if(action==="create-list"||action==="update-list"){
+        const name=String($("#list-name")?.value||"").trim().slice(0,30);
+        if(!name){toast("Enter a list name.");return;}
+        const listId=String(t.dataset.listId||"");
+        const duplicate=(state.customLists||[]).some(item=>item.name.toLowerCase()===name.toLowerCase()&&String(item.id)!==listId);
+        if(duplicate){toast("A list with that name already exists.");return;}
+        const chatIds=$$("input[name='custom-list-chat']:checked").map(input=>String(input.value));
+        let saved;
+        if(action==="create-list"){saved={id:uid("list"),name,chatIds};state.customLists.push(saved);}
+        else{saved=(state.customLists||[]).find(row=>String(row.id)===listId);if(!saved){toast("That list could not be found.");return;}saved.name=name;saved.chatIds=chatIds;}
+        saveState();closeDialog();
+        if(action==="create-list"){filter="list:"+String(saved.id);view="chats";}
+        archivedMode=false;selectedChatId=null;renderSidebar();renderMain();updateNav();updateMobileMode();
+        toast(action==="create-list"?"Custom chat list created.":"Custom chat list updated.");return;
+      }
       if(action==="bulk-selection"){const n=$$("#dialog-backdrop input[type=checkbox]:checked").length;closeDialog();toast(n+" chat(s) selected in this preview.");return;}
       if(action==="send-poll"){
         const c=currentChat();const question=$("#poll-question").value.trim();const opts=$("#poll-options").value.trim().split(/\n/).filter(Boolean);
@@ -1986,7 +2022,12 @@ function openSharedItemsDialog(chat,kind) {
       if(action==="accept-request"){acceptRequest(t.dataset.requestId);return;}
       if(action==="decline-request"){declineRequest(t.dataset.requestId);return;}
       if(action==="cancel-request"){state.sentRequests=state.sentRequests.filter(r=>r.id!==t.dataset.requestId);save();renderMain();return;}
-      if(action==="remove-list"){state.customLists=state.customLists.filter(l=>l.id!==t.dataset.listId);saveState();renderMain();return;}
+      if(action==="remove-list"){
+        const removedId=String(t.dataset.listId||"");
+        state.customLists=(state.customLists||[]).filter(item=>String(item.id)!==removedId);
+        if(filter==="list:"+removedId)filter="all";
+        saveState();closeDialog();renderSidebar();renderMain();updateMobileMode();toast("List removed.");return;
+      }
       if(action==="status-preview"){toast("Status viewer preview.");return;}
       handleAction(action,t);return;
     }

@@ -847,9 +847,25 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     cameraOff=!cameraOff;if(localStream)localStream.getVideoTracks().forEach(t=>t.enabled=!cameraOff);updateCameraButton();
   }
   function openPicker(mediaType){
-    const s=appState(),options=(s&&s.chats||[]).filter(p=>p.type==="person").map(person=>"<button class='wa-call-picker-row' type='button' data-wa-call-person='"+esc(person.id)+"'><span class='wa-call-picker-avatar'>"+esc(person.avatar||String(person.name||"U").slice(0,2))+"</span><span><strong>"+esc(person.name||person.username)+"</strong><small>@"+esc(person.username||"")+"</small></span><span>Call</span></button>").join("");
-    bridge.openDialog("Start "+(mediaType==="video"?"video":"voice")+" call",options||"<div class='empty-state'>Add a contact first. Call requests only work with accepted contacts.</div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button>");
+    const s=appState();
+    const contacts=(s&&s.chats||[]).filter(person=>person.type==="person").slice().sort((a,b)=>String(a.name||a.username||"").localeCompare(String(b.name||b.username||"")));
+    const rows=contacts.map(person=>{
+      const name=String(person.name||person.username||"Contact"),username=String(person.username||"");
+      const search=(name+" "+username).toLowerCase();
+      return "<button class='wa-call-picker-row' type='button' data-wa-call-person='"+esc(person.id)+"' data-search='"+esc(search)+"' aria-label='Call "+esc(name)+"'><span class='wa-call-picker-avatar'>"+esc(person.avatar||String(name).slice(0,2).toUpperCase())+"</span><span class='wa-call-picker-copy'><strong>"+esc(name)+"</strong><small>@"+esc(username)+"</small></span><span class='wa-call-picker-action'>"+(mediaType==="video"?"Video":"Call")+"</span></button>";
+    }).join("");
+    const body="<p class='screen-description wa-call-picker-description'>Choose one of your accepted contacts for a "+(mediaType==="video"?"video":"voice")+" call.</p>"+(contacts.length?"<div class='dialog-field wa-call-picker-search-field'><label for='wa-call-picker-search'>Search contacts</label><input id='wa-call-picker-search' type='search' placeholder='Search name or username' autocomplete='off'></div><div class='wa-call-picker-count' id='wa-call-picker-count'>"+contacts.length+" contacts</div><div class='wa-call-picker-list' id='wa-call-picker-list'>"+rows+"</div><div class='empty-state wa-call-picker-no-match' id='wa-call-picker-no-match' hidden>No matching contacts found.</div>":"<div class='empty-state'>No accepted contacts yet. Use Find people to connect with someone first.</div>");
+    bridge.openDialog("New "+(mediaType==="video"?"video":"voice")+" call",body,"<button class='secondary-button' data-action='close-dialog'>Cancel</button>");
     const backdrop=$("#dialog-backdrop");if(backdrop)backdrop.dataset.callMediaType=mediaType;
+    const searchInput=$("#wa-call-picker-search");
+    if(searchInput)searchInput.addEventListener("input",()=>{
+      const query=String(searchInput.value||"").trim().toLowerCase();
+      const items=Array.from(document.querySelectorAll("#wa-call-picker-list [data-wa-call-person]"));
+      let visible=0;
+      items.forEach(row=>{const matches=!query||String(row.dataset.search||"").includes(query);row.hidden=!matches;if(matches)visible++;});
+      const count=$("#wa-call-picker-count");if(count)count.textContent=visible+" contact"+(visible===1?"":"s");
+      const empty=$("#wa-call-picker-no-match");if(empty)empty.hidden=visible>0;
+    });
   }
 
   async function recoverIncomingOffer(callId,userId,client){
