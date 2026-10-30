@@ -703,3 +703,17 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:
 .theme-dark .friend-search-result-card{background:#111b21;color:#e9edef;border-color:#28363d}
 .theme-dark .friend-search-result-copy strong{color:#e9edef}
 .theme-dark .friend-search-result-copy>span{color:#aebac1}
+
+
+/* Community and channel creation: visible plus marks and clear touch-friendly CTAs. */
+.wa-create-community-header,.wa-create-channel-header{font-size:27px;font-weight:500;line-height:1;color:#008069}
+.wa-create-community-header span,.wa-create-channel-header span{display:block;transform:translateY(-1px)}
+.wa-create-community-cta,.wa-create-channel-cta{display:flex;align-items:center;justify-content:center;gap:11px;width:100%;max-width:420px;min-height:50px;margin:18px 0 4px;padding:8px 18px;border-radius:11px;font-size:14px;font-weight:650;box-shadow:0 2px 8px #00806920}
+.wa-create-community-plus,.wa-create-channel-plus{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;flex:0 0 28px;border:1.5px solid currentColor;border-radius:50%;font-size:23px;font-weight:400;line-height:1}
+.theme-dark .wa-create-community-cta,.theme-dark .wa-create-channel-cta{background:#00a884;border-color:#00a884;color:#062d25}
+.wa-camera-preview-shell{display:flex;flex-direction:column;gap:10px;min-width:0}
+.wa-camera-preview-video{display:block;width:100%;max-height:min(60vh,520px);aspect-ratio:3/4;object-fit:cover;border-radius:13px;background:#101820}
+.wa-camera-status{margin:0;color:#667781;font-size:12px;line-height:1.5}
+#wa-camera-capture:disabled{opacity:.55;cursor:wait}
+.theme-dark .wa-camera-status{color:#b8c4cb}
+@media(max-width:520px){.wa-create-community-cta,.wa-create-channel-cta{max-width:none;min-height:48px}.wa-camera-preview-video{max-height:55vh}}

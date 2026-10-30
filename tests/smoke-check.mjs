@@ -57,10 +57,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261030e");
-  includes(files.sw, "whatsapp-final-20261030e");
-  includes(files.manifest, "whatsapp-final-20261030e");
-  includes(files.sw, "whatsapp-final-shell-v58");
+  includes(files.html, "whatsapp-final-20261030f");
+  includes(files.sw, "whatsapp-final-20261030f");
+  includes(files.manifest, "whatsapp-final-20261030f");
+  includes(files.sw, "whatsapp-final-shell-v59");
 });
 check("mobile settings use a full-width account detail pane", () => {
   includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
@@ -701,6 +701,44 @@ check("New Group and New Community remain available from the overflow menu", () 
   includes(files.app, 'if(action==="new-community"){createCommunityDialog();return;}');
   includes(files.backend, "aeroshell_create_group");
   includes(files.backend, "async function createCommunity");
+});
+check("chat attachment menu exposes polls, events, sharing contacts and adding contacts", () => {
+  for (const action of ["pick-file","pick-image","pick-audio","camera","share-contact","find-friends","create-poll","create-event"]) includes(files.app, 'action:"' + action + '" '.trimEnd());
+  includes(files.app, 'label:"Share contact"');
+  includes(files.app, 'label:"Add contact"');
+  includes(files.app, 'label:"Create poll"');
+  includes(files.app, 'label:"Create event"');
+  includes(files.app, 'if(action==="find-friends"){createNewChatDialog();return;}');
+});
+check("Communities and Channels have visible plus creation controls", () => {
+  includes(files.app, "wa-create-community-plus");
+  includes(files.app, "wa-create-community-cta");
+  includes(files.app, "wa-create-channel-plus");
+  includes(files.app, "wa-create-channel-cta");
+  includes(files.css, ".wa-create-community-plus");
+  includes(files.css, ".wa-create-channel-plus");
+  includes(files.app, "data-action=\'new-channel\'");
+});
+check("channel creation keeps the Supabase create-and-follow backend flow", () => {
+  includes(files.app, "function createChannelDialog()");
+  includes(files.app, "data-dialog-action=\'create-channel\'");
+  includes(files.app, 'if(action==="new-channel"){createChannelDialog();return;}');
+  includes(files.backend, 'action==="new-channel"');
+  includes(files.backend, "async function createChannel()");
+  includes(files.backend, 'db.from("whatsapp_channels").insert');
+  includes(files.backend, 'db.from("whatsapp_channel_follows").insert');
+  includes(files.app, 'if(action==="create-channel")');
+});
+check("Camera is forced through Android native capture with an in-app camera fallback", () => {
+  includes(files.app, "openCameraPreviewFallback");
+  includes(files.app, "navigator.mediaDevices.getUserMedia");
+  includes(files.app, "wa-camera-preview");
+  includes(files.app, "captureCameraPreviewPhoto");
+  includes(files.app, "forceNextCameraCapture()");
+  includes(files.nativeActivity, "forceCameraCaptureOnNextChooser");
+  includes(files.nativeActivity, "createCaptureIntent(params, forceCamera)");
+  includes(files.nativeActivity, "window.__waCameraCaptureFallback");
+  includes(files.nativeManifest, 'android.hardware.camera" android:required="false"');
 });
 console.log("\n" + passed + " passed, " + failed + " failed.");
 if (failed) process.exitCode = 1;

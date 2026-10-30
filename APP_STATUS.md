@@ -62,3 +62,14 @@ The October 30 follow-up hardens the Metered ICE server configuration. The Edge 
 Find People result cards now keep their contact action inside a dedicated responsive row with a full-size labelled button. New Group and New Community remain available from the overflow menu and continue to call their existing Supabase create flows.
 
 The automated suite adds source assertions for TURN transport coverage, native wake-lock acquisition/release, responsive contact actions, and the group/community entry points. It does not simulate a TURN allocation or prove a completed call. A real two-account call over separate Wi-Fi/mobile networks, followed by screen-lock and accept/decline tests on physical Android devices, remains required for sign-off.
+
+
+## Messaging actions, Channels, and camera follow-up
+
+The final UI pass makes the chat attachment menu explicit: Document, Photos & videos, Audio, Camera, Share contact, Add contact, Create poll, and Create event. Add contact opens the registered-account search; Share contact selects an existing accepted contact. Poll and event creation keep using the existing persisted Supabase workflows for signed-in accounts and local preview behavior for demo state.
+
+The Communities and Channels screens now have prominent labelled creation buttons with visible plus marks, in addition to the header controls. Channel creation calls the existing Supabase create-and-follow workflow for signed-in accounts and a local preview flow for demo state.
+
+Camera capture is now camera-first. The Android WebView marks the next chooser as an explicit camera request and launches the native image-capture intent; if no camera activity can handle it, the app falls back to an in-app camera preview through getUserMedia. Non-native mobile browsers use the in-app camera preview when mediaDevices is available, with the capture-attribute picker as a compatibility fallback. Camera permission, available hardware, browser support, and OEM policies still vary by device; no source test can prove that every physical camera works.
+
+The source smoke suite includes regression checks for attachment actions, the Add contact route, community/channel plus controls, the existing backend channel create/follow workflow, Android native camera intent, and the in-app camera fallback. These automated checks validate source structure and responsive CSS; they do not replace visual checks on physical Android, iOS, tablet, and desktop devices.

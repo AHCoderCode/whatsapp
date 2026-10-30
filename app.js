@@ -1047,7 +1047,7 @@
     if(currentUser&&currentUser.isSupabase){
       const communities=state.backendCommunities||[];
       const rows=communities.map(c=>"<button class='community-row' data-community-id='"+esc(c.id)+"'>"+avatarHTML({name:c.name})+"<span class='community-copy'><strong>"+esc(c.name)+"</strong><span>"+esc(c.description||"Community")+"</span></span><span class='setting-side-label'>"+(c.joined?"Member":"Join")+"</span>"+icon("chevron")+"</button>").join("");
-      main.innerHTML="<section class='section-screen'>"+screenHeader("Communities","<button class='icon-button' data-action='new-community' aria-label='New community'>"+icon("new")+"</button>")+"<div class='screen-content'><p class='screen-description'>Create a community or join one created by another account. Membership is synced through Supabase.</p><div class='section-card'>"+(rows||"<div class='empty-state'>No communities yet. Create the first one.</div>")+"</div><button class='primary-button' data-action='new-community'>"+icon("new")+" New community</button></div></section>";
+      main.innerHTML="<section class='section-screen'>"+screenHeader("Communities","<button type='button' class='icon-button wa-create-community-header' data-action='new-community' aria-label='Create community'><span aria-hidden='true'>+</span></button>")+"<div class='screen-content'><p class='screen-description'>Create a community or join one created by another account. Membership is synced through Supabase.</p><div class='section-card'>"+(rows||"<div class='empty-state'>No communities yet. Create the first one.</div>")+"</div><button type='button' class='primary-button wa-create-community-cta' data-action='new-community'><span class='wa-create-community-plus' aria-hidden='true'>+</span><span>Create community</span></button></div></section>";
       return;
     }
     main.innerHTML="<section class='section-screen'>"+screenHeader("Communities","<button class='icon-button' data-action='new-community' aria-label='New community'>"+icon("new")+"</button>")+"<div class='screen-content'><p class='screen-description'>Bring people together in topic-based communities. Organize group chats and announcements in one place.</p><div class='section-card'>"+state.communities.map(c=>"<button class='community-row' data-community-id='"+esc(c.id)+"'><span class='avatar av7'>"+esc(initials(c.name))+"</span><span class='community-copy'><strong>"+esc(c.name)+"</strong><span>"+esc(c.groups.join(" · "))+"</span></span>"+icon("chevron")+"</button>").join("")+"</div><button class='primary-button' data-action='new-community'>"+icon("new")+" New community</button></div></section>";
@@ -1056,10 +1056,10 @@
     if(currentUser&&currentUser.isSupabase){
       const channels=state.backendChannels||[];
       const rows=channels.map(c=>"<div class='channel-row'>"+avatarHTML({name:c.name})+"<button class='channel-open-button community-copy' type='button' data-action='open-channel' data-channel-id='"+esc(c.id)+"'><strong>"+esc(c.name)+"</strong><span>"+esc(c.description||"No description")+"</span></button><button class='"+(c.following?"secondary-button":"primary-button")+"' data-action='toggle-channel' data-channel-id='"+esc(c.id)+"'>"+(c.following?"Following":"Follow")+"</button></div>").join("");
-      main.innerHTML="<section class='section-screen'>"+screenHeader("Channels","<button class='icon-button' data-action='channel-search' aria-label='Search channels'>"+icon("search")+"</button><button class='icon-button' data-action='new-channel' aria-label='Create channel'>"+icon("new")+"</button>")+"<div class='screen-content'><p class='screen-description'>Follow channels created by users of this app, or create your own channel. Channel posts are not included in this build yet.</p><div class='section-card'><h3 class='section-card-title'>Channels</h3>"+(rows||"<div class='empty-state'>No channels yet. Create one to get started.</div>")+"</div></div></section>";
+      main.innerHTML="<section class='section-screen'>"+screenHeader("Channels","<button type='button' class='icon-button' data-action='channel-search' aria-label='Search channels'>"+icon("search")+"</button><button type='button' class='icon-button wa-create-channel-header' data-action='new-channel' aria-label='Create channel'><span aria-hidden='true'>+</span></button>")+"<div class='screen-content'><p class='screen-description'>Create a channel to share updates with followers, or discover and follow channels from other accounts.</p><div class='section-card'><h3 class='section-card-title'>Channels</h3>"+(rows||"<div class='empty-state'>No channels yet. Create one to get started.</div>")+"</div><button type='button' class='primary-button wa-create-channel-cta' data-action='new-channel'><span class='wa-create-channel-plus' aria-hidden='true'>+</span><span>Create channel</span></button></div></section>";
       return;
     }
-    main.innerHTML="<section class='section-screen'>"+screenHeader("Channels","<button class='icon-button' data-action='channel-search' aria-label='Search channels'>"+icon("search")+"</button>")+"<div class='screen-content'><p class='screen-description'>Discover updates from people and organizations. Follow channels to see their updates here.</p><div class='section-card'><h3 class='section-card-title'>Suggested</h3>"+state.channels.map(c=>"<div class='channel-row'>"+avatarHTML(c)+"<span class='community-copy'><strong>"+esc(c.name)+"</strong><span>"+esc(c.description)+"</span></span><button class='"+(c.following?"secondary-button":"primary-button")+"' data-action='toggle-channel' data-channel-id='"+esc(c.id)+"'>"+(c.following?"Following":"Follow")+"</button></div>").join("")+"</div></div></section>";
+    main.innerHTML="<section class='section-screen'>"+screenHeader("Channels","<button type='button' class='icon-button' data-action='channel-search' aria-label='Search channels'>"+icon("search")+"</button><button type='button' class='icon-button wa-create-channel-header' data-action='new-channel' aria-label='Create channel'><span aria-hidden='true'>+</span></button>")+"<div class='screen-content'><p class='screen-description'>Discover updates from people and organizations. Follow channels to see their updates here.</p><div class='section-card'><h3 class='section-card-title'>Suggested</h3>"+state.channels.map(c=>"<div class='channel-row'>"+avatarHTML(c)+"<span class='community-copy'><strong>"+esc(c.name)+"</strong><span>"+esc(c.description)+"</span></span><button class='"+(c.following?"secondary-button":"primary-button")+"' data-action='toggle-channel' data-channel-id='"+esc(c.id)+"'>"+(c.following?"Following":"Follow")+"</button></div>").join("")+"</div><button type='button' class='primary-button wa-create-channel-cta' data-action='new-channel'><span class='wa-create-channel-plus' aria-hidden='true'>+</span><span>Create channel</span></button></div></section>";
   }
   function renderBasic(title,rows,desc,kind) {
     main.innerHTML="<section class='section-screen'>"+screenHeader(title)+"<div class='screen-content'><p class='screen-description'>"+esc(desc)+"</p><div class='section-card'>"+(rows.length?rows.map(chat=>"<button class='setting-row' data-chat-id='"+esc(chat.id)+"'>"+avatarHTML(chat)+"<span class='setting-copy'><span class='setting-title'>"+esc(chat.name)+"</span><span class='setting-subtitle'>"+esc(chat.preview||chat.username||"")+"</span></span><span class='end-icon'>"+icon(kind||"chevron")+"</span></button>").join(""):"<div class='empty-state'>Nothing to show here yet.</div>")+"</div></div></section>";
@@ -1110,7 +1110,12 @@
     saveState();
   }
   function closePopup() { const e=$("#popup-menu");if(e)e.remove();menuChatId=null; }
-  function closeDialog() { const e=$("#dialog-backdrop");if(e)e.remove(); }
+  let activeCameraPreviewStream=null;
+  function stopActiveCameraPreview(){
+    const stream=activeCameraPreviewStream;activeCameraPreviewStream=null;
+    if(stream)stream.getTracks().forEach(track=>{try{track.stop();}catch(_){}});
+  }
+  function closeDialog() { stopActiveCameraPreview();const e=$("#dialog-backdrop");if(e)e.remove(); }
   function toast(message) {
     toastRoot.innerHTML="<div class='toast' role='status'>"+esc(message)+"</div>";
     clearTimeout(toastTimer);toastTimer=setTimeout(()=>toastRoot.innerHTML="",3000);
@@ -1169,8 +1174,8 @@
     if(action==="attachment")return[
       {icon:"file",label:"Document",action:"pick-file"},{icon:"image",label:"Photos & videos",action:"pick-image"},
       {icon:"music",label:"Audio",action:"pick-audio"},{icon:"camera",label:"Camera",action:"camera"},
-      {icon:"contact",label:"Contact",action:"share-contact"},
-      {icon:"poll",label:"Poll",action:"create-poll"},{icon:"calendar",label:"Event",action:"create-event"}
+      {icon:"contact",label:"Share contact",action:"share-contact"},{icon:"user-plus",label:"Add contact",action:"find-friends"},
+      {icon:"poll",label:"Create poll",action:"create-poll"},{icon:"calendar",label:"Create event",action:"create-event"}
     ];
     if(action==="emoji")return ["😀","😂","🥹","😍","😊","😭","❤️","👍","🙏","🔥","🎉","✨","🙌","🤔","✅","💯"].map(e=>({icon:"smile",label:e,action:"emoji:"+e}));
     if(action==="more-lists")return[{icon:"new",label:"Create new list",action:"new-list"},{icon:"settings",label:"Manage lists",action:"manage-lists"}];
@@ -1287,6 +1292,10 @@
   function createCommunityDialog() {
     const body="<div class='dialog-field'><label for='community-name'>Community name</label><input id='community-name' maxlength='60' placeholder='Enter a community name'></div><div class='dialog-field'><label for='community-description'>Description (optional)</label><textarea id='community-description' rows='3' placeholder='What is this community about?'></textarea></div>";
     openDialog("New community",body,"<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='create-community'>Create community</button>");
+  }
+  function createChannelDialog() {
+    const body="<div class='dialog-field'><label for='channel-name'>Channel name</label><input id='channel-name' maxlength='70' placeholder='Channel name'></div><div class='dialog-field'><label for='channel-description'>Description</label><textarea id='channel-description' maxlength='500' rows='3' placeholder='What is this channel about?'></textarea></div><p class='screen-description'>You will own and automatically follow this channel.</p>";
+    openDialog("Create channel",body,"<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='create-channel'>Create channel</button>");
   }
   function editProfileDialog() {
     const p=state.profile;const body="<div class='dialog-field'><label for='edit-name'>Display name</label><input id='edit-name' maxlength='48' value='"+esc(p.name)+"'></div><div class='dialog-field'><label for='edit-about'>About</label><input id='edit-about' maxlength='140' value='"+esc(p.about)+"'></div><div class='dialog-field'><label>Username</label><input value='@"+esc(p.username)+"' readonly><span class='field-help'>Usernames are unique identifiers and cannot be edited from this screen.</span></div><div class='dialog-field'><label>Custom in-app number</label><input value='"+esc(p.phone)+"' readonly><span class='field-help'>This unique app ID is not a real phone number and cannot receive SMS.</span></div>";
@@ -1544,27 +1553,74 @@ function openSharedItemsDialog(chat,kind) {
     else{event.myResponse="going";event.total=Number(event.total||0)+1;toast("You are going to this event.");}
     saveState();renderMain();
   }
+  async function openCameraPreviewFallback(){
+    if(!navigator.mediaDevices||typeof navigator.mediaDevices.getUserMedia!=="function"){
+      toast("This browser cannot open an in-app camera. Use Photos & videos to choose an existing picture.");
+      return false;
+    }
+    openDialog("Camera","<div class='wa-camera-preview-shell'><video id='wa-camera-preview' class='wa-camera-preview-video' autoplay playsinline muted></video><p id='wa-camera-status' class='wa-camera-status' role='status'>Requesting camera access…</p></div>","<button type='button' class='secondary-button' data-action='close-dialog'>Cancel</button><button type='button' id='wa-camera-capture' class='primary-button' data-dialog-action='capture-camera-photo' disabled>Take photo</button>",true);
+    let stream=null;
+    try{
+      stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}}});
+      const video=$("#wa-camera-preview");
+      if(!video){stream.getTracks().forEach(track=>track.stop());return false;}
+      activeCameraPreviewStream=stream;video.srcObject=stream;
+      await video.play().catch(()=>{});
+      const status=$("#wa-camera-status");if(status)status.textContent="Camera ready. Frame your photo and tap Take photo.";
+      const capture=$("#wa-camera-capture");if(capture)capture.disabled=false;
+      return true;
+    }catch(error){
+      if(stream)stream.getTracks().forEach(track=>track.stop());
+      const name=String(error&&error.name||"");
+      const message=/NotAllowedError|PermissionDeniedError/i.test(name)?"Camera permission was denied. Allow camera access in your app or browser settings, then try again.":/NotFoundError|DevicesNotFoundError/i.test(name)?"No usable camera was detected on this device.":/NotReadableError|TrackStartError/i.test(name)?"The camera is busy or unavailable. Close other camera apps and retry.":"The camera could not be opened. Check camera permission and try again.";
+      const status=$("#wa-camera-status");if(status)status.textContent=message;
+      toast(message);return false;
+    }
+  }
+  window.__waCameraCaptureFallback=()=>{void openCameraPreviewFallback();};
+  function sendCameraCapturedPhoto(blob){
+    const chat=currentChat();if(!chat){toast("Open a conversation before taking a photo.");return;}
+    if(typeof File!=="function"){toast("This browser cannot prepare a camera photo for sending.");return;}
+    const file=new File([blob],"whatsapp-camera-"+Date.now()+".jpg",{type:"image/jpeg",lastModified:Date.now()});attachmentFile=file;
+    if(currentUser&&currentUser.isSupabase){
+      const bridge=window.waAppBridge;
+      if(bridge&&typeof bridge.uploadBackendAttachment==="function")void bridge.uploadBackendAttachment(file,{type:"file",name:file.name,mime:file.type}).catch(error=>toast("Could not send the camera photo: "+String(error&&error.message||"Unknown error")));
+      else toast("Secure photo upload is still loading. Refresh and try again.");
+      return;
+    }
+    const reader=new FileReader();
+    reader.onload=()=>{
+      const attachment={id:uid("attachment"),name:file.name,type:"image",size:file.size,dataUrl:reader.result};
+      chat.attachments=chat.attachments||[];chat.attachments.push(attachment);
+      const messageText="🖼️ Photo: "+file.name;
+      chat.messages.push({id:uid("msg"),from:"me",text:messageText,time:nowTime(),date:"TODAY",status:"sent",attachmentId:attachment.id});
+      chat.preview=messageText;chat.time="Now";chat.lastMessageType="attachment";
+      saveState();renderSidebar();renderMain();toast("Camera photo added to the conversation.");
+    };
+    reader.onerror=()=>toast("The camera photo could not be prepared. Please take it again.");reader.readAsDataURL(file);
+  }
+  function captureCameraPreviewPhoto(){
+    const video=$("#wa-camera-preview");if(!video||!video.videoWidth||!video.videoHeight){toast("The camera preview is not ready yet.");return;}
+    const canvas=document.createElement("canvas");canvas.width=video.videoWidth;canvas.height=video.videoHeight;
+    const context=canvas.getContext("2d");if(!context){toast("The camera photo could not be captured.");return;}
+    context.drawImage(video,0,0,canvas.width,canvas.height);
+    canvas.toBlob(blob=>{if(!blob){toast("The camera photo could not be encoded. Please try again.");return;}stopActiveCameraPreview();closeDialog();sendCameraCapturedPhoto(blob);},"image/jpeg",0.9);
+  }
   function openAttachmentPicker(kind) {
     const input=$("#attachment-input");
     if(!input){toast("The attachment picker is unavailable. Close and reopen WhatsApp, then try again.");return;}
-    const accepts={file:"*/*",image:"image/*,video/*",audio:"audio/*",camera:"image/*,video/*"};
-    input.accept=accepts[kind]||"*/*";
-    input.value="";
-    input.removeAttribute("capture");
-    if(kind==="camera")input.setAttribute("capture","environment");
-    // Prefer showPicker in supported WebViews; it preserves the tap's user
-    // activation more reliably than clicking an off-screen file input.
-    try {
-      if(typeof input.showPicker==="function")input.showPicker();
-      else input.click();
-    } catch(error) {
-      // Older Android System WebView versions do not implement showPicker for
-      // file inputs. Fall back to click, but never fail silently.
-      try { input.click(); }
-      catch(fallbackError) {
-        console.error("[attachments] Could not open the native file picker:",fallbackError&&fallbackError.message||fallbackError);
-        toast("Android could not open the file picker. Reopen WhatsApp and try again.");
-      }
+    const accepts={file:"*/*",image:"image/*,video/*",audio:"audio/*",camera:"image/*"};
+    input.accept=accepts[kind]||"*/*";input.value="";input.removeAttribute("capture");
+    if(kind==="camera"){
+      input.setAttribute("capture","environment");
+      if(!isNativeAndroidApp()&&navigator.mediaDevices&&typeof navigator.mediaDevices.getUserMedia==="function"){void openCameraPreviewFallback();return;}
+      try{if(isNativeAndroidApp()&&typeof window.WhatsAppNativeAndroid.forceNextCameraCapture==="function")window.WhatsAppNativeAndroid.forceNextCameraCapture();}
+      catch(error){console.warn("[camera] Native camera intent could not be prepared:",error&&error.message||error);}
+    }
+    try{if(typeof input.showPicker==="function")input.showPicker();else input.click();}
+    catch(error){
+      try{input.click();}
+      catch(fallbackError){console.error("[attachments] Could not open the native picker:",fallbackError&&fallbackError.message||fallbackError);if(kind==="camera")void openCameraPreviewFallback();else toast("Android could not open the file picker. Reopen WhatsApp and try again.");}
     }
   }
   function handleAction(action,el) {
@@ -1578,6 +1634,7 @@ function openSharedItemsDialog(chat,kind) {
     if(action==="new-chat"){createNewChatDialog();return;}
     if(action==="new-group"){createGroupDialog();return;}
     if(action==="new-community"){createCommunityDialog();return;}
+    if(action==="new-channel"){createChannelDialog();return;}
     if(action==="broadcast-list"){createBroadcastDialog();return;}
     if(action==="linked-devices"){
       if(currentUser&&currentUser.isSupabase&&window.waBackendOpenLinkedDevices){void window.waBackendOpenLinkedDevices();return;}
@@ -1702,6 +1759,7 @@ function openSharedItemsDialog(chat,kind) {
     if(mapped.includes(action)){useAction(action,chat||currentChat());return;}
     if(action==="new-group"){createGroupDialog();return;}
     if(action==="new-community"){createCommunityDialog();return;}
+    if(action==="find-friends"){createNewChatDialog();return;}
     if(action==="go-starred"){setView("starred");return;}
     if(action==="go-requests"){setView("requests");return;}
     if(action==="select-chats"){selectChatsDialog();return;}
@@ -1752,6 +1810,17 @@ function openSharedItemsDialog(chat,kind) {
     }
     if(t.dataset.dialogAction){
       const action=t.dataset.dialogAction;
+      if(action==="capture-camera-photo"){captureCameraPreviewPhoto();return;}
+      if(action==="create-channel"){
+        const name=String($("#channel-name")?.value||"").trim().slice(0,70);
+        const description=String($("#channel-description")?.value||"").trim().slice(0,500);
+        if(!name){toast("Enter a channel name.");return;}
+        if(currentUser&&currentUser.isSupabase){toast("The secure channel service is still loading. Refresh and try again.");return;}
+        state.channels=state.channels||[];
+        if(state.channels.some(channel=>String(channel.name||"").toLowerCase()===name.toLowerCase())){toast("A channel with that name already exists.");return;}
+        state.channels.unshift({id:uid("channel"),name,description,following:true});
+        saveState();closeDialog();setView("channels");toast("Channel created and followed on this device.");return;
+      }
       if(action==="send-poll"){
         if(currentUser&&currentUser.isSupabase){
           if(window.waAppBridge&&typeof window.waAppBridge.sendBackendPoll==="function")Promise.resolve(window.waAppBridge.sendBackendPoll()).catch(error=>toast("Could not send the poll: "+String(error&&error.message||"Unknown error")));

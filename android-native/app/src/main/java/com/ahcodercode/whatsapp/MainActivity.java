@@ -54,6 +54,7 @@ public final class MainActivity extends Activity {
     private WebView webView;
     private ValueCallback<Uri[]> fileChooserCallback;
     private Uri pendingCaptureUri;
+    private volatile boolean forceCameraCaptureOnNextChooser;
     private AudioManager callAudioManager;
     private PowerManager.WakeLock callCpuWakeLock;
     private AudioFocusRequest callAudioFocusRequest;
@@ -116,11 +117,28 @@ public final class MainActivity extends Activity {
             @Override public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (fileChooserCallback != null) fileChooserCallback.onReceiveValue(null);
                 fileChooserCallback = callback;
-                if (params != null && params.isCaptureEnabled()) {
+                boolean forceCamera = forceCameraCaptureOnNextChooser;
+                forceCameraCaptureOnNextChooser = false;
+                if (forceCamera || (params != null && params.isCaptureEnabled())) {
                     try {
-                        Intent capture = createCaptureIntent(params);
-                        if (capture != null) { startActivityForResult(capture, REQUEST_CAPTURE); return true; }
-                    } catch (Exception ignored) { pendingCaptureUri = null; }
+                        Intent capture = createCaptureIntent(params, forceCamera);
+                        if (capture != null) {
+                            startActivityForResult(capture, REQUEST_CAPTURE);
+                            return true;
+                        }
+                    } catch (Exception captureError) {
+                        android.util.Log.w("WhatsApp", "No native camera activity could handle the capture request; opening the in-app camera.", captureError);
+                        pendingCaptureUri = null;
+                    }
+                    if (forceCamera) {
+                        fileChooserCallback = null;
+                        pendingCaptureUri = null;
+                        callback.onReceiveValue(null);
+                        view.post(() -> view.evaluateJavascript(
+                            "if(window.__waCameraCaptureFallback)window.__waCameraCaptureFallback();", null
+                        ));
+                        return true;
+                    }
                 }
                 try {
                     Intent picker = null;
@@ -274,10 +292,10 @@ public final class MainActivity extends Activity {
             }
         });
     }
-    private Intent createCaptureIntent(WebChromeClient.FileChooserParams params) throws java.io.IOException {
-        if (params == null || !params.isCaptureEnabled()) return null;
+    private Intent createCaptureIntent(WebChromeClient.FileChooserParams params, boolean forceCapture) throws java.io.IOException {
+        if (!forceCapture && (params == null || !params.isCaptureEnabled())) return null;
         StringBuilder accepted = new StringBuilder();
-        for (String type : params.getAcceptTypes()) if (type != null) accepted.append(type.toLowerCase(java.util.Locale.ROOT)).append(",");
+        if (params != null) for (String type : params.getAcceptTypes()) if (type != null) accepted.append(type.toLowerCase(java.util.Locale.ROOT)).append(",");
         boolean video = accepted.toString().contains("video/") && !accepted.toString().contains("image/");
         File directory = new File(getCacheDir(), "capture");
         if (!directory.exists() && !directory.mkdirs()) throw new java.io.IOException("Could not prepare camera capture.");
@@ -660,6 +678,7 @@ public final class MainActivity extends Activity {
         }
         @JavascriptInterface public void setCallSpeaker(boolean enabled) { setNativeCallSpeaker(enabled); }
         @JavascriptInterface public void endCallAudio() { endNativeCallAudio(); }
+        @JavascriptInterface public void forceNextCameraCapture() { forceCameraCaptureOnNextChooser = true; }
 
         @JavascriptInterface public String getFcmToken() {
             if (fcmToken != null && !fcmToken.trim().isEmpty()) return fcmToken.trim();
