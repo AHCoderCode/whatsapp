@@ -16,7 +16,28 @@
   let incomingOffer=null, callChannel=null, channelUser="", pendingSignals=new Map(), seenSignals=new Set();
   let incomingPollTimer=null,incomingPollBusy=false,incomingPollUser="",incomingPollVisibilityHandler=null,incomingPollLastErrorAt=0;
   let callTimer=null, ringTimer=null, callSetupTimer=null, callPushReminderTimer=null, callStart=0, elapsed=0, muted=false, cameraOff=false, speakerOn=true, busy=false;
-  let pendingNotificationAction=null, acceptRequested=false;
+  const PENDING_CALL_ACTION_KEY="wa_pending_native_call_action_v1";
+  function readPendingNotificationAction(){
+    try{
+      const raw=localStorage.getItem(PENDING_CALL_ACTION_KEY);
+      if(!raw)return null;
+      const saved=JSON.parse(raw),age=Date.now()-Number(saved&&saved.savedAt||0);
+      if(!saved||saved.kind!=="call"||!saved.callId||!["open","accept","decline"].includes(saved.action)||!Number.isFinite(age)||age<0||age>30*60*1000){
+        localStorage.removeItem(PENDING_CALL_ACTION_KEY);return null;
+      }
+      return {kind:"call",callId:String(saved.callId),action:String(saved.action),savedAt:Number(saved.savedAt)};
+    }catch(_){return null;}
+  }
+  function setPendingNotificationAction(action){
+    if(!action||action.kind!=="call"||!action.callId||!["open","accept","decline"].includes(action.action))return;
+    pendingNotificationAction={kind:"call",callId:String(action.callId),action:String(action.action),savedAt:Date.now()};
+    try{localStorage.setItem(PENDING_CALL_ACTION_KEY,JSON.stringify(pendingNotificationAction));}catch(error){console.warn("[calls] Could not persist the pending call action:",error&&error.message||error);}
+  }
+  function clearPendingNotificationAction(){
+    pendingNotificationAction=null;
+    try{localStorage.removeItem(PENDING_CALL_ACTION_KEY);}catch(_){}
+  }
+  let pendingNotificationAction=readPendingNotificationAction(), acceptRequested=false;
 const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
   let ringtoneAudio=null,ringtoneObjectUrl="",ringtoneRequestId=0,ringtoneWanted=false,ringtoneStartPromise=null,previewRingtoneTimer=null,builtInRingtoneBlob=null;
   let ringtoneAudioContext=null,ringtoneGain=null,ringtoneCompressor=null,ringtoneSource=null;
@@ -77,7 +98,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
   try{
     const params=new URLSearchParams(window.location.search);
     if(params.get("waPushKind")==="call"&&params.get("waCallId")){
-      pendingNotificationAction={kind:"call",callId:String(params.get("waCallId")),action:params.get("waPushAction")||"open"};
+      setPendingNotificationAction({kind:"call",callId:String(params.get("waCallId")),action:params.get("waPushAction")||"open"});
       params.delete("waPushKind");params.delete("waCallId");params.delete("waPushAction");
       history.replaceState(history.state,"",location.pathname+(params.toString()?"?"+params.toString():"")+location.hash);
     }
@@ -125,9 +146,9 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       return;
     }
     if(pending.action==="decline"){
-      pendingNotificationAction=null;void declineCall(false);return;
+      void declineCall(false);return;
     }
-    if(pending.action==="open")pendingNotificationAction=null;
+    if(pending.action==="open")clearPendingNotificationAction();
   }
   function handleNotificationAction(data){
     if(!data)return;
@@ -141,12 +162,15 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       return;
     }
     if(data.kind!=="call")return;
-    pendingNotificationAction={kind:"call",callId:String(data.callId||""),action:data.action||"open"};
+    setPendingNotificationAction({kind:"call",callId:String(data.callId||""),action:data.action||"open"});
     runPendingNotificationAction();
+    if(!activeCall)void pollIncomingCallState();
   }
   async function showIncomingCallRecord(row){
     const current=me(),client=db();
-    if(!current||!client||!row||row.callee_id!==current.id||row.status!=="ringing"||row.group_call_id||activeCall)return;
+    const pending=pendingNotificationAction;
+    const resumingAcceptedCall=!!(row&&row.status==="accepted"&&pending&&pending.kind==="call"&&pending.action==="accept"&&String(pending.callId)===String(row.id));
+    if(!current||!client||!row||row.callee_id!==current.id||(row.status!=="ringing"&&!resumingAcceptedCall)||row.group_call_id||activeCall)return;
     let peer=(appState()?.chats||[]).find(person=>String(person.id)===String(row.caller_id));
     if(!peer){
       try{const result=await client.from("aeroshell_profiles").select("id,username,display_name,avatar_data").eq("id",row.caller_id).maybeSingle();const p=result.data;if(p)peer={id:p.id,username:p.username,name:p.display_name||p.username,avatarData:p.avatar_data||""};}catch(_){}
@@ -272,7 +296,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
   function cleanupLocal() {
     clearTimers();
     acceptRequested=false;
-    pendingNotificationAction=null;
+    clearPendingNotificationAction();
     stopIncomingRingtone();
     if(pc){try{pc.ontrack=null;pc.onicecandidate=null;pc.onconnectionstatechange=null;pc.close();}catch(_){}}
     pc=null;
@@ -537,7 +561,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
   async function acceptCall(){
     if(!activeCall||phase!=="incoming"||busy)return;
     if(!incomingOffer){
-      pendingNotificationAction={kind:"call",callId:String(activeCall.id),action:"accept"};
+      setPendingNotificationAction({kind:"call",callId:String(activeCall.id),action:"accept"});
       acceptRequested=true;
       renderCallOverlay("Waiting for the caller to connect…");
       return;
@@ -570,6 +594,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       await withCallTimeout(pc.setLocalDescription(answer),8000,"The local call description timed out.");
       if(!activeCall||activeCall.id!==call.id)return;
       await withCallTimeout(sendSignal(call,"answer",{type:"answer",sdp:pc.localDescription.sdp}),8000,"The call answer could not be delivered. Check the connection and try again.");
+      clearPendingNotificationAction();
       setPhase("connecting","Connecting through the secure relay…");
     }catch(error){
       try{await transitionCallStatus(call,statusAccepted?"ended":"rejected",client,current);}
@@ -714,18 +739,15 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
           .select("id,caller_id,callee_id,status,created_at,media_type,group_call_id")
           .eq("id",pending.callId).eq("callee_id",current.id).maybeSingle();
         if(!targetError&&target){
-          if(target.status==="ringing"&&!target.group_call_id){
+          const resumable=target.status==="ringing"||(target.status==="accepted"&&pending.action==="accept");
+          if(resumable&&!target.group_call_id){
             await showIncomingCallRecord(target);
             if(activeCall&&String(activeCall.id)===String(target.id)&&phase==="incoming"&&!incomingOffer)await recoverIncomingOffer(target.id,current.id,client);
             else if(activeCall&&String(activeCall.id)===String(target.id))runPendingNotificationAction();
             return;
           }
-          if(["rejected","ended"].includes(target.status)){
-            pendingNotificationAction=null;acceptRequested=false;
-            return;
-          }
-          if(target.status==="accepted"&&pending.action==="accept"){
-            pendingNotificationAction=null;acceptRequested=false;
+          if(["rejected","ended"].includes(target.status)||(target.status==="accepted"&&pending.action!=="accept")){
+            clearPendingNotificationAction();acceptRequested=false;
             return;
           }
         }
@@ -800,7 +822,8 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
         const {data:target,error:targetError}=await client.from("aeroshell_calls")
           .select("id,caller_id,callee_id,status,created_at,media_type,group_call_id")
           .eq("id",pending.callId).eq("callee_id",current.id).maybeSingle();
-        if(!targetError&&target&&!target.group_call_id&&target.status==="ringing"){
+        const resumable=target&&!target.group_call_id&&(target.status==="ringing"||(target.status==="accepted"&&pending.action==="accept"));
+        if(!targetError&&resumable){
           if(!activeCall)await showIncomingCallRecord(target);
           const {data:targetOffers}=await client.from("aeroshell_call_signals")
             .select("id,call_id,from_user_id,to_user_id,kind,payload,created_at")
@@ -811,9 +834,9 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
           return;
         }
         if(!targetError&&target&&target.status!=="ringing"){
-          pendingNotificationAction=null;
+          clearPendingNotificationAction();
           acceptRequested=false;
-          say("This call is no longer available.");
+          if(target.status!=="rejected"&&target.status!=="ended")say("This call is no longer available.");
         }
       }
       // Also recover offers that arrived while this device was offline.
@@ -873,6 +896,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     accept:()=>acceptCall(),
     decline:()=>declineCall(false),
     handleNotificationAction,
+    resume:()=>{if(me()&&me().isSupabase)void pollIncomingCallState();},
     cleanup:()=>{cleanupLocal();stopIncomingCallPolling();if(callChannel&&db())void db().removeChannel(callChannel);callChannel=null;channelUser="";},
     getPhase:()=>phase
   };

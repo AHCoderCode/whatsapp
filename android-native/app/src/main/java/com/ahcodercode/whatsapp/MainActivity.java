@@ -209,8 +209,25 @@ public final class MainActivity extends Activity {
         if (notificationId >= 0) NativeCallNotifications.cancel(this, notificationId);
         if (url != null && isTrustedAppUrl(Uri.parse(url))) {
             pendingUrl = url;
-            if (webView != null) webView.loadUrl(url);
+            if (webView != null) {
+                if (isCallLaunchIntent(intent, url) && pageLoaded) {
+                    // Keep the authenticated WebView alive. Reloading here would
+                    // briefly show the session boot screen and can race the call action.
+                    webView.postDelayed(MainActivity.this::dispatchPendingNativeCallAction, 100);
+                } else {
+                    webView.loadUrl(url);
+                }
+            }
         }
+    }
+
+    private boolean isCallLaunchIntent(Intent intent, String launchUrl) {
+        try {
+            Uri uri = launchUrl != null && !launchUrl.trim().isEmpty()
+                ? Uri.parse(launchUrl) : (intent != null ? intent.getData() : null);
+            return uri != null && "call".equals(uri.getQueryParameter("waPushKind"))
+                && uri.getQueryParameter("waCallId") != null;
+        } catch (Exception ignored) { return false; }
     }
 
     private void rememberPendingNativeCallAction(Intent intent, String launchUrl) {
@@ -597,7 +614,8 @@ public final class MainActivity extends Activity {
         publishFcmToken();
         if (webView != null) {
             webView.postDelayed(() -> webView.evaluateJavascript(
-                "if(window.waNativeAppResumed)window.waNativeAppResumed();", null
+                "if(window.waNativeAppResumed)window.waNativeAppResumed();"
+                    + "if(window.WhatsAppCalls&&window.WhatsAppCalls.resume)window.WhatsAppCalls.resume();", null
             ), 350);
         }
     }

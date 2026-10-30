@@ -519,6 +519,20 @@ check("native Accept actions reach the call controller after WebView startup", (
   includes(files.calls, "window.WhatsAppCalls={");
   includes(files.calls, "if(pending&&pending.kind===\"call\"&&pending.callId)");
 });
+check("pending native Accept survives URL cleanup and WebView/service-worker reloads", () => {
+  includes(files.calls, 'const PENDING_CALL_ACTION_KEY="wa_pending_native_call_action_v1";');
+  includes(files.calls, "localStorage.setItem(PENDING_CALL_ACTION_KEY");
+  includes(files.calls, "pendingNotificationAction=readPendingNotificationAction()");
+  includes(files.calls, "clearPendingNotificationAction();");
+  includes(files.nativeActivity, "if (isCallLaunchIntent(intent, url) && pageLoaded)");
+});
+check("incoming call recovery resumes an already-accepted call after a WebView reload", () => {
+  includes(files.calls, 'target.status==="accepted"&&pending.action==="accept"');
+  includes(files.calls, 'row.status==="accepted"&&pending&&pending.kind==="call"');
+  includes(files.calls, 'if(!activeCall)await showIncomingCallRecord(target);');
+  includes(files.calls, "clearPendingNotificationAction();");
+  includes(files.nativeActivity, "window.WhatsAppCalls&&window.WhatsAppCalls.resume");
+});
 check("accept, decline and hang-up use verified call-state transitions", () => {
   includes(files.calls, 'client.functions.invoke("whatsapp-push",{body:{action:"transition-call",callId:String(call.id),status:nextStatus}})');
   includes(files.calls, 'await transitionCallStatus(call,"accepted",client,current)');
