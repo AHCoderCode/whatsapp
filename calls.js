@@ -13,11 +13,13 @@
     return element;
   };
   let activeCall=null, phase="idle", pc=null, localStream=null, remoteStream=null;
+  let directFallbackAttempted=false,directFallbackLocalStarted=false,directFallbackBusy=false,directFallbackRequested=false,directFallbackRequestSent=false,directFallbackRemoteReady=false,pendingDirectCandidates=[];
   let pendingRecoveryPromise=null;
   let incomingOffer=null, callChannel=null, channelUser="", pendingSignals=new Map(), seenSignals=new Set();
   let incomingPollTimer=null,incomingPollBusy=false,incomingPollUser="",incomingPollVisibilityHandler=null,incomingPollLastErrorAt=0;
   let callTimer=null, ringTimer=null, callSetupTimer=null, callPushReminderTimer=null, callStart=0, elapsed=0, muted=false, cameraOff=false, speakerOn=true, busy=false;
   const PENDING_CALL_ACTION_KEY="wa_pending_native_call_action_v1";
+  const DIRECT_FALLBACK_ICE_SERVERS=[{urls:"stun:stun.relay.metered.ca:80"}];
   function readPendingNotificationAction(){
     try{
       const raw=localStorage.getItem(PENDING_CALL_ACTION_KEY);
@@ -331,6 +333,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     remoteStream=null;
     activeCall=null;incomingOffer=null;phase="idle";busy=false;muted=false;cameraOff=false;speakerOn=true;elapsed=0;callStart=0;
     pendingSignals.clear();seenSignals.clear();
+    directFallbackAttempted=false;directFallbackLocalStarted=false;directFallbackBusy=false;directFallbackRequested=false;directFallbackRequestSent=false;directFallbackRemoteReady=false;pendingDirectCandidates=[];
     root().innerHTML="";
     try{if(window.WhatsAppNativeAndroid&&typeof window.WhatsAppNativeAndroid.finishIncomingCallUi==="function")window.WhatsAppNativeAndroid.finishIncomingCallUi();}catch(_){}
   }
@@ -352,7 +355,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       "<header class='wa-call-header'><div class='wa-call-title'><span class='wa-call-status-dot'></span><div><strong>"+esc(peer.name||peer.username||"Contact")+"</strong><small>"+esc(status)+"</small></div></div><button class='wa-call-close' type='button' data-wa-call='end' aria-label='End call'>" + bridge.icon("x") + "</button></header>"+
       (video?"<div class='wa-call-stage'><video class='wa-call-remote-video' id='wa-call-remote-video' autoplay playsinline></video><div class='wa-call-video-placeholder' id='wa-call-video-placeholder'><div class='wa-call-avatar'>"+esc(peer.avatar||String(peer.name||peer.username||"U").slice(0,2).toUpperCase())+"</div><strong>"+esc(peer.name||peer.username||"Contact")+"</strong><span>"+esc(phase==="incoming"?"Incoming video call":phase==="connected"?"Waiting for video…":"Waiting for video…")+"</span></div><video class='wa-call-local-video' id='wa-call-local-video' autoplay muted playsinline></video></div>":
       "<div class='wa-call-audio-stage'><div class='wa-call-avatar'>"+esc(peer.avatar||String(peer.name||peer.username||"U").slice(0,2).toUpperCase())+"</div><h2>"+esc(peer.name||peer.username||"Contact")+"</h2><p>"+esc(status)+"</p><audio id='wa-call-remote-audio' autoplay playsinline></audio></div>")+
-      "<div class='wa-call-security'><span>" + bridge.icon("lock") + "</span> WebRTC media · Relay-only connection</div>"+
+      "<div class='wa-call-security'><span>" + bridge.icon("lock") + "</span> "+(directFallbackAttempted?"WebRTC media · Encrypted direct fallback (network address may be visible)":"WebRTC media · TURN relay connection")+"</div>"+
       "<div class='wa-call-controls'>"+
       (waitingForOffer?"<button class='wa-call-control decline' type='button' data-wa-call='decline' aria-label='Cancel call acceptance'>" + bridge.icon("phone") + "<span>Cancel</span></button>":
       incoming?"<button class='wa-call-control decline' type='button' data-wa-call='decline' aria-label='Decline call'>" + bridge.icon("phone") + "<span>Decline</span></button><button class='wa-call-control accept' type='button' data-wa-call='accept' aria-label='Accept call'>"+(video?bridge.icon("video"):bridge.icon("phone"))+"<span>Accept</span></button>":
@@ -434,35 +437,126 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     }
     pendingSignals.delete(activeCall.id);
   }
+  async function flushDirectFallbackCandidates(){
+    if(!pc||!directFallbackRemoteReady||!pendingDirectCandidates.length)return;
+    const queued=pendingDirectCandidates.splice(0);
+    for(const candidate of queued){
+      try{await pc.addIceCandidate(new RTCIceCandidate(candidate));}
+      catch(error){console.warn("[calls] A direct-fallback ICE candidate was rejected:",error&&error.message||error);}
+    }
+  }
+  function armDirectFallbackTimeout(callId){
+    if(callSetupTimer!==null)clearTimeout(callSetupTimer);
+    callSetupTimer=setTimeout(()=>{
+      if(activeCall&&String(activeCall.id)===String(callId)&&phase!=="connected"){
+        void endCall("The TURN relay and direct connection could not connect. Try again, or switch networks.");
+      }
+    },25000);
+  }
+  function requestDirectFallback(){
+    if(!activeCall||activeCall.direction!=="incoming"||directFallbackRequestSent||directFallbackLocalStarted)return;
+    const call=activeCall;
+    directFallbackAttempted=true;
+    directFallbackRequestSent=true;
+    setPhase("connecting","The TURN relay is unavailable. Requesting an encrypted direct fallback. Your network address may be visible to this contact…");
+    armDirectFallbackTimeout(call.id);
+    void sendSignal(call,"fallback-request",{}).catch(error=>{
+      console.warn("[calls] Could not request direct fallback:",error&&error.message||error);
+      void endCall("The relay failed and the other phone could not be asked to try a direct connection.");
+    });
+  }
+  async function startDirectFallbackFromCaller(){
+    if(!activeCall||activeCall.direction!=="outgoing"||!pc||directFallbackLocalStarted||directFallbackBusy)return;
+    const call=activeCall,connection=pc;
+    directFallbackAttempted=true;
+    directFallbackRequested=true;
+    if(connection.signalingState!=="stable"){
+      setPhase("connecting","The relay is unavailable. Waiting for the current call negotiation before retrying directly…");
+      return;
+    }
+    directFallbackBusy=true;
+    setPhase("connecting","The TURN relay failed. Trying an encrypted direct connection; your network address may be visible to this contact…");
+    armDirectFallbackTimeout(call.id);
+    try{
+      connection.setConfiguration({iceServers:DIRECT_FALLBACK_ICE_SERVERS,iceTransportPolicy:"all",iceCandidatePoolSize:0});
+      directFallbackLocalStarted=true;
+      directFallbackRemoteReady=false;
+      pendingDirectCandidates=[];
+      if(typeof connection.restartIce==="function")connection.restartIce();
+      const offer=await withCallTimeout(connection.createOffer({iceRestart:true}),10000,"The direct connection offer could not be created.");
+      await withCallTimeout(connection.setLocalDescription(offer),8000,"The direct connection offer timed out.");
+      if(!activeCall||activeCall.id!==call.id||pc!==connection)return;
+      await withCallTimeout(sendSignal(call,"fallback-offer",{type:"offer",sdp:connection.localDescription.sdp}),10000,"The direct connection offer could not be delivered.");
+      setPhase("connecting","Trying an encrypted direct connection. Your network address may be visible to this contact…");
+    }catch(error){
+      console.warn("[calls] Direct fallback negotiation failed:",error&&error.message||error);
+      if(activeCall&&activeCall.id===call.id)void endCall("The TURN relay failed and the direct connection retry could not start. Try again on a different network.");
+    }finally{directFallbackBusy=false;}
+  }
+  async function acceptDirectFallbackOffer(signal){
+    if(!activeCall||activeCall.direction!=="incoming"||!pc||directFallbackLocalStarted)return;
+    const call=activeCall,connection=pc,sdp=signal.payload&&signal.payload.sdp;
+    if(typeof sdp!=="string"||!sdp)return;
+    directFallbackAttempted=true;
+    directFallbackLocalStarted=true;
+    directFallbackRemoteReady=false;
+    directFallbackBusy=true;
+    setPhase("connecting","The TURN relay failed. Switching to an encrypted direct connection; your network address may be visible to this contact…");
+    armDirectFallbackTimeout(call.id);
+    try{
+      connection.setConfiguration({iceServers:DIRECT_FALLBACK_ICE_SERVERS,iceTransportPolicy:"all",iceCandidatePoolSize:0});
+      await withCallTimeout(connection.setRemoteDescription({type:"offer",sdp}),10000,"The direct connection offer from the caller timed out.");
+      directFallbackRemoteReady=true;
+      await flushDirectFallbackCandidates();
+      const answer=await withCallTimeout(connection.createAnswer(),10000,"The direct connection answer could not be created.");
+      await withCallTimeout(connection.setLocalDescription(answer),8000,"The direct connection answer timed out.");
+      if(!activeCall||activeCall.id!==call.id||pc!==connection)return;
+      await withCallTimeout(sendSignal(call,"fallback-answer",{type:"answer",sdp:connection.localDescription.sdp}),10000,"The direct connection answer could not be delivered.");
+      setPhase("connecting","Connecting through the encrypted direct fallback. Your network address may be visible to this contact…");
+    }catch(error){
+      console.warn("[calls] Could not accept the direct fallback:",error&&error.message||error);
+      if(activeCall&&activeCall.id===call.id)void endCall("The TURN relay failed and the direct connection retry could not be completed. Try again on a different network.");
+    }finally{directFallbackBusy=false;}
+  }
   function makePeer(call,servers) {
     const client=db(),current=me(),peer=call.caller_id===current.id?call.callee_id:call.caller_id;
-    pc=new RTCPeerConnection({iceServers:servers,iceTransportPolicy:"relay",iceCandidatePoolSize:0});
+    const connection=new RTCPeerConnection({iceServers:servers,iceTransportPolicy:"relay",iceCandidatePoolSize:0});
+    pc=connection;
     remoteStream=new MediaStream();
-    pc.ontrack=event=>{
+    connection.ontrack=event=>{
       const streams=event.streams&&event.streams[0];
       if(streams){remoteStream=streams;renderCallOverlay();}
       else {remoteStream.addTrack(event.track);renderCallOverlay();}
     };
-    pc.onicecandidate=event=>{
+    connection.onicecandidate=event=>{
       if(!event.candidate||!activeCall||!client)return;
-      void client.from("aeroshell_call_signals").insert({call_id:call.id,from_user_id:current.id,to_user_id:peer,kind:"ice",payload:{candidate:event.candidate.toJSON()}})
+      const kind=directFallbackLocalStarted?"fallback-ice":"ice";
+      void client.from("aeroshell_call_signals").insert({call_id:call.id,from_user_id:current.id,to_user_id:peer,kind,payload:{candidate:event.candidate.toJSON()}})
         .then(({error})=>{if(error&&activeCall&&activeCall.id===call.id)say("A network candidate could not be delivered. Check the internet connection.");});
     };
-    pc.onconnectionstatechange=()=>{
-      if(!pc||!activeCall)return;
-      if(pc.connectionState==="connected"){
+    connection.onconnectionstatechange=()=>{
+      if(pc!==connection||!activeCall)return;
+      if(connection.connectionState==="connected"){
         if(callSetupTimer!==null)clearTimeout(callSetupTimer);callSetupTimer=null;
         if(ringTimer!==null)clearTimeout(ringTimer);ringTimer=null;
         callStart=Date.now();setPhase("connected");
         if(callTimer!==null)clearInterval(callTimer);
         callTimer=setInterval(()=>{if(phase==="connected"){elapsed=Math.floor((Date.now()-callStart)/1000);updateConnectedDuration();}},1000);
-      }else if(pc.connectionState==="failed"||pc.connectionState==="disconnected"){
-        setPhase("connecting","The call relay is reconnecting…");
-        if(pc.connectionState==="failed")void endCall("The secure relay connection failed. No direct-connection fallback was attempted.");
+      }else if(connection.connectionState==="failed"||connection.connectionState==="disconnected"){
+        setPhase("connecting",directFallbackAttempted?"The encrypted direct connection is reconnecting…":"The TURN relay is reconnecting…");
+        if(connection.connectionState==="failed"){
+          if(directFallbackLocalStarted){
+            if(!directFallbackBusy)void endCall("The TURN relay and encrypted direct fallback both failed. Try again on a different network.");
+          }else if(activeCall.direction==="outgoing"){
+            void startDirectFallbackFromCaller();
+          }else{
+            requestDirectFallback();
+          }
+        }
       }
     };
-    if(localStream)localStream.getTracks().forEach(track=>pc.addTrack(track,localStream));
-    return pc;
+    if(localStream)localStream.getTracks().forEach(track=>connection.addTrack(track,localStream));
+    return connection;
   }
   async function startCall(person,mediaType) {
     const current=me(),client=db();
@@ -565,15 +659,44 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
         activeCall=Object.assign({},data,{direction:"incoming",peer:{id:peer.id,username:peer.username,name:peer.display_name||peer.username,avatarData:peer.avatar_data||""}});
         incomingOffer=signal;phase="incoming";void startIncomingRingtone();renderCallOverlay();runPendingNotificationAction();
         ringTimer=null; // Keep incoming audio looping until answered or ended.
-      }else{
+      }else if(signal.kind==="ice"){
         const list=pendingSignals.get(signal.call_id)||[];list.push(signal);pendingSignals.set(signal.call_id,list);
       }
+      return;
+    }
+    if(signal.kind==="fallback-request"&&activeCall.direction==="outgoing"){
+      directFallbackAttempted=true;
+      directFallbackRequested=true;
+      void startDirectFallbackFromCaller();
+      return;
+    }
+    if(signal.kind==="fallback-offer"&&activeCall.direction==="incoming"){
+      await acceptDirectFallbackOffer(signal);
+      return;
+    }
+    if(signal.kind==="fallback-answer"&&activeCall.direction==="outgoing"&&pc){
+      const sdp=signal.payload&&signal.payload.sdp;
+      if(typeof sdp==="string"&&pc.signalingState==="have-local-offer"){
+        await pc.setRemoteDescription({type:"answer",sdp});
+        directFallbackRemoteReady=true;
+        await flushDirectFallbackCandidates();
+        setPhase("connecting","Connecting through the encrypted direct fallback. Your network address may be visible to this contact…");
+      }
+      return;
+    }
+    if(signal.kind==="fallback-ice"){
+      const candidate=signal.payload&&signal.payload.candidate;
+      if(!candidate||typeof candidate.candidate!=="string")return;
+      if(pc&&directFallbackRemoteReady){
+        try{await pc.addIceCandidate(new RTCIceCandidate(candidate));}catch(error){console.warn("[calls] Direct-fallback candidate could not be added:",error&&error.message||error);}
+      }else pendingDirectCandidates.push(candidate);
       return;
     }
     if(signal.kind==="answer"&&activeCall.direction==="outgoing"&&pc){
       const sdp=signal.payload&&signal.payload.sdp;
       if(typeof sdp==="string"&&!pc.remoteDescription&&pc.signalingState==="have-local-offer"){
         await pc.setRemoteDescription({type:"answer",sdp});await flushCandidates();setPhase("connecting");
+        if(directFallbackRequested)void startDirectFallbackFromCaller();
       }
     }else if(signal.kind==="ice"){
       const candidate=signal.payload&&signal.payload.candidate;
