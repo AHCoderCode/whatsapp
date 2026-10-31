@@ -393,6 +393,51 @@ async function notifyCall(userId: string, body: any) {
 }
 
 
+
+async function notifyGroupCall(userId: string, body: any) {
+  if (!admin) throw new Error("Push service is unavailable.");
+  const groupCallId = String(body?.groupCallId || "");
+  if (!uuidPattern.test(groupCallId)) throw new Error("A valid group call ID is required.");
+  const { data: call, error: callError } = await admin.from("aeroshell_group_calls")
+    .select("id,group_id,initiator_id,media_type,status")
+    .eq("id", groupCallId).maybeSingle();
+  if (callError) throw callError;
+  if (!call || call.initiator_id !== userId || call.status !== "active") {
+    return { sent: 0, reason: "group-call-not-active-or-not-owned" };
+  }
+  const { data: members, error: membersError } = await admin.from("aeroshell_group_call_participants")
+    .select("user_id").eq("group_call_id", groupCallId).eq("status", "invited");
+  if (membersError) throw membersError;
+  const recipientIds = Array.from(new Set((members || []).map((row: any) => String(row.user_id)).filter(Boolean)));
+  if (!recipientIds.length) return { sent: 0, reason: "no-invited-participants" };
+  const [{ data: caller }, { data: group }] = await Promise.all([
+    admin.from("aeroshell_profiles").select("display_name,username").eq("id", userId).maybeSingle(),
+    admin.from("aeroshell_groups").select("name").eq("id", call.group_id).maybeSingle()
+  ]);
+  const callerName = clean(caller?.display_name || caller?.username || "A group member", 80);
+  const groupName = clean(group?.name || "Group", 80);
+  const mediaLabel = call.media_type === "video" ? "video" : "voice";
+  const chatUrl = "/?waChatId=" + encodeURIComponent(String(call.group_id)) + "&waGroupCallId=" + encodeURIComponent(groupCallId);
+  const pushPayload = {
+    kind: "message",
+    title: "Incoming group " + mediaLabel + " call",
+    body: callerName + " started a " + mediaLabel + " call in " + groupName + ". Tap to join.",
+    tag: "wa-group-call-" + groupCallId,
+    data: { kind: "message", chatId: String(call.group_id), groupCallId, chatType: "group", url: chatUrl }
+  };
+  const [webResult, androidResult] = await Promise.all([
+    sendPushToUsers(recipientIds, "calls_enabled", pushPayload, 180),
+    sendAndroidPushToUsers(recipientIds, "calls_enabled", pushPayload)
+  ]);
+  return {
+    sent: Number(webResult.sent || 0) + Number(androidResult.sent || 0),
+    failed: Number(webResult.failed || 0) + Number(androidResult.failed || 0),
+    subscriptions: Number(webResult.subscriptions || 0) + Number(androidResult.subscriptions || 0),
+    web: webResult,
+    android: androidResult
+  };
+}
+
 async function notifyCallEnded(userId: string, body: any) {
   if (!admin) throw new Error("Push service is unavailable.");
   const callId = String(body?.callId || "");
@@ -620,6 +665,7 @@ Deno.serve(async (req: Request) => {
     }
     if (body.action === "notify-message") return response(await notifyMessage(user.id, body));
     if (body.action === "notify-call") return response(await notifyCall(user.id, body));
+    if (body.action === "notify-group-call") return response(await notifyGroupCall(user.id, body));
     if (body.action === "transition-call") return response(await transitionCall(user.id, body, req.headers.get("Authorization") || ""));
     if (body.action === "notify-call-ended") return response(await notifyCallEnded(user.id, body));
     if (body.action === "test-call-push") return response(await testCallPush(user.id, body.delaySeconds));

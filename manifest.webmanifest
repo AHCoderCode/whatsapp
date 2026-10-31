@@ -10,19 +10,19 @@
   "theme_color": "#25D366",
   "icons": [
     {
-      "src": "/icon.svg?v=whatsapp-fix-20261031b",
+      "src": "/icon.svg?v=whatsapp-fix-20261031c",
       "type": "image/svg+xml",
       "sizes": "512x512",
       "purpose": "any maskable"
     },
     {
-      "src": "/icon.svg?v=whatsapp-fix-20261031a",
+      "src": "/icon.svg?v=whatsapp-fix-20261031c",
       "type": "image/svg+xml",
       "sizes": "192x192",
       "purpose": "any"
     },
     {
-      "src": "/icon.svg?v=whatsapp-fix-20261031a",
+      "src": "/icon.svg?v=whatsapp-fix-20261031c",
       "type": "image/svg+xml",
       "sizes": "any",
       "purpose": "any"

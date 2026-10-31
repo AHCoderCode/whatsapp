@@ -82,3 +82,32 @@ The final UI pass completes custom chat lists: users can create a named list, ch
 Contact Requests now has a prominent **Find people** button in its header. Calls → New call presents an alphabetically ordered, searchable list of accepted one-to-one contacts for both voice and video calls. The Channels screen opens on **Your channels**, with separate **Discover channels** and **Create channel** actions. The Updates shortcut is labelled **Channels** and explains both entry points. Channel creation continues to use the existing Supabase create-and-follow operation for signed-in accounts.
 
 The UI/CSS pass adds narrow-screen wrapping and scrolling for custom list chips, list selection, call contact rows, channel actions, and the Find people button. Source smoke checks cover these routes. These are source-level checks only; a manual visual and two-account/two-device pass is still required for device sign-off.
+
+
+## October 31 feature-completion branch
+
+**Branch:** `feature/complete-messaging-gaps-20261031`  
+**Production deployment:** unchanged until this branch is reviewed and merged.
+
+The feature branch adds:
+- Image/video status publishing and viewing, using private Storage paths and 24-hour expiry.
+- Image/video channel posts, signed media URLs, and author/owner deletion.
+- Community subgroup linking for groups administered by the community owner, plus member self-join through RLS.
+- Server-backed block/unblock, report submissions, shared disappearing-message settings and message expiry triggers.
+- Five-minute scheduled expiry cleanup using `pg_cron`.
+- Account-synced custom chat lists, while contact display-name aliases remain device-local.
+- Relay-only mesh group voice/video calls for up to eight participants, including invitation, accept/decline, mute, camera toggle and leave.
+- A dedicated authenticated TURN credential function with per-user request quotas and group-call invitation push delivery.
+
+The database migrations and Supabase Edge Functions for this work have been applied/deployed to the connected Supabase project. The web client, service-worker assets, tests and workflow updates are on the feature branch and are **not in production** until merged and deployed.
+
+The source suite now checks the new modules and handler wiring. It does not prove multi-device behavior or call quality. Required sign-off still includes at least three accounts in one group, separate Android devices, browser/PWA, and native APK group calls over separate Wi-Fi/mobile networks. Group calling currently uses a full mesh and is limited to eight participants. Group invite notifications open the app; they do not provide native lock-screen Accept/Decline controls.
+
+Security and product boundaries that remain:
+- No end-to-end encryption or verified per-device identity/key recovery.
+- No real phone-number ownership check, SMS, PSTN calling, or external-platform interoperability.
+- Reports have no staffed moderation dashboard or response workflow.
+- Blocking applies to direct messages; it does not enforce removal from shared groups.
+- Account deletion is disabled in this client because accounts are shared with Windows 12 Master Chat.
+- Expiry cannot erase recipient downloads, screenshots, OS caches, or other copies already outside the server.
+- Multi-account, physical-device, background-call and group-call media tests remain mandatory before production sign-off.
