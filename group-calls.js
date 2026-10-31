@@ -144,6 +144,13 @@
     const rows = await loadParticipants(session.id);
     session.participants = rows;
     const accepted = rows.filter(row => row.status === "accepted").map(row => String(row.user_id));
+    const acceptedSet = new Set(accepted);
+    for (const [remoteId, record] of session.peers) {
+      if (!acceptedSet.has(remoteId)) {
+        closePeer(record.pc);
+        session.peers.delete(remoteId);
+      }
+    }
     for (const remoteId of accepted) {
       if (remoteId === me().id) continue;
       const record = await createPeer(remoteId);
@@ -180,7 +187,12 @@
           void cleanup("You declined the invitation.", true); return;
         }
         if (payload.new?.user_id === me().id && payload.new?.status === "left") {
+          pendingPrompt = "";
           void cleanup("You left the group call.", true); return;
+        }
+        if (payload.new?.group_call_id === pendingPrompt && ["accepted","declined","left"].includes(payload.new?.status)) {
+          pendingPrompt = "";
+          closeDialog();
         }
         void negotiateAcceptedPeers().catch(error => console.warn("[group-calls] Participant refresh failed:", errorText(error)));
       })
@@ -313,6 +325,7 @@
         .select("status").eq("group_call_id", groupCallId).eq("user_id", user.id).maybeSingle();
       if (inviteError) throw inviteError;
       if (!invite || invite.status !== "invited") throw new Error("There is no pending invitation for this account.");
+      pendingPrompt = "";
       localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: call.media_type === "video" });
       const { error: acceptError } = await db().from("aeroshell_group_call_participants")
         .update({ status: "accepted", responded_at: new Date().toISOString() })
@@ -340,6 +353,7 @@
 
   async function decline(groupCallId) {
     if (!me()?.isSupabase) return;
+    pendingPrompt = "";
     const { error } = await db().from("aeroshell_group_call_participants")
       .update({ status: "declined", responded_at: new Date().toISOString() })
       .eq("group_call_id", groupCallId).eq("user_id", me().id);
@@ -368,9 +382,8 @@
         "<button class='secondary-button' data-action='wa-group-decline' data-group-call-id='" + esc(groupCallId) + "'>Decline</button>" +
         "<button class='primary-button' data-action='wa-group-accept' data-group-call-id='" + esc(groupCallId) + "'>Join call</button>");
     } catch (error) {
+      if (pendingPrompt === groupCallId) pendingPrompt = "";
       console.warn("[group-calls] Invite prompt failed:", errorText(error));
-    } finally {
-      setTimeout(() => { if (pendingPrompt === groupCallId) pendingPrompt = ""; }, 3000);
     }
   }
 
@@ -460,6 +473,7 @@
       void start(bridge().getCurrentChat(), action === "video-call" ? "video" : "audio"); return;
     }
     const id = target.dataset.groupCallId;
+    if (action === "close-dialog" && pendingPrompt) { pendingPrompt = ""; return; }
     if (action === "wa-group-accept") { event.preventDefault(); event.stopImmediatePropagation(); void join(id); return; }
     if (action === "wa-group-decline") { event.preventDefault(); event.stopImmediatePropagation(); void decline(id); return; }
     if (action === "wa-group-end") { event.preventDefault(); event.stopImmediatePropagation(); void leave(); return; }
