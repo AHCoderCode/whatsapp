@@ -1064,15 +1064,24 @@
       const channels=state.backendChannels||[];
       const mine=channels.filter(channel=>String(channel.createdBy)===String(currentUser.id));
       const followed=channels.filter(channel=>channel.following&&!mine.some(item=>String(item.id)===String(channel.id)));
+      const contactIds=new Set((state.chats||[]).filter(contact=>contact.type==="person").map(contact=>String(contact.id)));
+      const contactChannels=channels.filter(channel=>
+        contactIds.has(String(channel.createdBy)) &&
+        !mine.some(item=>String(item.id)===String(channel.id)) &&
+        !followed.some(item=>String(item.id)===String(channel.id))
+      );
       const rows=mine.concat(followed).map(channel=>"<div class='channel-row'>"+avatarHTML({name:channel.name})+"<button class='channel-open-button community-copy' type='button' data-action='open-channel' data-channel-id='"+esc(channel.id)+"'><strong>"+esc(channel.name)+"</strong><span>"+esc(channel.description||"No description")+"</span></button><span class='wa-channel-membership-label'>"+(String(channel.createdBy)===String(currentUser.id)?"Your channel":"Following")+"</span></div>").join("");
+      const contactRows=contactChannels.map(channel=>"<div class='channel-row'>"+avatarHTML({name:channel.name})+"<button class='channel-open-button community-copy' type='button' data-action='open-channel' data-channel-id='"+esc(channel.id)+"'><strong>"+esc(channel.name)+"</strong><span>"+esc(channel.ownerName||"Your contact")+(channel.ownerUsername?" · @"+esc(channel.ownerUsername):"")+" · "+esc(channel.description||"No description")+"</span></button><button type='button' class='primary-button' data-action='toggle-channel' data-channel-id='"+esc(channel.id)+"'>Follow</button></div>").join("");
       const empty="<div class='empty-state'>Your channels will appear here. Create your own channel or discover channels to follow.</div>";
-      main.innerHTML="<section class='section-screen'>"+screenHeader("Channels",headerActions)+"<div class='screen-content'><p class='screen-description'>Create and manage your own channels, or follow updates from channels you like.</p><div class='section-card'><h3 class='section-card-title'>Your channels</h3>"+(rows||empty)+"</div><div class='wa-channel-primary-actions'><button type='button' class='primary-button wa-create-channel-cta' data-action='new-channel'><span class='wa-create-channel-plus' aria-hidden='true'>+</span><span>Create channel</span></button><button type='button' class='secondary-button wa-channel-discover-wide' data-action='channel-search'>"+icon("search")+" Discover channels</button></div></div></section>";
+      const contactEmpty="<div class='empty-state'>Channels created by your accepted contacts will appear here.</div>";
+      main.innerHTML="<section class='section-screen'>"+screenHeader("Channels",headerActions)+"<div class='screen-content'><p class='screen-description'>Create and manage your own channels, view channels from your contacts, or discover channels across WhatsApp.</p><div class='section-card'><h3 class='section-card-title'>Your channels</h3>"+(rows||empty)+"</div><div class='section-card'><h3 class='section-card-title'>Channels from your contacts</h3>"+(contactRows||contactEmpty)+"</div><div class='wa-channel-primary-actions'><button type='button' class='primary-button wa-create-channel-cta' data-action='new-channel'><span class='wa-create-channel-plus' aria-hidden='true'>+</span><span>Create channel</span></button><button type='button' class='secondary-button wa-channel-discover-wide' data-action='channel-search'>"+icon("search")+" Discover channels</button></div></div></section>";
       return;
     }
     const followed=(state.channels||[]).filter(channel=>channel.following);
     const rows=followed.map(channel=>"<div class='channel-row'>"+avatarHTML(channel)+"<span class='community-copy'><strong>"+esc(channel.name)+"</strong><span>"+esc(channel.description||"")+"</span></span><span class='wa-channel-membership-label'>Following</span></div>").join("");
     main.innerHTML="<section class='section-screen'>"+screenHeader("Channels",headerActions)+"<div class='screen-content'><p class='screen-description'>Create your own channel or discover channels to follow.</p><div class='section-card'><h3 class='section-card-title'>Your channels</h3>"+(rows||"<div class='empty-state'>No channels yet. Discover channels to find some, or create your own.</div>")+"</div><div class='wa-channel-primary-actions'><button type='button' class='primary-button wa-create-channel-cta' data-action='new-channel'><span class='wa-create-channel-plus' aria-hidden='true'>+</span><span>Create channel</span></button><button type='button' class='secondary-button wa-channel-discover-wide' data-action='channel-search'>"+icon("search")+" Discover channels</button></div></div></section>";
   }
+
   function renderBasic(title,rows,desc,kind) {
     main.innerHTML="<section class='section-screen'>"+screenHeader(title)+"<div class='screen-content'><p class='screen-description'>"+esc(desc)+"</p><div class='section-card'>"+(rows.length?rows.map(chat=>"<button class='setting-row' data-chat-id='"+esc(chat.id)+"'>"+avatarHTML(chat)+"<span class='setting-copy'><span class='setting-title'>"+esc(chat.name)+"</span><span class='setting-subtitle'>"+esc(chat.preview||chat.username||"")+"</span></span><span class='end-icon'>"+icon(kind||"chevron")+"</span></button>").join(""):"<div class='empty-state'>Nothing to show here yet.</div>")+"</div></div></section>";
   }
@@ -1190,7 +1199,7 @@
       {icon:"poll",label:"Create poll",action:"create-poll"},{icon:"calendar",label:"Create event",action:"create-event"}
     ];
     if(action==="emoji")return ["😀","😂","🥹","😍","😊","😭","❤️","👍","🙏","🔥","🎉","✨","🙌","🤔","✅","💯"].map(e=>({icon:"smile",label:e,action:"emoji:"+e}));
-    if(action==="more-lists")return[{icon:"new",label:"Create new list",action:"new-list"},{icon:"settings",label:"Manage lists",action:"manage-lists"}];
+    if(action==="more-lists")return[{icon:"new",label:"Create list",action:"new-list"},{icon:"settings",label:"Manage lists",action:"manage-lists"}];
     if(action==="search-filters")return[{icon:"chat",label:"All chats",action:"filter-all"},{icon:"image",label:"Photos",action:"search-media"},{icon:"file",label:"Documents",action:"search-media"},{icon:"link",label:"Links",action:"search-media"}];
     if(action==="pinned-menu")return[{icon:"pin",label:"View pinned message",action:"pinned-preview"}].concat(chat&&chat.pinnedMessage?[{icon:"x",label:"Unpin message",action:"unpin-message"}]:[]);
     if(action==="message-menu"){
