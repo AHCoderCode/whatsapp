@@ -173,6 +173,8 @@ check("WebView attachment inputs remain clickable and native calls set audio mod
   includes(files.nativeActivity, "AudioManager.STREAM_VOICE_CALL");
   excludes(files.nativeActivity, "getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)");
   includes(files.nativeActivity, "setCommunicationDevice(device)");
+  includes(files.nativeActivity, "TYPE_BUILTIN_EARPIECE");
+  excludes(files.nativeActivity, "TYPE_BUILTIN_SPEAKER) && manager.setCommunicationDevice(device)");
 });
 check("call speaker begins on the earpiece and has a compressed remote-audio boost", () => {
   includes(files.calls, "speakerOn=false");
