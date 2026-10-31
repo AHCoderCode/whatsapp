@@ -77,9 +77,7 @@
       renderCall();
     };
     pc.onicecandidate = event => {
-      if (!event.candidate || !session || session.id !== record.callId) {
-        if (!event.candidate || !session) return;
-      }
+      if (!event.candidate || !session || session.id !== record.callId) return;
       void sendSignal(id, "ice", { candidate: event.candidate.toJSON() })
         .catch(error => console.warn("[group-calls] ICE signal failed:", errorText(error)));
     };
@@ -385,10 +383,7 @@
         .select("group_call_id").eq("user_id", me().id).eq("status", "invited")
         .order("created_at", { ascending: false }).limit(10);
       if (error) throw error;
-      for (const invite of invites || []) {
-        if (session) break;
-        await showInvite(invite.group_call_id);
-      }
+      if (invites?.length) await showInvite(invites[0].group_call_id);
     } catch (error) {
       console.warn("[group-calls] Pending invite scan failed:", errorText(error));
     } finally { scanRunning = false; }
