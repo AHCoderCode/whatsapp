@@ -395,6 +395,15 @@
     app.classList.toggle("mobile-section-open",isMobile && selectedChatId===null && view!=="chats");
     app.classList.toggle("mobile-conversation-open",isMobile && selectedChatId!==null);
   }
+  function callEventHTML(call, chat, timeLabel) {
+    const outgoing=call.type==="outgoing",status=String(call.status||"").toLowerCase(),video=call.mediaType==="video";
+    const missed=!outgoing&&status==="rejected",declined=outgoing&&status==="rejected";
+    const stateLabel=missed?"Missed":declined?"Declined":outgoing?"Outgoing":"Received";
+    const mediaLabel=video?"video":"voice";
+    const actionLabel=missed?"Tap to call back":declined?"Tap to call again":"Call again";
+    const title=stateLabel+" "+mediaLabel+" call";
+    return "<div class='message-row "+(outgoing?"outgoing":"incoming")+" call-event-row'><button type='button' class='wa-call-message-card "+((missed||declined)?"missed":"received")+"' data-action='call-entry' data-chat-id='"+esc(chat.id)+"' data-media-type='"+(video?"video":"audio")+"' aria-label='"+esc(title+". "+actionLabel)+"'><span class='wa-call-message-icon'>"+icon(video?"video":"phone")+"</span><span class='wa-call-message-copy'><strong>"+esc(title)+"</strong><small>"+esc(actionLabel)+"</small></span><time class='wa-call-message-time'>"+esc(timeLabel||"")+"</time></button></div>";
+  }
   function messageHTML(message, chat) {
     const outgoing = message.from==="me";
     const sender = !outgoing&&chat.type==="group" ? "<span class='message-sender'>" + esc(message.sender || "Group member") + "</span>" : "";
@@ -504,12 +513,18 @@
     const pinned = chat.pinnedMessage ? "<div class='pinned-banner'>" + icon("pin") + "<div class='pinned-copy'><strong>Pinned message</strong><span>" + esc(chat.pinnedMessage.text) + "</span></div><button class='icon-button' data-action='pinned-menu' aria-label='Pinned messages'>" + icon("more") + "</button></div>" : "";
     let messages = "";
     let previousDate = "";
-    (chat.messages||[]).forEach(m=>{
+    const callMessages=chat.type==="person"?(state.calls||[]).filter(call=>String(call.contactId)===String(chat.id)).map(call=>{
+      const stamp=new Date(call.createdAt||"");
+      if(Number.isNaN(stamp.getTime()))return null;
+      return {id:"call-event-"+String(call.id),createdAt:call.createdAt,date:dayLabel(stamp),time:stamp.toLocaleTimeString([],{hour:"numeric",minute:"2-digit",hour12:true}),callEvent:call};
+    }).filter(Boolean):[];
+    const timeline=(chat.messages||[]).concat(callMessages).sort((a,b)=>Date.parse(a.createdAt||0)-Date.parse(b.createdAt||0));
+    timeline.forEach(m=>{
       if(m.date && m.date!==previousDate) {
         const label = m.date==="TODAY"?"Today":m.date==="YESTERDAY"?"Yesterday":m.date.toLowerCase().replace(/^\w/,c=>c.toUpperCase());
         messages += "<div class='date-separator'>" + esc(label) + "</div>"; previousDate=m.date;
       }
-      messages += messageHTML(m,chat);
+      messages += m.callEvent ? callEventHTML(m.callEvent,chat,m.time) : messageHTML(m,chat);
     });
     const callActions = "<button type='button' class='icon-button conversation-call-button' data-action='voice-call' title='Voice call' aria-label='Voice call'>" + icon("phone") + "</button><button type='button' class='icon-button conversation-call-button' data-action='video-call' title='Video call' aria-label='Video call'>" + icon("video") + "</button>";
     main.innerHTML = "<section class='conversation'>" +
