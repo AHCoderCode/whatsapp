@@ -76,10 +76,10 @@ check("media, privacy, subgroup and synced-list handlers are present", () => {
   includes(files.app, "WhatsAppFeatureGaps.onBackendData");
 });
 check("feature-gap module is in the app shell cache", () => {
-  includes(files.html, "/feature-gaps.js?v=whatsapp-fix-20261031c");
-  includes(files.sw, "/feature-gaps.js?v=whatsapp-fix-20261031c");
-  includes(files.html, "/group-calls.js?v=whatsapp-fix-20261031c");
-  includes(files.sw, "/group-calls.js?v=whatsapp-fix-20261031c");
+  includes(files.html, "/feature-gaps.js?v=whatsapp-fix-20261031d");
+  includes(files.sw, "/feature-gaps.js?v=whatsapp-fix-20261031d");
+  includes(files.html, "/group-calls.js?v=whatsapp-fix-20261031d");
+  includes(files.sw, "/group-calls.js?v=whatsapp-fix-20261031d");
 });
 check("inline HTML scripts parse", () => {
   const scripts = [...files.html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
@@ -90,10 +90,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-fix-20261031c");
-  includes(files.sw, "whatsapp-fix-20261031c");
-  includes(files.manifest, "whatsapp-fix-20261031c");
-  includes(files.sw, "whatsapp-final-shell-v64");
+  includes(files.html, "whatsapp-fix-20261031d");
+  includes(files.sw, "whatsapp-fix-20261031d");
+  includes(files.manifest, "whatsapp-fix-20261031d");
+  includes(files.sw, "whatsapp-final-shell-v65");
 });
 check("mobile settings use a full-width account detail pane", () => {
   includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
@@ -563,10 +563,26 @@ check("background call alerts always show, retry transient push errors, and can 
   includes(files.push, "[whatsapp-push] Incoming-call delivery result");
   includes(files.push, "[whatsapp-push] Background call-test result");
 });
-check("audio calls provide speaker-volume, mute and end controls", () => {
+check("audio calls provide speaker routing without reducing remote playback volume", () => {
   includes(files.calls, "data-wa-call='speaker'");
   includes(files.calls, "data-wa-call='mute'");
   includes(files.calls, "data-wa-call='end'");
+  includes(files.calls, "attachCallPlaybackBoost");
+  includes(files.calls, "gain.gain.value=2.2");
+  includes(files.calls, "remoteAudio.srcObject=remoteStream;attachCallPlaybackBoost(remoteAudio)");
+  excludes(files.calls, "audio.volume=speakerOn?1:.45");
+  includes(files.nativeActivity, "getAvailableCommunicationDevices()");
+  includes(files.nativeActivity, "setCommunicationDevice(target)");
+  includes(files.nativeActivity, "TYPE_BUILTIN_SPEAKER");
+  includes(files.nativeActivity, "clearCommunicationDevice()");
+});
+check("direct-chat timelines show red missed-call and dark received-call cards", () => {
+  includes(files.backend, "createdAt:r.created_at");
+  includes(files.app, "function callEventHTML");
+  includes(files.app, "callEventHTML(m.callEvent,chat,m.time)");
+  includes(files.app, "data-action='call-entry'");
+  includes(files.css, ".wa-call-message-card.missed");
+  includes(files.css, ".wa-call-message-card.received");
 });
 check("landscape phone layout focuses the open conversation", () => {
   includes(files.app, "mobile-landscape");
