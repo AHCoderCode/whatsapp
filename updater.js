@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  const APP_BUILD = "whatsapp-fix-20261031c";
+  const APP_BUILD = "whatsapp-fix-20261031e";
   const native = window.WhatsAppNativeAndroid;
   const nativeApp = !!(native && typeof native.isNativeApp === "function" && native.isNativeApp());
 
@@ -87,7 +87,8 @@
     setupWebUpdateNotice();
     return;
   }
-  let latestUpdate = null, lastCheckAt = 0, banner = null, installButton = null, message = null, dismissedVersion = "", checking = false;
+  let latestUpdate = null, latestCheckInfo = null, lastCheckAt = 0, banner = null, installButton = null, message = null;
+  let dismissedVersion = "", checking = false, installing = false, lastCheckFailed = false, lastCheckMessage = "";
   function ensureBanner() {
     if (banner) return banner;
     banner = document.createElement("section");
@@ -124,9 +125,47 @@
     return banner;
   }
   function hideBanner() { if (banner) banner.hidden = true; }
+  function notifyUpdateState() {
+    try { window.dispatchEvent(new CustomEvent("wa-native-update-state")); } catch (_) {}
+  }
+  window.waNativeUpdateGetState = function () {
+    let installedVersionCode = 0, installedVersionName = "";
+    try { installedVersionCode = Number(native.getVersionCode()) || 0; } catch (_) {}
+    try { installedVersionName = String(native.getVersionName() || ""); } catch (_) {}
+    const source = latestUpdate || latestCheckInfo || {};
+    return {
+      nativeApp: true,
+      installedVersionCode,
+      installedVersionName,
+      checked: !!latestCheckInfo,
+      checking,
+      installing,
+      checkFailed: lastCheckFailed,
+      updateAvailable: !!(latestUpdate && latestUpdate.apkUrl && latestUpdate.sha256),
+      versionCode: Number(source.versionCode || 0),
+      versionName: String(source.versionName || ""),
+      apkUrl: String(source.apkUrl || ""),
+      sha256: String(source.sha256 || ""),
+      releaseUrl: String(source.releaseUrl || ""),
+      message: lastCheckMessage,
+      lastCheckAt
+    };
+  };
+  window.waNativeUpdateCheckNow = function () { check(true); };
+  window.waNativeUpdateInstall = function () {
+    if (!latestUpdate || !latestUpdate.apkUrl || !latestUpdate.sha256 || installing) return;
+    installing = true;
+    lastCheckMessage = "";
+    notifyUpdateState();
+    try { native.downloadAndInstallUpdate(latestUpdate.apkUrl, latestUpdate.sha256); }
+    catch (error) { window.waNativeUpdateInstallFailed(error && error.message || "Could not start Android's installer."); }
+  };
   window.waOnNativeUpdateCheck = function (info) {
     checking = false;
-    if (!info) return;
+    if (!info) { notifyUpdateState(); return; }
+    latestCheckInfo = info;
+    lastCheckFailed = !!info.checkFailed;
+    lastCheckMessage = info.checkFailed ? String(info.message || "Could not check for updates.") : "";
     if (info.checkFailed) {
       // Keep a previously discovered update available through a temporary network/API failure.
       if (latestUpdate && dismissedVersion !== String(latestUpdate.versionCode)) {
@@ -137,32 +176,40 @@
         }
         if (installButton) { installButton.disabled = false; installButton.textContent = "Update now"; }
       }
+      notifyUpdateState();
       return;
     }
     if (!info.updateAvailable || !info.apkUrl || !info.sha256) {
-      latestUpdate = null; hideBanner(); return;
+      latestUpdate = null; hideBanner(); notifyUpdateState(); return;
     }
     latestUpdate = info;
-    if (dismissedVersion === String(info.versionCode)) { hideBanner(); return; }
+    if (dismissedVersion === String(info.versionCode)) { hideBanner(); notifyUpdateState(); return; }
     const el = ensureBanner(); el.hidden = false;
     const detail = document.getElementById("wa-native-update-detail");
     if (detail) detail.textContent = "Version " + String(info.versionName || "new version") + " is available. Tap Update now, then approve Android’s installer.";
     if (message) { message.hidden = true; message.textContent = ""; }
     if (installButton) { installButton.disabled = false; installButton.textContent = "Update now"; }
+    notifyUpdateState();
   };
   window.waNativeUpdateInstallFailed = function (reason) {
+    installing = false;
+    lastCheckMessage = String(reason || "The update could not be installed.");
     const el = ensureBanner(); el.hidden = false;
-    if (message) { message.textContent = String(reason || "The update could not be installed."); message.hidden = false; }
+    if (message) { message.textContent = lastCheckMessage; message.hidden = false; }
     if (installButton) { installButton.disabled = false; installButton.textContent = "Try again"; }
+    notifyUpdateState();
   };
   document.addEventListener("click", event => {
+    const checkButton = event.target.closest("[data-wa-native-update-check]");
+    if (checkButton) { check(true); return; }
+    const pageInstall = event.target.closest("[data-wa-native-update-install]");
+    if (pageInstall) { window.waNativeUpdateInstall(); return; }
     const install = event.target.closest("[data-wa-update-install]");
     if (install) {
       if (!latestUpdate) return;
       install.disabled = true; install.textContent = "Preparing…";
       if (message) { message.hidden = true; message.textContent = ""; }
-      try { native.downloadAndInstallUpdate(latestUpdate.apkUrl, latestUpdate.sha256); }
-      catch (error) { window.waNativeUpdateInstallFailed(error && error.message || "Could not start Android's installer."); }
+      window.waNativeUpdateInstall();
       return;
     }
     const dismiss = event.target.closest("[data-wa-update-dismiss]");
@@ -173,11 +220,17 @@
     if (checking || (!force && now - lastCheckAt < 5 * 60 * 1000)) return;
     lastCheckAt = now;
     checking = true;
+    lastCheckFailed = false;
+    lastCheckMessage = "";
+    notifyUpdateState();
     try {
       native.checkForUpdates();
     } catch (error) {
       checking = false;
+      lastCheckFailed = true;
+      lastCheckMessage = error && error.message || "The update check could not start.";
       console.warn("[updater] Update check could not start:", error);
+      notifyUpdateState();
     }
   }
   const priorResume = window.waNativeAppResumed;
