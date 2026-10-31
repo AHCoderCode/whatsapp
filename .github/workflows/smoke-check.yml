@@ -20,6 +20,6 @@ jobs:
         with:
           node-version: "20"
       - name: Parse JavaScript
-        run: node --check app.js && node --check backend.js && node --check calls.js && node --check sw.js
+        run: node --check feature-gaps.js && node --check app.js && node --check backend.js && node --check calls.js && node --check sw.js
       - name: Run source smoke checks
         run: node tests/smoke-check.mjs
