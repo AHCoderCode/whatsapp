@@ -286,7 +286,6 @@
       await subscribeSession();
       await negotiateAcceptedPeers();
       renderCall();
-      closeDialog();
       const { error: notifyError } = await db().functions.invoke("whatsapp-push", { body: { action: "notify-group-call", groupCallId: call.id } });
       if (notifyError) console.warn("[group-calls] Invitation push failed:", errorText(notifyError));
       toast("Group " + type + " call started. Invited " + (memberIds.length - 1) + " member(s).");
@@ -390,8 +389,9 @@
   }
 
   async function subscribeIncoming() {
-    if (!me()?.isSupabase || inviteUserId === me().id) return;
-    if (inviteChannel && inviteUserId !== me().id) {
+    if (!me()?.isSupabase) return;
+    if (inviteChannel && inviteUserId === me().id) return;
+    if (inviteChannel) {
       await db().removeChannel(inviteChannel).catch(() => {});
       inviteChannel = null;
     }
