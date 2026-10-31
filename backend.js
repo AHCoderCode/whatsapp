@@ -435,7 +435,7 @@
       const calls=(callResult.data||[]).map(r=>{const peer=profileById.get(r.caller_id===me.id?r.callee_id:r.caller_id);return{id:r.id,contactId:peer?peer.id:"",name:peer?peer.name:"Contact",username:peer?peer.username:"",time:new Date(r.created_at).toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit",hour12:true}),type:r.caller_id===me.id?"outgoing":"incoming",avatar:peer?peer.avatar:1,mediaType:r.media_type,status:r.status};});
       const statuses=(statusResult.data||[]).map(row=>{const author=profileById.get(row.user_id)||self;return{id:row.id,userId:row.user_id,username:author.username,name:author.name,text:row.text,createdAt:row.created_at,expiresAt:row.expires_at,avatar:author.avatar,avatarColor:author.avatarColor,avatarData:author.avatarData||""};});
       const followed=new Set((followResult.data||[]).map(row=>row.channel_id));
-      const channels=(channelResult.data||[]).map(row=>({id:row.id,name:row.name,description:row.description||"",createdBy:row.created_by,following:followed.has(row.id),createdAt:row.created_at}));
+      const channels=(channelResult.data||[]).map(row=>{const owner=profileById.get(row.created_by);return{id:row.id,name:row.name,description:row.description||"",createdBy:row.created_by,ownerName:owner?owner.name:"WhatsApp member",ownerUsername:owner?owner.username:"",following:followed.has(row.id),createdAt:row.created_at};});
       const channelIds=new Set(channels.map(row=>row.id));
       const channelPosts=(channelPostResult.data||[]).filter(row=>channelIds.has(row.channel_id)).map(row=>({
         id:row.id,channelId:row.channel_id,authorId:row.author_id,body:row.body,createdAt:row.created_at,
@@ -461,9 +461,11 @@
   }
   async function hydrate(authUser){
     const {data,error}=await db.from("aeroshell_profiles").select("id,username,display_name,about,custom_number,avatar_data,created_at").eq("id",authUser.id).maybeSingle();
-    if(error)throw error;if(!data)throw new Error("No messaging profile exists for this account. Sign out and create a messaging account.");
+    if(error)throw error;if(!data)throw new Error("Your WhatsApp profile could not be found for this saved account. Your sign-in is being kept; retry the connection before creating another account.");
     const sessionUser=Object.assign({},authUser,{isSupabase:true});
     bridge.setBackendUser(sessionUser,data);
+    // Reveal the signed-in app as soon as the account profile is restored. Chat feeds can finish loading in the background.
+    finishStartup(false);
     // A notification Accept must not wait for the full chat list, linked-device
     // registration, or FCM token registration. Restore the exact call first.
     if(window.WhatsAppCalls&&typeof window.WhatsAppCalls.restorePendingNotificationAction==="function"){
@@ -1507,6 +1509,14 @@
   window.waBackendTestCallPush=testCallPush;
   window.waBackendOpenLinkedDevices=openLinkedDevices;
   window.waBackend={client:db,load:()=>loadData(false),safeError,searchPeople,sendMessage,hideMessageForMe,deleteMessageForEveryone,editMessage,forwardMessage,toggleMessageReaction,markAllRead,enableDevicePush,updateDevicePushPreferences,testCallPush,openLinkedDevices,revokeLinkedDevice};
+  function showStartupRecovery(message) {
+    if(typeof window.waShowStartupRecovery==="function")window.waShowStartupRecovery(String(message||"WhatsApp is still reconnecting. Retry when your connection is available."));
+    else{
+      const boot=$("#boot-screen");
+      if(boot)boot.hidden=false;
+      console.warn("[backend] Startup recovery:",message);
+    }
+  }
   function finishStartup(showAuth) {
     const root = $("#app-screen");
     const auth = $("#auth-screen");
@@ -1524,24 +1534,34 @@
   }
   async function bootstrap(){
     if(!db){
-      finishStartup(true);
-      say("Supabase client did not load. Refresh the page and check your internet connection.");
+      showStartupRecovery("The secure account service did not finish loading. Your saved sign-in has not been cleared. Check your connection and retry.");
       return;
     }
     try{
-      const {data,error}=await withTimeout(db.auth.getSession(),12000,"Signing in took too long. Check your internet connection and try again.");
+      // Do not time out into the sign-in screen. The HTML watchdog now offers a
+      // retry while keeping this restore attempt alive and preserving Supabase storage.
+      const {data,error}=await db.auth.getSession();
       if(error)throw error;
-      if(data&&data.session&&data.session.user)await withTimeout(hydrate(data.session.user),18000,"WhatsApp took too long to load your chats. The app will open and you can retry.");
-      const restored=!!(getUser()&&getUser().isSupabase);
-      finishStartup(!restored);
+      if(data&&data.session&&data.session.user){
+        await hydrate(data.session.user);
+        finishStartup( !(getUser()&&getUser().isSupabase) );
+      }else{
+        // Only a confirmed empty session should show account creation / login.
+        finishStartup(true);
+      }
       db.auth.onAuthStateChange((event,session)=>{
         if(event==="SIGNED_OUT"){if(window.WhatsAppCalls)window.WhatsAppCalls.cleanup();return;}
-        if(event==="SIGNED_IN"&&session&&session.user&&(!getUser()||!getUser().isSupabase))void hydrate(session.user).catch(e=>say(safeError(e,"Could not load your account.")));
+        if(event==="SIGNED_IN"&&session&&session.user&&(!getUser()||!getUser().isSupabase)){
+          queueMicrotask(()=>void hydrate(session.user).catch(e=>{
+            console.warn("[backend] Signed-in account could not finish loading:",e&&e.message||e);
+            showStartupRecovery(safeError(e,"Could not load your saved account. Retry without creating a new account."));
+          }));
+        }
       });
     }catch(error){
-      const restored=!!(getUser()&&getUser().isSupabase);
-      finishStartup(!restored);
-      say(safeError(error,"Could not restore your Supabase session."));
+      console.warn("[backend] Saved session restore did not finish:",error&&error.message||error);
+      if(getUser()&&getUser().isSupabase)finishStartup(false);
+      else showStartupRecovery(safeError(error,"Could not restore your saved sign-in. Your account session has not been cleared; check your connection and retry."));
     }
   }
   void bootstrap();
