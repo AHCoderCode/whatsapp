@@ -19,7 +19,7 @@
   let incomingPollTimer=null,incomingPollBusy=false,incomingPollUser="",incomingPollVisibilityHandler=null,incomingPollLastErrorAt=0;
   let callTimer=null, ringTimer=null, callSetupTimer=null, callPushReminderTimer=null, callStart=0, elapsed=0, muted=false, cameraOff=false, speakerOn=true, busy=false;
   const PENDING_CALL_ACTION_KEY="wa_pending_native_call_action_v1";
-  const DIRECT_FALLBACK_ICE_SERVERS=[{urls:"stun:stun.relay.metered.ca:80"}];
+  const DIRECT_FALLBACK_ICE_SERVERS=[{urls:"stun:stun.relay.metered.ca:80"},{urls:"stun:stun.cloudflare.com:3478"},{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun1.l.google.com:19302"}];
   function readPendingNotificationAction(){
     try{
       const raw=localStorage.getItem(PENDING_CALL_ACTION_KEY);
@@ -426,7 +426,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     const client=db(),current=me();if(!client||!current)throw new Error("Sign in before calling.");
     const peer=call.caller_id===current.id?call.callee_id:call.caller_id;
     const {error}=await client.from("aeroshell_call_signals").insert({call_id:call.id,from_user_id:current.id,to_user_id:peer,kind,payload});
-    if(error)throw new Error("Call setup signal was rejected by the server.");
+    if(error)throw new Error("Call setup signal was rejected by the server ("+String(error.code||"unknown")+"): "+String(error.message||"permission or call-state check failed").slice(0,180));
   }
   async function flushCandidates() {
     if(!pc||!pc.remoteDescription)return;
@@ -451,7 +451,29 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       if(activeCall&&String(activeCall.id)===String(callId)&&phase!=="connected"){
         void endCall("The TURN relay and direct connection could not connect. Try again, or switch networks.");
       }
-    },25000);
+    },45000);
+  }
+  function waitForSignalingStableForFallback(connection,callId,timeoutMs=5000){
+    if(!connection)return Promise.reject(new Error("The call connection is not available."));
+    if(connection.signalingState==="stable")return Promise.resolve();
+    return new Promise((resolve,reject)=>{
+      let timer=null,finished=false;
+      const finish=error=>{
+        if(finished)return;
+        finished=true;
+        if(timer!==null)clearTimeout(timer);
+        try{connection.removeEventListener("signalingstatechange",check);}catch(_){}
+        if(error)reject(error);else resolve();
+      };
+      const check=()=>{
+        if(!activeCall||String(activeCall.id)!==String(callId)){finish(new Error("The call ended before the direct retry could start."));return;}
+        if(connection.signalingState==="stable"){finish();return;}
+        if(connection.signalingState==="closed"){finish(new Error("The call connection closed during direct retry."));}
+      };
+      connection.addEventListener("signalingstatechange",check);
+      timer=setTimeout(()=>finish(new Error("The call negotiation did not become stable in time.")),timeoutMs);
+      check();
+    });
   }
   function requestDirectFallback(){
     if(!activeCall||activeCall.direction!=="incoming"||directFallbackRequestSent||directFallbackLocalStarted)return;
@@ -470,27 +492,46 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     const call=activeCall,connection=pc;
     directFallbackAttempted=true;
     directFallbackRequested=true;
-    if(connection.signalingState!=="stable"){
-      setPhase("connecting","The relay is unavailable. Waiting for the current call negotiation before retrying directly…");
-      return;
-    }
     directFallbackBusy=true;
-    setPhase("connecting","The TURN relay failed. Trying an encrypted direct connection; your network address may be visible to this contact…");
+    setPhase("connecting","The TURN relay failed. Recovering the call negotiation and trying an encrypted direct connection; your network address may be visible to this contact…");
     armDirectFallbackTimeout(call.id);
     try{
+      // A fallback-request can reach the caller before its original relay
+      // answer. In that case the peer is still in have-local-offer and
+      // createOffer() cannot install a second offer. Roll back only that
+      // abandoned local offer, then restart ICE with several STUN routes.
+      if(connection.signalingState==="have-local-offer"||connection.signalingState==="have-local-pranswer"){
+        await withCallTimeout(
+          connection.setLocalDescription({type:"rollback"}),
+          6000,
+          "The pending relay offer could not be reset for a direct retry."
+        );
+      }
+      if(connection.signalingState!=="stable"){
+        await withCallTimeout(
+          waitForSignalingStableForFallback(connection,call.id,6000),
+          6500,
+          "The call negotiation did not settle before the direct retry."
+        );
+      }
+      if(!activeCall||activeCall.id!==call.id||pc!==connection)return;
+      if(connection.signalingState!=="stable")throw new Error("The WebRTC signaling state is still "+String(connection.signalingState||"unknown")+".");
       connection.setConfiguration({iceServers:DIRECT_FALLBACK_ICE_SERVERS,iceTransportPolicy:"all",iceCandidatePoolSize:0});
       directFallbackLocalStarted=true;
       directFallbackRemoteReady=false;
       pendingDirectCandidates=[];
       if(typeof connection.restartIce==="function")connection.restartIce();
-      const offer=await withCallTimeout(connection.createOffer({iceRestart:true}),10000,"The direct connection offer could not be created.");
-      await withCallTimeout(connection.setLocalDescription(offer),8000,"The direct connection offer timed out.");
+      const offer=await withCallTimeout(connection.createOffer({iceRestart:true}),12000,"The direct ICE-restart offer could not be created.");
+      await withCallTimeout(connection.setLocalDescription(offer),10000,"The direct ICE-restart offer could not be installed.");
       if(!activeCall||activeCall.id!==call.id||pc!==connection)return;
-      await withCallTimeout(sendSignal(call,"fallback-offer",{type:"offer",sdp:connection.localDescription.sdp}),10000,"The direct connection offer could not be delivered.");
+      await withCallTimeout(sendSignal(call,"fallback-offer",{type:"offer",sdp:connection.localDescription.sdp}),12000,"The direct ICE-restart offer could not be delivered to the other phone.");
       setPhase("connecting","Trying an encrypted direct connection. Your network address may be visible to this contact…");
     }catch(error){
-      console.warn("[calls] Direct fallback negotiation failed:",error&&error.message||error);
-      if(activeCall&&activeCall.id===call.id)void endCall("The TURN relay failed and the direct connection retry could not start. Try again on a different network.");
+      const detail=String(error&&error.message||"Unknown WebRTC negotiation error").slice(0,220);
+      console.warn("[calls] Direct fallback negotiation failed:",error&&error.name||"Error",detail);
+      if(activeCall&&activeCall.id===call.id){
+        void endCall("The TURN relay did not connect. WhatsApp tried a direct retry, but negotiation stopped: "+detail+" Try another network if this keeps happening.");
+      }
     }finally{directFallbackBusy=false;}
   }
   async function acceptDirectFallbackOffer(signal){
@@ -695,7 +736,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       }else pendingDirectCandidates.push(candidate);
       return;
     }
-    if(signal.kind==="answer"&&activeCall.direction==="outgoing"&&pc){
+    if(signal.kind==="answer"&&activeCall.direction==="outgoing"&&pc&&!directFallbackLocalStarted){
       const sdp=signal.payload&&signal.payload.sdp;
       if(typeof sdp==="string"&&!pc.remoteDescription&&pc.signalingState==="have-local-offer"){
         await pc.setRemoteDescription({type:"answer",sdp});await flushCandidates();setPhase("connecting");
