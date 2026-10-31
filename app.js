@@ -40,7 +40,7 @@
     ["account","key","Account"],["privacy","shield","Privacy"],["chats","chat","Chats"],
     ["notifications","bell","Notifications"],["personalization","palette","Appearance"],
     ["storage","database","Storage and data"],["accessibility","users","Accessibility"],
-    ["language","globe","App language"],["help","help","Help"],["shortcuts","keyboard","Keyboard shortcuts"]
+    ["language","globe","App language"],["updates","download","App updates"],["help","help","Help"],["shortcuts","keyboard","Keyboard shortcuts"]
   ];
   const settingDescriptions = {
     account:[
@@ -430,7 +430,7 @@
     const missedCall=!!callEvent&&callEvent.outcome==="missed";
     const durationSeconds=callEvent?Math.max(0,Number(callEvent.durationSeconds)||0):0;
     const durationLabel=String(Math.floor(durationSeconds/60)).padStart(2,"0")+":"+String(durationSeconds%60).padStart(2,"0");
-    const callTitle=missedCall?"Missed "+(mediaType==="video"?"video":"voice")+" call":(callerIsMe?"Outgoing ":"Incoming ")+(mediaType==="video"?"video":"voice")+" call";
+    const callTitle=missedCall?(callerIsMe?"Missed outgoing ":"Missed incoming ")+(mediaType==="video"?"video":"voice")+" call":(callerIsMe?"Outgoing ":"Incoming ")+(mediaType==="video"?"video":"voice")+" call";
     const callDetail=missedCall?"Not answered":(durationSeconds?"Duration "+durationLabel:"Call connected");
     const callEventCard=callEvent?"<div class='wa-call-event-card "+(missedCall?"missed":"completed")+"' role='group' aria-label='"+esc(callTitle)+"'><span class='wa-call-event-icon'>"+icon(mediaType==="video"?"video":"phone")+"</span><span class='wa-call-event-copy'><strong>"+esc(callTitle)+"</strong><small>"+esc(callDetail)+"</small></span></div>":"";
     const messageLabel = callEvent?callTitle:((outgoing ? "You: " : (chat.name || "Contact") + ": ") + String(message.text || message.attachmentName || "Message").slice(0,100));
@@ -915,6 +915,58 @@
     const tab=settingsTabs.find(t=>t[0]===settingsTab)||settingsTabs[0];
     const options=settingDescriptions[settingsTab]||settingDescriptions.account;
     let content="";
+    if(settingsTab==="updates"){
+      const info=typeof window.waNativeUpdateGetState==="function"?window.waNativeUpdateGetState():null;
+      const nativeApp=!!(info&&info.nativeApp);
+      const available=!!(info&&info.updateAvailable);
+      const installedName=info&&info.installedVersionName?String(info.installedVersionName):"Installed Android app";
+      const installedCode=info&&info.installedVersionCode?String(info.installedVersionCode):"";
+      const latestName=info&&info.versionName?String(info.versionName):"";
+      const latestCode=info&&info.versionCode?String(info.versionCode):"";
+      let statusTitle="Check for updates";
+      let statusCopy="Check GitHub Releases for the latest signed Android version.";
+      let statusClass="idle";
+      if(!nativeApp){
+        statusTitle="Android app updates";
+        statusCopy="The signed APK updater is available inside the installed Android app.";
+      }else if(info.checking){
+        statusTitle="Checking for updates…";
+        statusCopy="Contacting the official project release feed.";
+        statusClass="checking";
+      }else if(info.installing){
+        statusTitle="Preparing your update…";
+        statusCopy="The APK is downloading and being verified. Android will ask you to approve installation.";
+        statusClass="checking";
+      }else if(available){
+        statusTitle="Update available";
+        statusCopy="Version "+(latestName||latestCode||"new version")+" is ready. Download it here even if you dismissed the pop-up.";
+        statusClass="available";
+      }else if(info.checkFailed){
+        statusTitle="Could not check right now";
+        statusCopy=String(info.message||"Check your internet connection, then try again.");
+        statusClass="error";
+      }else if(info.checked){
+        statusTitle="You're up to date";
+        statusCopy="No newer signed Android release is currently available.";
+        statusClass="current";
+      }
+      const checkedAt=info&&info.lastCheckAt?new Date(info.lastCheckAt).toLocaleString([],{hour:"numeric",minute:"2-digit",day:"numeric",month:"short"}):"Not checked yet";
+      const releaseLink=info&&info.releaseUrl?"<a class='wa-update-release-link' href='"+esc(info.releaseUrl)+"' target='_blank' rel='noopener noreferrer'>View release notes</a>":"";
+      const installButton=available
+        ? "<button type='button' class='wa-update-primary' data-wa-native-update-install "+(info.installing?"disabled":"")+">"+(info.installing?"Preparing…":"Download and install")+"</button>"
+        : "";
+      const message=info&&info.message?"<p class='wa-update-error'>"+esc(info.message)+"</p>":"";
+      content="<section class='wa-update-panel'>"+
+        "<div class='wa-update-hero'><span class='wa-update-icon'>"+icon("download")+"</span><div><span class='wa-settings-kicker'>APP MAINTENANCE</span><h4>WhatsApp updates</h4><p>Find, download and install the latest signed Android release from inside the app.</p></div></div>"+
+        "<div class='wa-update-status "+statusClass+"'><span class='wa-update-status-dot'></span><div><strong>"+esc(statusTitle)+"</strong><small>"+esc(statusCopy)+"</small></div></div>"+
+        "<div class='wa-update-version-grid'><div><small>Installed version</small><strong>"+esc(installedName)+(installedCode?" · "+esc(installedCode):"")+"</strong></div>"+
+        "<div><small>Latest release</small><strong>"+esc(available?(latestName||"Version "+latestCode):(latestName||"Checked against Releases"))+"</strong></div></div>"+
+        "<div class='wa-update-actions'><button type='button' class='wa-update-secondary' data-wa-native-update-check "+(info&&info.checking?"disabled":"")+">"+(info&&info.checking?"Checking…":"Check for updates")+"</button>"+installButton+"</div>"+
+        "<div class='wa-update-footer'><span>Last checked: "+esc(checkedAt)+"</span>"+releaseLink+"</div>"+message+
+        "<p class='wa-update-safety-note'>Your chats remain in your account. After the download is verified, Android’s installer opens and asks you to confirm the update.</p>"+
+        "</section>";
+      return "<div class='settings-detail-header'><h3>"+esc(tab[2])+"</h3></div><div class='settings-detail-content'>"+content+"</div>";
+    }
     if(settingsTab==="account"){
       const profilePhoto=state.profile.avatarData
         ? "<img src='"+esc(state.profile.avatarData)+"' alt='Profile photo'>"
@@ -947,6 +999,9 @@
     const matched=settingsTabs.filter(t=>(t[2]+" "+t[0]).toLowerCase().includes(settingsQuery.toLowerCase()));
     main.innerHTML="<section class='settings-layout'><aside class='settings-list'><div class='settings-list-header'><h2>Settings</h2><label class='settings-search'>"+icon("search")+"<input id='settings-search' placeholder='Search settings' value='"+esc(settingsQuery)+"' aria-label='Search settings'></label></div>"+matched.map(t=>"<button class='settings-nav-item"+(t[0]===settingsTab?" active":"")+"' data-setting-tab='"+esc(t[0])+"'>"+icon(t[1])+"<span>"+esc(t[2])+"</span></button>").join("")+"<button class='settings-nav-item' data-action='profile'>"+icon("users")+"<span>Profile</span></button></aside><div class='settings-detail'>"+renderSettingsDetail()+"</div></section>";
   }
+  window.addEventListener("wa-native-update-state",()=>{
+    if(view==="settings"&&settingsTab==="updates")renderSettings();
+  });
   function renderInfo(chat) {
     if(!chat){renderWelcome();return;}
     const history=Array.isArray(chat.messages)?chat.messages:[];
