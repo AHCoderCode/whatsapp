@@ -91,17 +91,17 @@ The UI/CSS pass adds narrow-screen wrapping and scrolling for custom list chips,
 **Production:** `https://whatsapp-for.vercel.app`  
 **Vercel deployment:** `whatsapp-m6ppo8wq9-vexel-ai.vercel.app` (READY)
 
-The feature branch adds:
+The October 31 production release adds:
 - Image/video status publishing and viewing, using private Storage paths and 24-hour expiry.
 - Image/video channel posts, signed media URLs, and author/owner deletion.
 - Community subgroup linking for groups administered by the community owner, plus member self-join through RLS.
 - Server-backed block/unblock, report submissions, shared disappearing-message settings and message expiry triggers.
 - Five-minute scheduled expiry cleanup using `pg_cron`, Vault-held credentials and a service-only Edge Function that removes actual Storage objects.
 - Account-synced custom chat lists, while contact display-name aliases remain device-local.
-- Relay-only mesh group voice/video calls for up to eight participants, including invitation, accept/decline, mute, camera toggle and leave.
+- Relay-only mesh group voice/video calls for up to eight participants, including invitation, accept/decline, mute, camera toggle and leave. The participant limit is enforced by a PostgreSQL trigger, and abandoned sessions are ended after four hours.
 - A dedicated authenticated TURN credential function with per-user request quotas and group-call invitation push delivery.
 
-The database migrations and Supabase Edge Functions for this work are applied/deployed to the connected Supabase project. The web client, service-worker assets, tests and workflow updates are merged to `main` and deployed to the production Vercel alias. The six migration filenames are aligned with the versions recorded by Supabase.
+The database migrations and Supabase Edge Functions for this work are applied/deployed to the connected Supabase project. The web client, service-worker assets, tests and workflow updates are merged to `main` and deployed to the production Vercel alias. Migration filenames are aligned with the versions recorded by Supabase, including the eight-person group-call limit and direct-chat-only block scope.
 
 GitHub Actions source smoke checks passed on the merge and post-merge commits. Vercel's production deployment is READY and the production domain returns HTTP 200. The expiry cleanup Edge Function was invoked from Postgres and returned HTTP 200; the five-minute cron job is active and recorded successful executions. Static source checks do not prove multi-device behavior or call quality. Required sign-off still includes at least three accounts in one group, separate Android devices, browser/PWA, and native APK group calls over separate Wi-Fi/mobile networks. Group calling currently uses a full mesh and is limited to eight participants. Group invite notifications open the app; they do not provide native lock-screen Accept/Decline controls.
 
@@ -115,4 +115,4 @@ Security and product boundaries that remain:
 - Multi-account, physical-device, background-call and group-call media tests remain mandatory before production sign-off.
 
 
-**Android release:** the post-merge Android workflow is rebuilding the debug and permanently signed APKs. APK artifact/release publication should be considered complete only after that workflow reports success; its earlier run was superseded during the migration-filename sync.
+**Android release:** GitHub Actions run #105 completed successfully and published the permanently signed **WhatsApp Android 1.4.105** APK. The debug APK artifact and signed release artifact were uploaded successfully.
