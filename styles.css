@@ -796,3 +796,18 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:
 .wa-community-subgroup-row small{color:var(--muted,#667781);font-size:12px}
 .wa-community-add-subgroup{display:grid;gap:9px;padding:14px 0}
 .wa-community-add-subgroup select,.wa-community-add-subgroup input{width:100%;min-width:0}
+
+/* Relayed group-call window */
+.wa-group-call-window{display:grid;gap:14px;min-width:0}
+.wa-group-call-status{display:flex;justify-content:space-between;gap:8px;align-items:center;color:var(--muted,#667781);font-size:13px}
+.wa-group-call-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;max-height:52vh;overflow:auto}
+.wa-group-call-tile{position:relative;display:grid;min-width:0;min-height:130px;overflow:hidden;border-radius:12px;background:#172b32;align-content:center}
+.wa-group-call-tile video{width:100%;max-height:32vh;object-fit:cover;background:#0b141a}
+.wa-group-call-tile audio{display:none}
+.wa-group-call-name{display:flex;justify-content:space-between;gap:7px;padding:8px 10px;color:#fff;font-size:13px}
+.wa-group-call-name small{color:#b8c8ce;font-size:11px}
+.wa-group-call-audio-avatar{display:grid;place-items:center;min-height:105px;color:#fff;font-size:32px}
+.wa-group-call-controls{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.wa-group-invite{display:grid;gap:6px;padding:10px 2px}
+.wa-group-invite p{margin:0}
+@media(max-width:430px){.wa-group-call-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.wa-group-call-tile{min-height:105px}}
