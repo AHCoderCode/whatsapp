@@ -1,22 +1,22 @@
-const CACHE_NAME = "whatsapp-final-shell-v64";
+const CACHE_NAME = "whatsapp-final-shell-v65";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/app.js?v=whatsapp-fix-20261031c",
-  "/feature-gaps.js?v=whatsapp-fix-20261031c",
-  "/group-calls.js?v=whatsapp-fix-20261031c",
-  "/backend.js?v=whatsapp-fix-20261031c",
-  "/calls.js?v=whatsapp-fix-20261031c",
-  "/updater.js?v=whatsapp-fix-20261031c",
-  "/styles.css?v=whatsapp-fix-20261031c",
-  "/manifest.webmanifest?v=whatsapp-fix-20261031c",
-  "/whatsapp-favicon.svg?v=whatsapp-fix-20261031c",
+  "/app.js?v=whatsapp-fix-20261031d",
+  "/feature-gaps.js?v=whatsapp-fix-20261031d",
+  "/group-calls.js?v=whatsapp-fix-20261031d",
+  "/backend.js?v=whatsapp-fix-20261031d",
+  "/calls.js?v=whatsapp-fix-20261031d",
+  "/updater.js?v=whatsapp-fix-20261031d",
+  "/styles.css?v=whatsapp-fix-20261031d",
+  "/manifest.webmanifest?v=whatsapp-fix-20261031d",
+  "/whatsapp-favicon.svg?v=whatsapp-fix-20261031d",
   "/icon.svg",
   "/icon-192.svg",
   "/icon-512.svg",
-  "/icon.svg?v=whatsapp-fix-20261031c",
-  "/icon-192.svg?v=whatsapp-fix-20261031c",
-  "/icon-512.svg?v=whatsapp-fix-20261031c",
+  "/icon.svg?v=whatsapp-fix-20261031d",
+  "/icon-192.svg?v=whatsapp-fix-20261031d",
+  "/icon-512.svg?v=whatsapp-fix-20261031d",
 ];
 
 self.addEventListener("install", event => {

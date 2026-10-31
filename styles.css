@@ -811,3 +811,47 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:
 .wa-group-invite{display:grid;gap:6px;padding:10px 2px}
 .wa-group-invite p{margin:0}
 @media(max-width:430px){.wa-group-call-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.wa-group-call-tile{min-height:105px}}
+
+
+/* WhatsApp-style call entries inside a conversation. */
+.message-row.call-event-message .message-bubble{
+  max-width:min(88%,320px);
+  padding:0!important;
+  overflow:hidden;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+.wa-call-event-card{
+  display:grid;
+  grid-template-columns:42px minmax(0,1fr);
+  align-items:center;
+  gap:11px;
+  min-width:205px;
+  max-width:300px;
+  padding:12px 14px;
+  border:0;
+  border-radius:13px;
+  background:#111b21;
+  color:#f5f7f8;
+}
+.wa-call-event-card.missed{background:#d93645;color:#fff}
+.wa-call-event-icon{
+  display:grid;
+  place-items:center;
+  width:40px;
+  height:40px;
+  border-radius:50%;
+  background:#26383f;
+  color:#fff;
+}
+.wa-call-event-card.missed .wa-call-event-icon{background:#b92737}
+.wa-call-event-icon svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.9}
+.wa-call-event-copy{display:flex;min-width:0;flex-direction:column;gap:4px}
+.wa-call-event-copy strong{color:inherit;font-size:13px;font-weight:650;line-height:1.35}
+.wa-call-event-copy small{color:inherit;opacity:.82;font-size:11px;line-height:1.35}
+.call-event-message .message-meta{margin-top:3px}
+.theme-dark .wa-call-event-card.completed{background:#101a20;color:#e9edef}
+@media(max-width:430px){
+  .wa-call-event-card{min-width:190px;max-width:260px;padding:10px 11px;gap:9px}
+  .wa-call-event-icon{width:36px;height:36px}
+}

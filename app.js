@@ -396,13 +396,16 @@
     app.classList.toggle("mobile-conversation-open",isMobile && selectedChatId!==null);
   }
   function messageHTML(message, chat) {
+    const callEvent=message.callEvent||null;
+    const callerIsMe=!!callEvent&&String(callEvent.callerId)===String(currentUser&&currentUser.id);
     const outgoing = message.from==="me";
+    const visualOutgoing=callEvent?callerIsMe:outgoing;
     const sender = !outgoing&&chat.type==="group" ? "<span class='message-sender'>" + esc(message.sender || "Group member") + "</span>" : "";
     const time = esc(message.time || "");
     const edited = message.editedAt ? "<span class='message-edited-label' title='Message edited'>Edited</span>" : "";
     const reactions = message.reactions && message.reactions.length ? "<span class='reaction'>" + esc(message.reactions.join(" ")) + "</span>" : "";
     const isRead=message.status==="read";
-    const checks = outgoing ? "<span class='message-read-status " + (isRead?"is-read":"is-delivered") + "' title='" + (isRead?"Read by recipient":"Sent") + "' aria-label='" + (isRead?"Read by recipient":"Sent") + "'>" + icon(isRead?"checks":"check") + "</span>" : "";
+    const checks = outgoing&&!callEvent ? "<span class='message-read-status " + (isRead?"is-read":"is-delivered") + "' title='" + (isRead?"Read by recipient":"Sent") + "' aria-label='" + (isRead?"Read by recipient":"Sent") + "'>" + icon(isRead?"checks":"check") + "</span>" : "";
     const isVoiceAttachment = message.attachmentType==="voice" || message.messageType==="voice";
     const voiceBars = "<span class='voice-waveform' aria-hidden='true'>" + [9,15,11,19,13,22,10,16,7,18,12,21,9,15,6,13].map((height,index)=>"<i style='--wave-height:"+height+"px;--wave-index:"+index+"'></i>").join("") + "</span>";
     const attachmentAction = message.attachmentPath ? "<button type='button' class='message-attachment-open "+(isVoiceAttachment?"voice-message-open":"")+"' data-action='open-attachment' data-message-id='" + esc(message.id) + "' aria-label='"+(isVoiceAttachment?"Play voice message":"Open attachment")+"'>" + (isVoiceAttachment?"<span class='voice-play-button'>"+icon("play")+"</span>"+voiceBars+"<span class='voice-message-copy'><strong>Voice message</strong><small>Tap to listen</small></span>":icon((message.attachmentMime||"").startsWith("image/")?"image":(message.attachmentMime||"").startsWith("video/")?"video":(message.attachmentMime||"").startsWith("audio/")?"music":"file")+"<span>"+esc(message.attachmentName||"Open attachment")+"</span>") + "</button>" : "";
@@ -419,12 +422,20 @@
       const e=message.event,date=new Date(e.startsAt),valid=!Number.isNaN(date.getTime()),going=e.myResponse==="going";
       return "<div class='wa-event-card'><span class='wa-event-kicker'>EVENT</span><strong>"+esc(e.title)+"</strong><span class='wa-event-date'>"+esc(valid?date.toLocaleString():"Date unavailable")+"</span><small>"+Number(e.total||0)+" going"+(Number(e.interested||0)?" · "+Number(e.interested)+" interested":"")+"</small><button type='button' class='primary-button wa-event-rsvp "+(going?"going":"")+"' data-action='event-rsvp' data-event-id='"+esc(e.id)+"'>"+(going?"Going ✓ · Cancel RSVP":"I'm going")+"</button></div>";
     })() : "";
-    const textBody = message.poll || message.event || isVoiceAttachment ? "" : linkifyText(message.text);
+    const textBody = message.poll || message.event || isVoiceAttachment || callEvent ? "" : linkifyText(message.text);
     const replyQuote = message.replyTo ? "<button type='button' class='message-reply-quote' data-action='jump-to-reply' data-reply-target-id='" + esc(message.replyTo.id) + "'><span class='message-reply-quote-icon'>" + icon("reply") + "</span><span class='message-reply-quote-copy'><strong>" + esc(message.replyTo.sender || "Replied message") + "</strong><span>" + esc(message.replyTo.text || "Message") + "</span></span></button>" : "";
     const forwardedLabel = message.forwarded ? "<span class='forwarded-label'>" + icon("forward") + " Forwarded</span>" : "";
     const selected = selectedMessage && String(selectedMessage.id) === String(message.id) && String(selectedMessage.chatId) === String(chat.id) ? " message-selected" : "";
-    const messageLabel = (outgoing ? "You: " : (chat.name || "Contact") + ": ") + String(message.text || message.attachmentName || "Message").slice(0,100);
-    return "<div class='message-row " + (outgoing?"outgoing":"incoming") + selected + "' data-message-id='" + esc(message.id) + "' tabindex='0' aria-label='" + esc(messageLabel) + "'><div class='message-bubble'>" + sender + forwardedLabel + replyQuote + "<span class='message-text'>" + textBody + "</span>" + pollCard + eventCard + attachmentAction + "<span class='message-meta'>" + edited + time + checks + "</span>" + reactions + "</div></div>";
+    const mediaType=callEvent&&callEvent.mediaType==="video"?"video":"audio";
+    const missedCall=!!callEvent&&callEvent.outcome==="missed";
+    const durationSeconds=callEvent?Math.max(0,Number(callEvent.durationSeconds)||0):0;
+    const durationLabel=String(Math.floor(durationSeconds/60)).padStart(2,"0")+":"+String(durationSeconds%60).padStart(2,"0");
+    const callTitle=missedCall?"Missed "+(mediaType==="video"?"video":"voice")+" call":(callerIsMe?"Outgoing ":"Incoming ")+(mediaType==="video"?"video":"voice")+" call";
+    const callDetail=missedCall?"Not answered":(durationSeconds?"Duration "+durationLabel:"Call connected");
+    const callEventCard=callEvent?"<div class='wa-call-event-card "+(missedCall?"missed":"completed")+"' role='group' aria-label='"+esc(callTitle)+"'><span class='wa-call-event-icon'>"+icon(mediaType==="video"?"video":"phone")+"</span><span class='wa-call-event-copy'><strong>"+esc(callTitle)+"</strong><small>"+esc(callDetail)+"</small></span></div>":"";
+    const messageLabel = callEvent?callTitle:((outgoing ? "You: " : (chat.name || "Contact") + ": ") + String(message.text || message.attachmentName || "Message").slice(0,100));
+    const bubbleContent=callEvent?callEventCard:(sender+forwardedLabel+replyQuote+"<span class='message-text'>"+textBody+"</span>"+pollCard+eventCard+attachmentAction);
+    return "<div class='message-row " + (visualOutgoing?"outgoing":"incoming") + (callEvent?" call-event-message":"") + selected + "' data-message-id='" + esc(message.id) + "' tabindex='0' aria-label='" + esc(messageLabel) + "'><div class='message-bubble'>" + bubbleContent + "<span class='message-meta'>" + edited + time + checks + "</span>" + reactions + "</div></div>";
   }
   function syncMessageSelectionUI() {
     const bar = $("#message-selection-toolbar", main);
