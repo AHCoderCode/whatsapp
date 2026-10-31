@@ -2419,6 +2419,9 @@ function openSharedItemsDialog(chat,kind) {
       if (data.channels) state.backendChannels = data.channels;
       if (data.channelPosts) state.backendChannelPosts = data.channelPosts;
       if (data.communities) state.backendCommunities = data.communities;
+      if (window.WhatsAppFeatureGaps && typeof window.WhatsAppFeatureGaps.onBackendData === "function") {
+        queueMicrotask(() => { void window.WhatsAppFeatureGaps.onBackendData(data); });
+      }
       if (selectedChatId && !state.chats.some(c => String(c.id) === String(selectedChatId))) selectedChatId = null;
       const oldInput = $("#message-input");
       const draft = oldInput ? oldInput.value : "";
