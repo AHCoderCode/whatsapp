@@ -129,5 +129,11 @@ SHA-256 verifies that a downloaded file matches the release's declared checksum;
 
 
 ### Custom chat lists
+### App updates and call history
+
+On the installed Android app, open **Settings → App updates** to check for the latest signed APK and download it again even after dismissing the update banner. The updater verifies the published SHA-256 checksum and Android package signature before opening Android's installer; Android still requires the user to approve installation.
+
+Direct-call cards in chats are **red** for missed/unanswered calls (incoming or outgoing) and **green** for calls that connected. This reports the result of the call attempt, not merely which person started it.
+
 
 Create custom chat lists such as **Family**, **Work**, or **Wishlist**, choose which conversations appear in each list, and edit or remove a list later. Custom list names and selected conversation IDs sync through Supabase to the signed-in account. Contact display-name aliases remain local to each device.
