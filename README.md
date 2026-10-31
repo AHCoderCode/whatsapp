@@ -5,6 +5,10 @@ This independent WhatsApp-inspired web app is a responsive, installable messagin
 **Source:** https://github.com/AHCoderCode/whatsapp  
 **Supabase project:** `windows-12-beta-chat` (`qoyqfmovzvtyvxutakym`)
 
+### Call audio and chat call cards
+
+Android calls start on the earpiece route; the Speaker control explicitly switches to the device loudspeaker. During the call, the app raises the Android voice-call stream to that device's available maximum, restores its previous level when the call ends, and applies a compressed software gain to remote call audio where Web Audio is supported. Actual loudness still depends on the phone's speaker, OS limits, and connected audio devices. Connected calls appear as dark call cards in the conversation; unanswered or declined calls appear as red missed-call cards.
+
 ## What is connected to the backend
 
 - Username/password accounts using Supabase Auth. Usernames and custom IDs are unique. The `+990 xxx xxx xxx` value is an **in-app ID**, not a real telephone number.
