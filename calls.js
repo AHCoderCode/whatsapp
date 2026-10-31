@@ -371,9 +371,9 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
         const source=callOutputAudioContext.createMediaStreamSource(stream);
         const gain=callOutputAudioContext.createGain();
         const compressor=callOutputAudioContext.createDynamicsCompressor();
-        gain.gain.value=2.5;
-        compressor.threshold.value=-12;compressor.knee.value=10;compressor.ratio.value=10;
-        compressor.attack.value=0.004;compressor.release.value=0.22;
+        gain.gain.value=2.2;
+        compressor.threshold.value=-9;compressor.knee.value=6;compressor.ratio.value=12;
+        compressor.attack.value=0.003;compressor.release.value=0.2;
         source.connect(gain);gain.connect(compressor);compressor.connect(callOutputAudioContext.destination);
         callOutputSource=source;callOutputGain=gain;callOutputCompressor=compressor;callOutputStream=stream;
       }
