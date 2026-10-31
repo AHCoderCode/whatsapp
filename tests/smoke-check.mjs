@@ -90,10 +90,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-fix-20261031d");
-  includes(files.sw, "whatsapp-fix-20261031d");
-  includes(files.manifest, "whatsapp-fix-20261031d");
-  includes(files.sw, "whatsapp-final-shell-v65");
+  includes(files.html, "whatsapp-fix-20261031e");
+  includes(files.sw, "whatsapp-fix-20261031e");
+  includes(files.manifest, "whatsapp-fix-20261031e");
+  includes(files.sw, "whatsapp-final-shell-v66");
 });
 check("mobile settings use a full-width account detail pane", () => {
   includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
@@ -154,6 +154,19 @@ check("web/PWA clients receive an actionable update banner while Android checks 
   includes(files.updater, "registration.update()");
   includes(files.updater, "native.checkForUpdates()");
   includes(files.updater, "downloadAndInstallUpdate(latestUpdate.apkUrl, latestUpdate.sha256)");
+  includes(files.updater, "waNativeUpdateGetState");
+  includes(files.updater, "waNativeUpdateCheckNow");
+  includes(files.updater, "waNativeUpdateInstall");
+  includes(files.updater, "data-wa-native-update-check");
+  includes(files.updater, "data-wa-native-update-install");
+  includes(files.updater, "notifyUpdateState");
+});
+check("Android update remains available from Settings after dismissing the banner", () => {
+  includes(files.app, '["updates","download","App updates"]');
+  includes(files.app, "waNativeUpdateGetState");
+  includes(files.app, "wa-native-update-state");
+  includes(files.app, "wa-update-panel");
+  includes(files.app, "Download and install");
 });
 check("in-app update checker validates trusted release APK and checksum before install", () => {
   includes(files.updater, "Update now");
@@ -194,7 +207,9 @@ check("missed and connected call events are synced as WhatsApp-style chat cards"
   includes(files.app, "wa-call-event-card");
   includes(files.app, "call-event-message");
   includes(files.css, ".wa-call-event-card.missed{background:#d93645");
-  includes(files.css, ".wa-call-event-card.completed");
+  includes(files.css, ".wa-call-event-card.completed{background:#128c7e");
+  includes(files.app, "Missed outgoing ");
+  includes(files.app, "Missed incoming ");
 });
 check("attachment menu opens the Android file picker before closing and has a WebView fallback", () => {
   const start = files.app.indexOf("function runMenuAction");
