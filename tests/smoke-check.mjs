@@ -11,7 +11,7 @@ const files = {
   groupTurn: read("supabase/functions/whatsapp-group-turn-credentials/index.ts"),
   cleanup: read("supabase/functions/whatsapp-expiry-cleanup/index.ts"),
   groupCallLimitMigration: read("supabase/migrations/20261031091826_whatsapp_group_call_participant_limit.sql"),
-  blockScopeMigration: read("supabase/migrations/20261031091900_whatsapp_block_scope_direct_chats_only.sql"),
+  blockScopeMigration: read("supabase/migrations/20261031092054_whatsapp_block_scope_direct_chats_only.sql"),
   nativeNotifications: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/NativeCallNotifications.java"),
   nativeReceiver: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/CallNotificationActionReceiver.java"),
   nativeActivity: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/MainActivity.java"),
