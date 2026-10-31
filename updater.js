@@ -235,6 +235,12 @@
   }
   const priorResume = window.waNativeAppResumed;
   window.waNativeAppResumed = function () {
+    // Android returns here after the package installer is closed. Let the
+    // Settings update page offer another attempt if installation was cancelled.
+    if (installing) {
+      installing = false;
+      notifyUpdateState();
+    }
     if (typeof priorResume === "function") priorResume.apply(this, arguments);
     check(true);
   };
