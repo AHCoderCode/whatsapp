@@ -533,7 +533,7 @@ check("native Android manifest declares audio-settings permission for WebRTC rou
   includes(files.nativeManifest, 'android.permission.RECORD_AUDIO');
   includes(files.nativeManifest, 'android.permission.MODIFY_AUDIO_SETTINGS');
   includes(files.nativeActivity, 'private synchronized boolean beginNativeCallAudio(boolean useSpeaker)');
-  includes(files.nativeActivity, '@JavascriptInterface public boolean beginCallAudio()');
+  includes(files.nativeActivity, '@JavascriptInterface public boolean beginCallAudio(boolean useSpeaker)');
   includes(files.nativeActivity, 'return false;');
 });
 check("incoming calls acquire microphone before switching Android to communication audio mode", () => {
