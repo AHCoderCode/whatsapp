@@ -6,6 +6,7 @@ const read = path => readFileSync(new URL("../" + path, import.meta.url), "utf8"
 const files = {
   app: read("app.js"),
   backend: read("backend.js"),
+  featureGaps: read("feature-gaps.js"),
   nativeNotifications: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/NativeCallNotifications.java"),
   nativeReceiver: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/CallNotificationActionReceiver.java"),
   nativeActivity: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/MainActivity.java"),
@@ -45,9 +46,19 @@ function excludes(source, value, message) {
   assert.ok(!source.includes(value), message || "unexpected source found: " + value);
 }
 
-for (const [name, source] of [["app.js",files.app],["backend.js",files.backend],["calls.js",files.calls],["sw.js",files.sw],["updater.js",files.updater]]) {
+for (const [name, source] of [["app.js",files.app],["backend.js",files.backend],["feature-gaps.js",files.featureGaps],["calls.js",files.calls],["sw.js",files.sw],["updater.js",files.updater]]) {
   check(name + " JavaScript parses", () => new Script(source, { filename: name }));
 }
+check("media, privacy, subgroup and synced-list handlers are present", () => {
+  for (const marker of ["wa-publish-status","wa-publish-channel-post","whatsapp_user_blocks","whatsapp_user_reports","whatsapp_disappearing_settings","whatsapp_custom_chat_lists","whatsapp_community_groups"]) {
+    includes(files.featureGaps, marker);
+  }
+  includes(files.app, "WhatsAppFeatureGaps.onBackendData");
+});
+check("feature-gap module is in the app shell cache", () => {
+  includes(files.html, "/feature-gaps.js?v=whatsapp-fix-20261031c");
+  includes(files.sw, "/feature-gaps.js?v=whatsapp-fix-20261031c");
+});
 check("inline HTML scripts parse", () => {
   const scripts = [...files.html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
     .map(match => match[1]).filter(source => source.trim());
