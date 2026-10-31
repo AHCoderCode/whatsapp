@@ -1,7 +1,92 @@
 (() => {
   "use strict";
+  const APP_BUILD = "whatsapp-fix-20261031b";
   const native = window.WhatsAppNativeAndroid;
-  if (!native || typeof native.isNativeApp !== "function" || !native.isNativeApp()) return;
+  const nativeApp = !!(native && typeof native.isNativeApp === "function" && native.isNativeApp());
+
+  function setupWebUpdateNotice() {
+    if (!("serviceWorker" in navigator)) return;
+    let hadController = !!navigator.serviceWorker.controller;
+    let dismissed = false;
+    let banner = null;
+    function workerBuild(worker) {
+      try { return new URL(worker.scriptURL).searchParams.get("v") || ""; }
+      catch (_) { return ""; }
+    }
+    function ensureBanner() {
+      if (banner) return banner;
+      banner = document.createElement("section");
+      banner.className = "wa-native-update-banner wa-web-update-banner";
+      banner.id = "wa-web-update-banner";
+      banner.setAttribute("role", "status");
+      banner.setAttribute("aria-live", "polite");
+      const copy = document.createElement("div");
+      copy.className = "wa-native-update-copy";
+      const title = document.createElement("strong");
+      title.textContent = "WhatsApp update available";
+      const detail = document.createElement("small");
+      detail.textContent = "A new version is ready. Reload to use the latest fixes and features.";
+      copy.append(title, detail);
+      const actions = document.createElement("div");
+      actions.className = "wa-native-update-actions";
+      const reload = document.createElement("button");
+      reload.type = "button";
+      reload.className = "wa-native-update-install";
+      reload.textContent = "Update now";
+      reload.setAttribute("data-wa-web-update-reload", "true");
+      const later = document.createElement("button");
+      later.type = "button";
+      later.className = "wa-native-update-dismiss";
+      later.textContent = "Later";
+      later.setAttribute("data-wa-web-update-dismiss", "true");
+      actions.append(reload, later);
+      banner.append(copy, actions);
+      document.body.appendChild(banner);
+      return banner;
+    }
+    function showNotice() {
+      if (dismissed) return;
+      ensureBanner().hidden = false;
+    }
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (hadController) showNotice();
+      hadController = true;
+    });
+    const initialController = navigator.serviceWorker.controller;
+    if (initialController && workerBuild(initialController) !== APP_BUILD) showNotice();
+    document.addEventListener("click", event => {
+      const reload = event.target.closest("[data-wa-web-update-reload]");
+      if (reload) {
+        reload.disabled = true;
+        reload.textContent = "Reloading…";
+        window.setTimeout(() => window.location.reload(), 120);
+        return;
+      }
+      const later = event.target.closest("[data-wa-web-update-dismiss]");
+      if (later) {
+        dismissed = true;
+        if (banner) banner.hidden = true;
+      }
+    });
+    window.addEventListener("load", () => {
+      window.setTimeout(async () => {
+        try {
+          const registration = await navigator.serviceWorker.getRegistration();
+          if (!registration) return;
+          const active = navigator.serviceWorker.controller || registration.active;
+          if (active && workerBuild(active) !== APP_BUILD) showNotice();
+          await registration.update();
+        } catch (error) {
+          console.warn("[updater] Web app update check failed:", error && error.message || error);
+        }
+      }, 1200);
+    });
+  }
+
+  if (!nativeApp) {
+    setupWebUpdateNotice();
+    return;
+  }
   let latestUpdate = null, lastCheckAt = 0, banner = null, installButton = null, message = null, dismissedVersion = "", checking = false;
   function ensureBanner() {
     if (banner) return banner;
