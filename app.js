@@ -997,7 +997,7 @@
     const myRow = "<div class='status-row' data-action='" + (mine ? "status-preview" : "new-status") + "' " +
       (mine ? "data-status-id='" + esc(mine.id) + "'" : "") + "><div class='status-ring'><div class='status-inner'>" +
       myAvatar + "</div></div><div class='status-copy'><strong>My status</strong><span>" +
-      esc(mine ? mine.text : "Tap to add a text status") +
+      esc(mine ? mine.text : "Tap to add a text, photo or video status") +
       "</span></div><button class='icon-button' data-action='new-status' aria-label='Add status'>" + icon("new") + "</button></div>";
     const recent = Array.from(latestByUser.values()).map(status => {
       const avatar = status.avatarData
@@ -1011,7 +1011,7 @@
     }).join("");
     main.innerHTML = "<section class='section-screen'>" +
       screenHeader("Updates","<button class='icon-button' data-action='new-status' aria-label='New text status'>" + icon("new") + "</button>") +
-      "<div class='screen-content'><p class='screen-description'>Text status updates expire automatically after 24 hours and are shared with your accepted contacts.</p>" +
+      "<div class='screen-content'><p class='screen-description'>Text, photo and video status updates expire automatically after 24 hours and are shared with your accepted contacts.</p>" +
       "<div class='section-card'><h3 class='section-card-title'>Status</h3>" + myRow + "</div>" +
       "<div class='section-card'><h3 class='section-card-title'>Recent updates</h3>" +
       (recent || "<div class='empty-state'>No contact status updates yet.</div>") +
