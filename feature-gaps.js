@@ -461,7 +461,10 @@
     } finally { syncingLists = false; }
   }
 
-  async function onBackendData() { await syncCustomLists("initial"); }
+  async function onBackendData() {
+    await syncCustomLists("initial");
+    await window.WhatsAppGroupCalls?.resume?.();
+  }
 
   function handleActionEvent(event) {
     if (!ready()) return;
