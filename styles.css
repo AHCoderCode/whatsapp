@@ -834,6 +834,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:
   background:#111b21;
   color:#f5f7f8;
 }
+.wa-call-event-card.completed{background:#128c7e;color:#fff}
 .wa-call-event-card.missed{background:#d93645;color:#fff}
 .wa-call-event-icon{
   display:grid;
@@ -844,14 +845,51 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:
   background:#26383f;
   color:#fff;
 }
+.wa-call-event-card.completed .wa-call-event-icon{background:#075e54}
 .wa-call-event-card.missed .wa-call-event-icon{background:#b92737}
 .wa-call-event-icon svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.9}
 .wa-call-event-copy{display:flex;min-width:0;flex-direction:column;gap:4px}
 .wa-call-event-copy strong{color:inherit;font-size:13px;font-weight:650;line-height:1.35}
 .wa-call-event-copy small{color:inherit;opacity:.82;font-size:11px;line-height:1.35}
 .call-event-message .message-meta{margin-top:3px}
-.theme-dark .wa-call-event-card.completed{background:#101a20;color:#e9edef}
 @media(max-width:430px){
   .wa-call-event-card{min-width:190px;max-width:260px;padding:10px 11px;gap:9px}
   .wa-call-event-icon{width:36px;height:36px}
 }
+
+/* Permanent Android update page inside Settings */
+.wa-update-panel{display:grid;gap:16px;max-width:760px;padding:18px;border:1px solid #dfe8e3;border-radius:16px;background:#fff;color:#172b25}
+.wa-update-hero{display:flex;align-items:center;gap:14px}
+.wa-update-icon{display:grid;place-items:center;width:52px;height:52px;flex:0 0 52px;border-radius:15px;background:#e4f5ec;color:#128c7e}
+.wa-update-icon svg{width:25px;height:25px}
+.wa-update-hero h4{margin:4px 0;font-size:18px}
+.wa-update-hero p{margin:0;color:#667781;font-size:12px;line-height:1.5}
+.wa-update-status{display:flex;align-items:flex-start;gap:10px;padding:13px;border-radius:12px;background:#f3f6f5}
+.wa-update-status-dot{width:10px;height:10px;flex:0 0 10px;margin-top:4px;border-radius:50%;background:#7c8b85}
+.wa-update-status.available .wa-update-status-dot,.wa-update-status.current .wa-update-status-dot{background:#128c7e}
+.wa-update-status.checking .wa-update-status-dot{background:#d49a2a}
+.wa-update-status.error .wa-update-status-dot{background:#d93645}
+.wa-update-status>div{display:grid;gap:4px}
+.wa-update-status strong{font-size:13px}
+.wa-update-status small{color:#667781;font-size:12px;line-height:1.45}
+.wa-update-version-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.wa-update-version-grid>div{display:grid;min-width:0;gap:5px;padding:12px;border:1px solid #e4ebe7;border-radius:11px}
+.wa-update-version-grid small{color:#667781;font-size:11px}
+.wa-update-version-grid strong{overflow-wrap:anywhere;font-size:12px}
+.wa-update-actions{display:flex;flex-wrap:wrap;gap:9px}
+.wa-update-actions button{min-height:42px;padding:0 16px;border:0;border-radius:22px;font-size:13px;font-weight:700;cursor:pointer}
+.wa-update-primary{background:#128c7e;color:#fff}
+.wa-update-secondary{background:#edf2ef;color:#243b32}
+.wa-update-actions button:disabled{opacity:.6;cursor:wait}
+.wa-update-footer{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;color:#667781;font-size:11px}
+.wa-update-release-link{color:#128c7e;font-weight:650;text-decoration:none}
+.wa-update-error{margin:0;color:#b3261e;font-size:12px;line-height:1.45}
+.wa-update-safety-note{margin:0;color:#667781;font-size:11px;line-height:1.5}
+.theme-dark .wa-update-panel{background:#17231f;border-color:#344740;color:#e9edef}
+.theme-dark .wa-update-icon{background:#173c32;color:#65d5a4}
+.theme-dark .wa-update-status{background:#202c27}
+.theme-dark .wa-update-status small,.theme-dark .wa-update-hero p,.theme-dark .wa-update-version-grid small,.theme-dark .wa-update-footer,.theme-dark .wa-update-safety-note{color:#b7c8c0}
+.theme-dark .wa-update-version-grid>div{border-color:#344740}
+.theme-dark .wa-update-secondary{background:#2b3c35;color:#e9edef}
+.theme-dark .wa-update-release-link{color:#65d5a4}
+@media(max-width:520px){.wa-update-panel{padding:13px;gap:13px}.wa-update-version-grid{grid-template-columns:1fr}.wa-update-actions{display:grid;grid-template-columns:1fr}.wa-update-actions button{width:100%}}
