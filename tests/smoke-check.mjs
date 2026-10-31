@@ -160,6 +160,7 @@ check("web/PWA clients receive an actionable update banner while Android checks 
   includes(files.updater, "data-wa-native-update-check");
   includes(files.updater, "data-wa-native-update-install");
   includes(files.updater, "notifyUpdateState");
+  includes(files.updater, "if (installing) {\n      installing = false;");
 });
 check("Android update remains available from Settings after dismissing the banner", () => {
   includes(files.app, '["updates","download","App updates"]');
