@@ -28,6 +28,7 @@ jobs:
 
       - name: Run source checks before building an update
         run: |
+          node --check feature-gaps.js
           node --check app.js
           node --check backend.js
           node --check calls.js
