@@ -81,10 +81,24 @@
     return data.filter(row=>row&&row.id&&String(row.id)!==String(me.id)).map(row=>mapProfile(row)).filter(Boolean).slice(0,20);
   }
 
+  const CALL_MESSAGE_PREFIX="wa-call-event:v1:";
   function localMessage(row, me, chat) {
     const stamp=new Date(row.created_at);
-    const body=row.message_type==="voice"?"🎤 Voice message":(row.body||(row.attachment_name?"📎 "+row.attachment_name:""));
-    return {id:row.id,from:row.sender_id===me.id?"me":"them",text:body,
+    const rawBody=row.message_type==="voice"?"🎤 Voice message":(row.body||(row.attachment_name?"📎 "+row.attachment_name:""));
+    let callEvent=null;
+    if(row.message_type==="text"&&typeof row.body==="string"&&row.body.startsWith(CALL_MESSAGE_PREFIX)){
+      try{
+        const value=JSON.parse(row.body.slice(CALL_MESSAGE_PREFIX.length));
+        const participants=[String(value&&value.callerId||""),String(value&&value.calleeId||"")];
+        if(value&&value.v===1&&value.callId===String(row.id)&&participants.includes(String(me.id))&&participants.includes(String(chat.id))&&
+          ["missed","completed"].includes(value.outcome)&&["audio","video"].includes(value.mediaType)){
+          callEvent={callId:String(row.id),callerId:participants[0],calleeId:participants[1],outcome:value.outcome,mediaType:value.mediaType,durationSeconds:Math.max(0,Math.min(86400,Number(value.durationSeconds)||0))};
+        }
+      }catch(_){}
+    }
+    const direction=callEvent?(callEvent.callerId===String(me.id)?"Outgoing ":"Incoming "):"";
+    const body=callEvent?(callEvent.outcome==="missed"?"Missed ":direction)+(callEvent.mediaType==="video"?"video":"voice")+" call":rawBody;
+    return {id:row.id,from:row.sender_id===me.id?"me":"them",text:body,callEvent,
       time:stamp.toLocaleTimeString([],{hour:"numeric",minute:"2-digit",hour12:true}),
       date:stamp.toDateString()===new Date().toDateString()?"TODAY":stamp.toDateString()===new Date(Date.now()-86400000).toDateString()?"YESTERDAY":stamp.toLocaleDateString([],{month:"short",day:"numeric",...(stamp.getFullYear()!==new Date().getFullYear()?{year:"numeric"}:{})}),
       createdAt:row.created_at,editedAt:row.edited_at||"",status:"sent",reactions:[],sender:row.sender_id===me.id?"You":(chat&&chat.name)||"Member",
@@ -213,7 +227,7 @@
     if(!chat){void loadData(true);return;}
     if(chat.messages.some(m=>String(m.id)===String(row.id)))return;
     const msg=localMessage(row,me,chat);
-    if(msg.from==="them")void notifyIncomingMessage(chat,msg);
+    if(msg.from==="them"&&!msg.callEvent)void notifyIncomingMessage(chat,msg);
     if(msg.replyToId){
       const quoted=chat.messages.find(m=>String(m.id)===String(msg.replyToId));
       if(quoted)msg.replyTo={id:quoted.id,text:quoted.text||quoted.attachmentName||"Attachment",sender:quoted.from==="me"?"You":(quoted.sender||chat.name)};
