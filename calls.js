@@ -20,6 +20,16 @@
   let callTimer=null, ringTimer=null, callSetupTimer=null, callPushReminderTimer=null, callStart=0, elapsed=0, muted=false, cameraOff=false, speakerOn=true, busy=false;
   const PENDING_CALL_ACTION_KEY="wa_pending_native_call_action_v1";
   const DIRECT_FALLBACK_ICE_SERVERS=[{urls:"stun:stun.relay.metered.ca:80"},{urls:"stun:stun.cloudflare.com:3478"},{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun1.l.google.com:19302"}];
+  function configureDirectFallback(connection){
+    if(!connection||typeof connection.setConfiguration!=="function")throw new Error("The WebRTC connection cannot be reconfigured for direct fallback.");
+    // Preserve the original configuration, especially iceCandidatePoolSize.
+    // WebRTC forbids changing the candidate-pool size after setLocalDescription().
+    const current=typeof connection.getConfiguration==="function"?connection.getConfiguration():{};
+    connection.setConfiguration(Object.assign({},current,{
+      iceServers:DIRECT_FALLBACK_ICE_SERVERS,
+      iceTransportPolicy:"all"
+    }));
+  }
   function readPendingNotificationAction(){
     try{
       const raw=localStorage.getItem(PENDING_CALL_ACTION_KEY);
@@ -516,7 +526,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       }
       if(!activeCall||activeCall.id!==call.id||pc!==connection)return;
       if(connection.signalingState!=="stable")throw new Error("The WebRTC signaling state is still "+String(connection.signalingState||"unknown")+".");
-      connection.setConfiguration({iceServers:DIRECT_FALLBACK_ICE_SERVERS,iceTransportPolicy:"all",iceCandidatePoolSize:0});
+      configureDirectFallback(connection);
       directFallbackLocalStarted=true;
       directFallbackRemoteReady=false;
       pendingDirectCandidates=[];
@@ -545,7 +555,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     setPhase("connecting","The TURN relay failed. Switching to an encrypted direct connection; your network address may be visible to this contact…");
     armDirectFallbackTimeout(call.id);
     try{
-      connection.setConfiguration({iceServers:DIRECT_FALLBACK_ICE_SERVERS,iceTransportPolicy:"all",iceCandidatePoolSize:0});
+      configureDirectFallback(connection);
       await withCallTimeout(connection.setRemoteDescription({type:"offer",sdp}),10000,"The direct connection offer from the caller timed out.");
       directFallbackRemoteReady=true;
       await flushDirectFallbackCandidates();

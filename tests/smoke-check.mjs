@@ -218,7 +218,12 @@ check("direct ICE fallback recovers a pending relay offer and retries several ST
 });
 check("failed TURN calls coordinate an encrypted direct ICE fallback", () => {
   includes(files.calls, 'const DIRECT_FALLBACK_ICE_SERVERS=[{urls:"stun:stun.relay.metered.ca:80"},{urls:"stun:stun.cloudflare.com:3478"}');
-  includes(files.calls, 'connection.setConfiguration({iceServers:DIRECT_FALLBACK_ICE_SERVERS,iceTransportPolicy:"all",iceCandidatePoolSize:0});');
+  includes(files.calls, "function configureDirectFallback(connection)");
+  includes(files.calls, "connection.getConfiguration()");
+  includes(files.calls, "iceServers:DIRECT_FALLBACK_ICE_SERVERS");
+  includes(files.calls, "iceTransportPolicy:\"all\"");
+  includes(files.calls, "configureDirectFallback(connection)");
+  excludes(files.calls, "iceCandidatePoolSize:0");
   includes(files.calls, "connection.restartIce()");
   includes(files.calls, '"fallback-request"');
   includes(files.calls, '"fallback-offer"');
