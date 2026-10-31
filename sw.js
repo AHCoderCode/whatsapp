@@ -1,8 +1,8 @@
-const CACHE_NAME = "whatsapp-final-shell-v61";
+const CACHE_NAME = "whatsapp-final-shell-v62";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/app.js?v=whatsapp-fix-20261031a",
+  "/app.js?v=whatsapp-fix-20261031b",
   "/backend.js?v=whatsapp-fix-20261031a",
   "/calls.js?v=whatsapp-fix-20261031a",
   "/updater.js?v=whatsapp-fix-20261031a",
