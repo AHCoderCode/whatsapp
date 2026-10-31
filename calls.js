@@ -54,6 +54,7 @@
 const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
   let ringtoneAudio=null,ringtoneObjectUrl="",ringtoneRequestId=0,ringtoneWanted=false,ringtoneStartPromise=null,previewRingtoneTimer=null,builtInRingtoneBlob=null;
   let ringtoneAudioContext=null,ringtoneGain=null,ringtoneCompressor=null,ringtoneSource=null;
+  let callPlaybackElement=null,callPlaybackSource=null,callPlaybackGain=null,callPlaybackCompressor=null;
   function openRingtoneDatabase(){return new Promise((resolve,reject)=>{if(!("indexedDB" in window)){reject(new Error("This browser cannot save a custom ringtone."));return;}const request=indexedDB.open(RINGTONE_DB_NAME,1);request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains(RINGTONE_STORE_NAME))request.result.createObjectStore(RINGTONE_STORE_NAME);};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error||new Error("Could not open local ringtone storage."));request.onblocked=()=>reject(new Error("Ringtone storage is busy. Close other WhatsApp tabs and retry."));});}
   async function getSavedRingtone(){const database=await openRingtoneDatabase();return new Promise((resolve,reject)=>{const request=database.transaction(RINGTONE_STORE_NAME,"readonly").objectStore(RINGTONE_STORE_NAME).get("custom");request.onsuccess=()=>{const result=request.result||null;database.close();resolve(result);};request.onerror=()=>{const error=request.error||new Error("Could not load the saved ringtone.");database.close();reject(error);};});}
   async function setCustomRingtone(file){if(!file||typeof file.size!=="number")throw new Error("Choose an MP3 audio file first.");if(!/\.mp3$/i.test(String(file.name||"")))throw new Error("Select an .mp3 file for your ringtone.");if(file.size<1024||file.size>10*1024*1024)throw new Error("Choose an MP3 between 1 KB and 10 MB.");stopIncomingRingtone();const database=await openRingtoneDatabase();await new Promise((resolve,reject)=>{const transaction=database.transaction(RINGTONE_STORE_NAME,"readwrite");transaction.objectStore(RINGTONE_STORE_NAME).put({blob:file,name:String(file.name),type:file.type||"audio/mpeg",savedAt:Date.now()},"custom");transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error||new Error("Could not save this ringtone on the device."));transaction.onabort=()=>reject(transaction.error||new Error("Saving the ringtone was cancelled."));}).finally(()=>database.close());try{localStorage.setItem("wa_call_ringtone_name",String(file.name));}catch(_){}return getRingtoneInfo();}
@@ -67,6 +68,37 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     // next incoming call instead of being discarded after every ring.
     try{if(ringtoneSource)ringtoneSource.disconnect();if(ringtoneGain)ringtoneGain.disconnect();if(ringtoneCompressor)ringtoneCompressor.disconnect();}catch(_){}
     ringtoneGain=null;ringtoneCompressor=null;ringtoneSource=null;
+  }
+  function disconnectCallPlaybackGraph(){
+    try{if(callPlaybackSource)callPlaybackSource.disconnect();if(callPlaybackGain)callPlaybackGain.disconnect();if(callPlaybackCompressor)callPlaybackCompressor.disconnect();}catch(_){}
+    callPlaybackElement=null;callPlaybackSource=null;callPlaybackGain=null;callPlaybackCompressor=null;
+  }
+  function attachCallPlaybackBoost(element){
+    if(!element)return;
+    element.volume=1;
+    if(callPlaybackElement===element)return;
+    disconnectCallPlaybackGraph();
+    const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+    if(!AudioContextClass)return;
+    let context=null,source=null;
+    try{
+      context=ringtoneAudioContext;
+      if(!context||context.state==="closed"){context=new AudioContextClass();ringtoneAudioContext=context;}
+      source=context.createMediaElementSource(element);
+      const gain=context.createGain(),compressor=context.createDynamicsCompressor();
+      // A controlled ~7 dB lift; compression reduces clipping on already-loud input.
+      gain.gain.value=2.2;
+      compressor.threshold.value=-9;compressor.knee.value=6;compressor.ratio.value=12;
+      compressor.attack.value=0.003;compressor.release.value=0.2;
+      source.connect(gain);gain.connect(compressor);compressor.connect(context.destination);
+      callPlaybackElement=element;callPlaybackSource=source;callPlaybackGain=gain;callPlaybackCompressor=compressor;
+      if(context.state!=="running")void context.resume().catch(()=>{});
+    }catch(error){
+      // createMediaElementSource redirects playback into the graph; preserve direct
+      // output if any later graph setup step fails.
+      try{if(source)source.connect(context.destination);}catch(_){}
+      console.warn("[calls] Call audio boost unavailable; using normal playback:",error&&error.message||error);
+    }
   }
   function createBuiltInRingtone(){if(builtInRingtoneBlob)return builtInRingtoneBlob;const sampleRate=22050,duration=3.2,sampleCount=Math.floor(sampleRate*duration),dataLength=sampleCount*2,buffer=new ArrayBuffer(44+dataLength),view=new DataView(buffer);const write=(offset,value)=>{for(let i=0;i<value.length;i++)view.setUint8(offset+i,value.charCodeAt(i));};write(0,"RIFF");view.setUint32(4,36+dataLength,true);write(8,"WAVE");write(12,"fmt ");view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true);view.setUint32(24,sampleRate,true);view.setUint32(28,sampleRate*2,true);view.setUint16(32,2,true);view.setUint16(34,16,true);write(36,"data");view.setUint32(40,dataLength,true);for(let i=0;i<sampleCount;i++){const t=i/sampleRate,phase=t%duration,pulseStart=phase<0.46?0:phase>=0.66&&phase<1.12?0.66:-1;let sample=0;if(pulseStart>=0){const edge=phase-pulseStart,envelope=Math.max(0,Math.min(1,edge/0.018,(0.46-edge)/0.018));sample=(Math.sin(2*Math.PI*440*t)*0.46+Math.sin(2*Math.PI*480*t)*0.46)*envelope*0.94;}view.setInt16(44+i*2,Math.round(Math.max(-1,Math.min(1,sample))*32767),true);}builtInRingtoneBlob=new Blob([buffer],{type:"audio/wav"});return builtInRingtoneBlob;}
   async function attemptRingtonePlayback(blob,token){
@@ -334,6 +366,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     acceptRequested=false;
     clearPendingNotificationAction();
     stopIncomingRingtone();
+    disconnectCallPlaybackGraph();
     if(pc){try{pc.ontrack=null;pc.onicecandidate=null;pc.onconnectionstatechange=null;pc.close();}catch(_){}}
     pc=null;
     endNativeCallAudioSession();
@@ -341,7 +374,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     localStream=null;
     if(remoteStream)remoteStream.getTracks().forEach(t=>{try{t.stop();}catch(_){}});
     remoteStream=null;
-    activeCall=null;incomingOffer=null;phase="idle";busy=false;muted=false;cameraOff=false;speakerOn=true;elapsed=0;callStart=0;
+    activeCall=null;incomingOffer=null;phase="idle";busy=false;muted=false;cameraOff=false;speakerOn=false;elapsed=0;callStart=0;
     pendingSignals.clear();seenSignals.clear();
     directFallbackAttempted=false;directFallbackLocalStarted=false;directFallbackBusy=false;directFallbackRequested=false;directFallbackRequestSent=false;directFallbackRemoteReady=false;pendingDirectCandidates=[];
     root().innerHTML="";
@@ -350,6 +383,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
   function formatTime(total){const seconds=Math.max(0,Math.floor(total));return String(Math.floor(seconds/60)).padStart(2,"0")+":"+String(seconds%60).padStart(2,"0");}
   function renderCallOverlay(notice) {
     const host=root();
+    disconnectCallPlaybackGraph();
     if(!activeCall){host.innerHTML="";return;}
     const peer=callPeer(activeCall)||{};
     const waitingForOffer=phase==="incoming"&&acceptRequested;
@@ -371,13 +405,13 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       incoming?"<button class='wa-call-control decline' type='button' data-wa-call='decline' aria-label='Decline call'>" + bridge.icon("phone") + "<span>Decline</span></button><button class='wa-call-control accept' type='button' data-wa-call='accept' aria-label='Accept call'>"+(video?bridge.icon("video"):bridge.icon("phone"))+"<span>Accept</span></button>":
       (phase==="connected"||phase==="connecting"||phase==="outgoing"||phase==="preparing"?
       "<button class='wa-call-control "+(muted?"active":"")+"' type='button' data-wa-call='mute' aria-label='Toggle microphone'>"+bridge.icon("mic")+"<span>"+(muted?"Unmute":"Mute")+"</span></button>"+
-      (video?"<button class='wa-call-control "+(cameraOff?"active":"")+"' type='button' data-wa-call='camera' aria-label='Toggle camera'>"+bridge.icon("video")+"<span>"+(cameraOff?"Camera on":"Camera off")+"</span></button>":"<button class='wa-call-control "+(speakerOn?"active":"")+"' type='button' data-wa-call='speaker' aria-label='Toggle speaker volume'>"+bridge.icon("volume")+"<span>"+(speakerOn?"Speaker":"Lower volume")+"</span></button>")+
+      (video?"<button class='wa-call-control "+(cameraOff?"active":"")+"' type='button' data-wa-call='camera' aria-label='Toggle camera'>"+bridge.icon("video")+"<span>"+(cameraOff?"Camera on":"Camera off")+"</span></button>":"<button class='wa-call-control "+(speakerOn?"active":"")+"' type='button' data-wa-call='speaker' aria-label='Toggle speaker route'>"+bridge.icon("volume")+"<span>"+(speakerOn?"Speaker on":"Speaker")+"</span></button>")+
       "<button class='wa-call-control decline' type='button' data-wa-call='end' aria-label='End call'>" + bridge.icon("phone") + "<span>End call</span></button>":""))+
       "</div><p class='wa-call-footnote'>Calls connect only when both people are online and have allowed microphone/camera access.</p></section></div>";
     const remoteVideo=$("#wa-call-remote-video"),localVideo=$("#wa-call-local-video"),remoteAudio=$("#wa-call-remote-audio");
     if(remoteStream){
-      if(remoteVideo){remoteVideo.srcObject=remoteStream;void remoteVideo.play().catch(()=>{});}
-      if(remoteAudio){remoteAudio.srcObject=remoteStream;remoteAudio.volume=speakerOn?1:.45;void remoteAudio.play().catch(()=>{});}
+      if(remoteVideo){remoteVideo.srcObject=remoteStream;attachCallPlaybackBoost(remoteVideo);void remoteVideo.play().catch(()=>{});}
+      if(remoteAudio){remoteAudio.srcObject=remoteStream;attachCallPlaybackBoost(remoteAudio);void remoteAudio.play().catch(()=>{});}
     }
     if(localVideo&&localStream){localVideo.srcObject=localStream;void localVideo.play().catch(()=>{});}
     const placeholder=$("#wa-call-video-placeholder");
@@ -405,11 +439,11 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
   }
   function toggleSpeaker(){
     speakerOn=!speakerOn;
+    // Speaker is a hardware route only. Never turn down the remote audio element
+    // when the user selects the earpiece.
     setNativeCallSpeaker(speakerOn);
-    const audio=$("#wa-call-remote-audio");
-    if(audio)audio.volume=speakerOn?1:.45;
     const button=root().querySelector("[data-wa-call='speaker']");
-    if(button){button.classList.toggle("active",speakerOn);button.innerHTML=bridge.icon("volume")+"<span>"+(speakerOn?"Speaker":"Lower volume")+"</span>";}
+    if(button){button.classList.toggle("active",speakerOn);button.setAttribute("aria-label","Toggle speaker route");button.innerHTML=bridge.icon("volume")+"<span>"+(speakerOn?"Speaker on":"Speaker")+"</span>";}
   }
   async function relayServers(callId){
     const client=db();if(!client)throw new Error("Supabase is not connected.");
