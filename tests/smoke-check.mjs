@@ -9,6 +9,9 @@ const files = {
   featureGaps: read("feature-gaps.js"),
   groupCalls: read("group-calls.js"),
   groupTurn: read("supabase/functions/whatsapp-group-turn-credentials/index.ts"),
+  cleanup: read("supabase/functions/whatsapp-expiry-cleanup/index.ts"),
+  groupCallLimitMigration: read("supabase/migrations/20261031091826_whatsapp_group_call_participant_limit.sql"),
+  blockScopeMigration: read("supabase/migrations/20261031091900_whatsapp_block_scope_direct_chats_only.sql"),
   nativeNotifications: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/NativeCallNotifications.java"),
   nativeReceiver: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/CallNotificationActionReceiver.java"),
   nativeActivity: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/MainActivity.java"),
@@ -57,6 +60,12 @@ check("group calling uses authenticated group-call rows and relay-only mesh peer
   }
   includes(files.groupTurn, "aeroshell_group_turn_credential_requests");
   includes(files.groupTurn, "METERED_TURN_DOMAIN");
+  includes(files.groupCallLimitMigration, "enforce_group_call_participant_limit");
+  includes(files.groupCallLimitMigration, "participant_count >= 8");
+  includes(files.groupCallLimitMigration, "FOR UPDATE");
+  includes(files.blockScopeMigration, "group_id IS NOT NULL");
+  includes(files.cleanup, "staleGroupCallsEnded");
+  includes(files.cleanup, "staleCallCutoff");
   includes(files.push, "async function notifyGroupCall");
   includes(files.push, 'body.action === "notify-group-call"');
 });
@@ -789,7 +798,7 @@ check("Camera is forced through Android native capture with an in-app camera fal
   includes(files.nativeActivity, "window.__waCameraCaptureFallback");
   includes(files.nativeManifest, 'android.hardware.camera" android:required="false"');
 });
-check("Custom chat lists support selected chats, editing, filtering and local preference persistence", () => {
+check("Custom chat lists support selected chats, editing, filtering and account sync", () => {
   includes(files.app, "function openCustomListDialog(existingList)");
   includes(files.app, "name='custom-list-chat'");
   includes(files.app, 'filter.startsWith("list:")');
@@ -797,6 +806,8 @@ check("Custom chat lists support selected chats, editing, filtering and local pr
   includes(files.app, "openManageCustomListsDialog");
   includes(files.html, 'id="custom-filter-chips"');
   includes(files.app, "customLists:[]");
+  includes(files.featureGaps, "syncCustomLists");
+  includes(files.featureGaps, "whatsapp_custom_chat_lists");
 });
 check("Contact requests exposes a prominent responsive Find people button", () => {
   includes(files.app, "request-find-people-button");
