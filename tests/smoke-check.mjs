@@ -8,6 +8,7 @@ const files = {
   backend: read("backend.js"),
   featureGaps: read("feature-gaps.js"),
   groupCalls: read("group-calls.js"),
+  groupTurn: read("supabase/functions/whatsapp-group-turn-credentials/index.ts"),
   nativeNotifications: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/NativeCallNotifications.java"),
   nativeReceiver: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/CallNotificationActionReceiver.java"),
   nativeActivity: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/MainActivity.java"),
@@ -54,6 +55,10 @@ check("group calling uses authenticated group-call rows and relay-only mesh peer
   for (const marker of ["aeroshell_group_calls","aeroshell_group_call_participants","aeroshell_group_call_signals","whatsapp-group-turn-credentials","iceTransportPolicy: \"relay\"","notify-group-call","wa-group-accept","wa-group-end"]) {
     includes(files.groupCalls, marker);
   }
+  includes(files.groupTurn, "aeroshell_group_turn_credential_requests");
+  includes(files.groupTurn, "METERED_TURN_DOMAIN");
+  includes(files.push, "async function notifyGroupCall");
+  includes(files.push, 'body.action === "notify-group-call"');
 });
 check("media, privacy, subgroup and synced-list handlers are present", () => {
   for (const marker of ["wa-publish-status","wa-publish-channel-post","whatsapp_user_blocks","whatsapp_user_reports","whatsapp_disappearing_settings","whatsapp_custom_chat_lists","whatsapp_community_groups"]) {
@@ -76,10 +81,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-fix-20261031b");
-  includes(files.sw, "whatsapp-fix-20261031b");
-  includes(files.manifest, "whatsapp-fix-20261031b");
-  includes(files.sw, "whatsapp-final-shell-v62");
+  includes(files.html, "whatsapp-fix-20261031c");
+  includes(files.sw, "whatsapp-fix-20261031c");
+  includes(files.manifest, "whatsapp-fix-20261031c");
+  includes(files.sw, "whatsapp-final-shell-v64");
 });
 check("mobile settings use a full-width account detail pane", () => {
   includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
