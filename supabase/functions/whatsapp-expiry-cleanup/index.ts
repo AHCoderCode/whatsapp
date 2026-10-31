@@ -68,12 +68,31 @@ Deno.serve(async (request: Request) => {
     if (removedStatuses.error) throw removedStatuses.error;
     if (removedMessages.error) throw removedMessages.error;
 
+    // Close abandoned group-call sessions after four hours so crashed or
+    // disconnected initiators cannot leave permanent active invitations.
+    const staleCallCutoff = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
+    const staleCalls = await admin.from("aeroshell_group_calls")
+      .update({ status: "ended", ended_at: cutoff })
+      .eq("status", "active")
+      .lt("created_at", staleCallCutoff)
+      .select("id");
+    if (staleCalls.error) throw staleCalls.error;
+    const staleCallIds = (staleCalls.data || []).map(row => row.id);
+    if (staleCallIds.length) {
+      const closedParticipants = await admin.from("aeroshell_group_call_participants")
+        .update({ status: "left", responded_at: cutoff })
+        .in("group_call_id", staleCallIds)
+        .in("status", ["invited", "accepted"]);
+      if (closedParticipants.error) throw closedParticipants.error;
+    }
+
     return respond({
       ok: true,
       cutoff,
       statusesDeleted: (removedStatuses.data || []).length,
       messagesDeleted: (removedMessages.data || []).length,
-      storageObjectsRemoved: removedFiles
+      storageObjectsRemoved: removedFiles,
+      staleGroupCallsEnded: staleCallIds.length
     });
   } catch (error) {
     console.error("[whatsapp-expiry-cleanup] failed:", String((error as Error)?.message || error));
