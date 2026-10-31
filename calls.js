@@ -17,7 +17,7 @@
   let pendingRecoveryPromise=null;
   let incomingOffer=null, callChannel=null, channelUser="", pendingSignals=new Map(), seenSignals=new Set();
   let incomingPollTimer=null,incomingPollBusy=false,incomingPollUser="",incomingPollVisibilityHandler=null,incomingPollLastErrorAt=0;
-  let callTimer=null, ringTimer=null, callSetupTimer=null, callPushReminderTimer=null, callStart=0, elapsed=0, muted=false, cameraOff=false, speakerOn=true, busy=false;
+  let callTimer=null, ringTimer=null, callSetupTimer=null, callPushReminderTimer=null, callStart=0, elapsed=0, muted=false, cameraOff=false, speakerOn=false, busy=false;
   const PENDING_CALL_ACTION_KEY="wa_pending_native_call_action_v1";
   const DIRECT_FALLBACK_ICE_SERVERS=[{urls:"stun:stun.relay.metered.ca:80"},{urls:"stun:stun.cloudflare.com:3478"},{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun1.l.google.com:19302"}];
   function configureDirectFallback(connection){
@@ -872,9 +872,11 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     console.warn("[calls] Server call-state transition failed; checking the database fallback:",serverFailure&&serverFailure.message||serverFailure);
     let directFailure=null;
     try{
+      const callUpdate={status:nextStatus,updated_at:new Date().toISOString()};
+      if(nextStatus==="accepted")callUpdate.accepted_at=new Date().toISOString();
       const result=await withCallTimeout(
-        client.from("aeroshell_calls").update({status:nextStatus,updated_at:new Date().toISOString()})
-          .eq("id",call.id).in("status",allowedStatuses).select("id,status").maybeSingle(),
+        client.from("aeroshell_calls").update(callUpdate)
+          .eq("id",call.id).in("status",allowedStatuses).select("id,status,accepted_at").maybeSingle(),
         8000,
         "The call status update timed out."
       );
