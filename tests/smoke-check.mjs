@@ -217,7 +217,7 @@ check("direct ICE fallback recovers a pending relay offer and retries several ST
   includes(files.calls, "pc&&!directFallbackLocalStarted");
 });
 check("failed TURN calls coordinate an encrypted direct ICE fallback", () => {
-  includes(files.calls, 'const DIRECT_FALLBACK_ICE_SERVERS=[{urls:"stun:stun.relay.metered.ca:80"}];');
+  includes(files.calls, 'const DIRECT_FALLBACK_ICE_SERVERS=[{urls:"stun:stun.relay.metered.ca:80"},{urls:"stun:stun.cloudflare.com:3478"}');
   includes(files.calls, 'connection.setConfiguration({iceServers:DIRECT_FALLBACK_ICE_SERVERS,iceTransportPolicy:"all",iceCandidatePoolSize:0});');
   includes(files.calls, "connection.restartIce()");
   includes(files.calls, '"fallback-request"');
@@ -389,7 +389,7 @@ check("slow session restoration preserves sign-in and offers retry instead of sh
   includes(files.backend, "Your account session has not been cleared");
   includes(files.html, "window.waShowStartupRecovery = function(message)");
   includes(files.html, "Retry connection");
-  includes(files.html, 'window.dispatchEvent(new Event("wa-startup-finished"))');
+  includes(files.backend, 'window.dispatchEvent(new Event("wa-startup-finished"))');
 });
 check("custom ringtone gain supports 300 percent and loops until call state changes", () => {
   includes(files.calls, "value>=25&&value<=300?value:300");
