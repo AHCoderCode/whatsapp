@@ -499,7 +499,7 @@ async function transitionCall(userId: string, body: any, authorization: string) 
   if (!["accepted", "rejected", "ended"].includes(nextStatus)) throw new Error("Invalid call status transition.");
 
   const { data: call, error } = await userClient.from("aeroshell_calls")
-    .select("id,caller_id,callee_id,status,media_type,group_call_id")
+    .select("id,caller_id,callee_id,status,media_type,group_call_id,accepted_at")
     .eq("id", callId).maybeSingle();
   if (error) throw error;
   if (!call || call.group_call_id || (call.caller_id !== userId && call.callee_id !== userId)) {
@@ -523,10 +523,12 @@ async function transitionCall(userId: string, body: any, authorization: string) 
 
   const allowedStatuses = nextStatus === "ended" ? ["ringing", "accepted"] : ["ringing"];
   if (!allowedStatuses.includes(call.status)) return { ok: false, status: call.status, reason: "call-state-changed" };
+  const callUpdate: Record<string, unknown> = { status: nextStatus, updated_at: new Date().toISOString() };
+  if (nextStatus === "accepted" && !call.accepted_at) callUpdate.accepted_at = new Date().toISOString();
   const { data: updated, error: updateError } = await userClient.from("aeroshell_calls")
-    .update({ status: nextStatus, updated_at: new Date().toISOString() })
+    .update(callUpdate)
     .eq("id", callId).eq("status", call.status)
-    .select("id,caller_id,callee_id,status,media_type,group_call_id").maybeSingle();
+    .select("id,caller_id,callee_id,status,media_type,group_call_id,accepted_at").maybeSingle();
   if (updateError) throw updateError;
 
   if (!updated) {
