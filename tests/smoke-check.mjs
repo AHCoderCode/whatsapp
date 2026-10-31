@@ -57,10 +57,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-final-20261030g");
-  includes(files.sw, "whatsapp-final-20261030g");
-  includes(files.manifest, "whatsapp-final-20261030g");
-  includes(files.sw, "whatsapp-final-shell-v60");
+  includes(files.html, "whatsapp-fix-20261031b");
+  includes(files.sw, "whatsapp-fix-20261031b");
+  includes(files.manifest, "whatsapp-fix-20261031b");
+  includes(files.sw, "whatsapp-final-shell-v62");
 });
 check("mobile settings use a full-width account detail pane", () => {
   includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
@@ -113,6 +113,14 @@ check("dedicated incoming-call activity presents Accept and Decline above the lo
   includes(files.incomingActivity, "setTurnScreenOn(true)");
   includes(files.incomingActivity, 'accept.setText("Accept")');
   includes(files.incomingActivity, 'decline.setText("Decline")');
+});
+check("web/PWA clients receive an actionable update banner while Android checks signed APK releases", () => {
+  includes(files.updater, "WhatsApp update available");
+  includes(files.updater, 'data-wa-web-update-reload');
+  includes(files.updater, "controllerchange");
+  includes(files.updater, "registration.update()");
+  includes(files.updater, "native.checkForUpdates()");
+  includes(files.updater, "downloadAndInstallUpdate(latestUpdate.apkUrl, latestUpdate.sha256)");
 });
 check("in-app update checker validates trusted release APK and checksum before install", () => {
   includes(files.updater, "Update now");
@@ -198,6 +206,15 @@ check("call setup has bounded permission/relay/signaling waits", () => {
   includes(files.calls, "function withCallTimeout(promise,ms,message)");
   includes(files.calls, "Preparing the secure relay…");
   includes(files.calls, "callSetupTimer=setTimeout(");
+});
+check("direct ICE fallback recovers a pending relay offer and retries several STUN routes", () => {
+  includes(files.calls, 'connection.setLocalDescription({type:"rollback"})');
+  includes(files.calls, "waitForSignalingStableForFallback");
+  includes(files.calls, 'stun:stun.cloudflare.com:3478');
+  includes(files.calls, 'stun:stun.l.google.com:19302');
+  includes(files.calls, "direct ICE-restart offer");
+  includes(files.calls, "network address may be visible");
+  includes(files.calls, "pc&&!directFallbackLocalStarted");
 });
 check("failed TURN calls coordinate an encrypted direct ICE fallback", () => {
   includes(files.calls, 'const DIRECT_FALLBACK_ICE_SERVERS=[{urls:"stun:stun.relay.metered.ca:80"}];');
@@ -364,12 +381,15 @@ check("notification onboarding prompt is only scheduled once per hydration", () 
 });
 
 
-check("startup screen always exits when auth bootstrap stalls", () => {
-  includes(files.backend, "withTimeout(db.auth.getSession(),12000");
-  includes(files.backend, "withTimeout(hydrate(data.session.user),18000");
-  includes(files.backend, 'window.dispatchEvent(new Event("wa-startup-finished"))');
-  includes(files.html, "var startupWatchdog=window.setTimeout");
-  includes(files.html, "wa-startup-retry");
+check("slow session restoration preserves sign-in and offers retry instead of showing signup", () => {
+  includes(files.backend, "const {data,error}=await db.auth.getSession()");
+  includes(files.backend, "finishStartup(false)");
+  includes(files.backend, "finishStartup(true)");
+  includes(files.backend, "showStartupRecovery(safeError(error");
+  includes(files.backend, "Your account session has not been cleared");
+  includes(files.html, "window.waShowStartupRecovery = function(message)");
+  includes(files.html, "Retry connection");
+  includes(files.html, 'window.dispatchEvent(new Event("wa-startup-finished"))');
 });
 check("custom ringtone gain supports 300 percent and loops until call state changes", () => {
   includes(files.calls, "value>=25&&value<=300?value:300");
