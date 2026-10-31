@@ -565,6 +565,7 @@ check("background call alerts always show, retry transient push errors, and can 
 });
 check("audio calls provide speaker routing without reducing remote playback volume", () => {
   includes(files.calls, "data-wa-call='speaker'");
+  includes(files.calls, "speakerOn=false");
   includes(files.calls, "data-wa-call='mute'");
   includes(files.calls, "data-wa-call='end'");
   includes(files.calls, "attachCallPlaybackBoost");
@@ -578,11 +579,15 @@ check("audio calls provide speaker routing without reducing remote playback volu
 });
 check("direct-chat timelines show red missed-call and dark received-call cards", () => {
   includes(files.backend, "createdAt:r.created_at");
+  includes(files.backend, "acceptedAt:r.accepted_at||null");
+  includes(files.app, "endedWithoutAcceptance");
   includes(files.app, "function callEventHTML");
   includes(files.app, "callEventHTML(m.callEvent,chat,m.time)");
   includes(files.app, "data-action='call-entry'");
   includes(files.css, ".wa-call-message-card.missed");
   includes(files.css, ".wa-call-message-card.received");
+  includes(files.push, "callUpdate.accepted_at");
+  includes(files.push, "accepted_at");
 });
 check("landscape phone layout focuses the open conversation", () => {
   includes(files.app, "mobile-landscape");
