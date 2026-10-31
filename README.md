@@ -94,9 +94,9 @@ Serve the repository root over HTTP instead of opening `index.html` using `file:
 
 - `+990` is a custom app identifier only; it cannot receive SMS or use the telephone network.
 - A valid Metered TURN plan/domain/API key is required before calls can actually connect.
-- Group calls use peer-to-peer mesh topology through TURN relays and are limited to eight participants, including the initiator. There is no SFU, server-side media recording, or native lock-screen Accept/Decline action for group calls; a group invitation opens the app so the user can join there.
+- Group calls use peer-to-peer mesh topology through TURN relays and are limited to eight participants, including the initiator. The eight-person cap is enforced in Postgres as well as in the UI. Abandoned active group calls are ended by the scheduled cleanup after four hours. There is no SFU, server-side media recording, or native lock-screen Accept/Decline action for group calls; a group invitation opens the app so the user can join there.
 - Statuses and channel posts currently support one photo or video attachment per post, up to 15 MB. Channel media is visible to signed-in users who can read the corresponding channel post; status media is restricted to the owner and accepted contacts.
-- Report submissions are stored for review, but there is no staffed moderation dashboard, automated abuse triage, appeals workflow, or report-status UI yet. Blocking is enforced for direct-message reads/sends; it does not remove the blocker from shared groups or prevent group-level interaction.
+- Report submissions are stored for review, but there is no staffed moderation dashboard, automated abuse triage, appeals workflow, or report-status UI yet. Blocking is enforced for direct-message reads/sends; messages in shared groups remain visible, and blocking does not remove either person from shared groups.
 - Disappearing messages apply to new messages after the timer is set. Previously sent messages are not retroactively assigned an expiry time. The server hides expired records and the scheduled job sweeps them every five minutes; this is not a forensic secure-erasure guarantee for copies or cached files already downloaded by recipients.
 - Custom chat lists sync to the signed-in account; contact display-name aliases remain device-local.
 - The +990 identifier is app-only. There is no real phone-number verification, SMS delivery, telephone-network calling, or account recovery through a verified email/phone provider.
@@ -126,4 +126,4 @@ SHA-256 verifies that a downloaded file matches the release's declared checksum;
 
 ### Custom chat lists
 
-Create custom chat lists such as **Family**, **Work**, or **Wishlist**, choose which conversations appear in each list, and edit or remove a list later. Custom list definitions are saved in the current signed-in browser/device's local preferences; they are not synchronised to other devices through Supabase.
+Create custom chat lists such as **Family**, **Work**, or **Wishlist**, choose which conversations appear in each list, and edit or remove a list later. Custom list names and selected conversation IDs sync through Supabase to the signed-in account. Contact display-name aliases remain local to each device.
