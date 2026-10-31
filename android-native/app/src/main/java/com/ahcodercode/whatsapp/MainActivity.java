@@ -61,7 +61,6 @@ public final class MainActivity extends Activity {
     private AudioFocusRequest callAudioFocusRequest;
     private int previousAudioMode = AudioManager.MODE_NORMAL;
     private boolean previousSpeakerphoneOn;
-    private int previousVoiceCallVolume = -1;
     private AudioDeviceInfo previousCommunicationDevice;
     private boolean callAudioSessionActive;
     private final AudioManager.OnAudioFocusChangeListener callAudioFocusListener = focusChange -> {};
@@ -337,7 +336,6 @@ public final class MainActivity extends Activity {
         if (!hadActiveSession) {
             previousAudioMode = manager.getMode();
             previousSpeakerphoneOn = manager.isSpeakerphoneOn();
-            previousVoiceCallVolume = manager.getStreamVolume(AudioManager.STREAM_VOICE_CALL);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) previousCommunicationDevice = manager.getCommunicationDevice();
             callAudioManager = manager;
         }
@@ -357,7 +355,6 @@ public final class MainActivity extends Activity {
                 manager.requestAudioFocus(callAudioFocusListener, AudioManager.STREAM_VOICE_CALL, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
             }
             applyNativeCallSpeaker(manager, useSpeaker);
-            manager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, manager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL), 0);
             acquireCallCpuWakeLock();
             callAudioSessionActive = true;
             return true;
@@ -366,7 +363,6 @@ public final class MainActivity extends Activity {
             releaseCallCpuWakeLock();
             if (!hadActiveSession) {
                 try {
-                    if (previousVoiceCallVolume >= 0) manager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, previousVoiceCallVolume, 0);
                     restoreNativeCallRoute(manager);
                     manager.setMode(previousAudioMode);
                 } catch (Exception restoreError) {
@@ -429,13 +425,11 @@ public final class MainActivity extends Activity {
             return;
         }
         try {
-            if (previousVoiceCallVolume >= 0) manager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, previousVoiceCallVolume, 0);
             if (Build.VERSION.SDK_INT >= 26 && callAudioFocusRequest != null) manager.abandonAudioFocusRequest(callAudioFocusRequest);
             else manager.abandonAudioFocus(callAudioFocusListener);
             restoreNativeCallRoute(manager);
             manager.setMode(previousAudioMode);
         } catch (Exception ignored) {}
-        previousVoiceCallVolume = -1;
         callAudioSessionActive = false;
         callAudioManager = null;
         releaseCallCpuWakeLock();
