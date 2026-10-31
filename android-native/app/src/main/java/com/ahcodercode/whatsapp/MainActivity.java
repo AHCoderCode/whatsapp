@@ -381,9 +381,19 @@ public final class MainActivity extends Activity {
                 for (AudioDeviceInfo device : manager.getAvailableCommunicationDevices()) {
                     if (device.getType() == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER && manager.setCommunicationDevice(device)) return;
                 }
-            } else if (previousCommunicationDevice != null) {
+            } else {
+                // Restore an active headset route when one was selected before
+                // the call, but never treat the loudspeaker as the earpiece route.
+                if (previousCommunicationDevice != null
+                    && previousCommunicationDevice.getType() != AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
+                    for (AudioDeviceInfo device : manager.getAvailableCommunicationDevices()) {
+                        if (device.getId() == previousCommunicationDevice.getId()
+                            && manager.setCommunicationDevice(device)) return;
+                    }
+                }
                 for (AudioDeviceInfo device : manager.getAvailableCommunicationDevices()) {
-                    if (device.getId() == previousCommunicationDevice.getId() && manager.setCommunicationDevice(device)) return;
+                    if (device.getType() == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
+                        && manager.setCommunicationDevice(device)) return;
                 }
             }
             manager.clearCommunicationDevice();
