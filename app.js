@@ -397,7 +397,9 @@
   }
   function callEventHTML(call, chat, timeLabel) {
     const outgoing=call.type==="outgoing",status=String(call.status||"").toLowerCase(),video=call.mediaType==="video";
-    const missed=!outgoing&&status==="rejected",declined=outgoing&&status==="rejected";
+    const trackingStartedAt=Date.parse("2026-10-31T15:06:58Z"),callCreatedAt=Date.parse(call.createdAt||"");
+    const endedWithoutAcceptance=status==="ended"&&Number.isFinite(callCreatedAt)&&callCreatedAt>=trackingStartedAt&&!call.acceptedAt;
+    const missed=!outgoing&&(status==="rejected"||endedWithoutAcceptance),declined=outgoing&&status==="rejected";
     const stateLabel=missed?"Missed":declined?"Declined":outgoing?"Outgoing":"Received";
     const mediaLabel=video?"video":"voice";
     const actionLabel=missed?"Tap to call back":declined?"Tap to call again":"Call again";
