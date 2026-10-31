@@ -76,10 +76,10 @@ check("media, privacy, subgroup and synced-list handlers are present", () => {
   includes(files.app, "WhatsAppFeatureGaps.onBackendData");
 });
 check("feature-gap module is in the app shell cache", () => {
-  includes(files.html, "/feature-gaps.js?v=whatsapp-fix-20261031c");
-  includes(files.sw, "/feature-gaps.js?v=whatsapp-fix-20261031c");
-  includes(files.html, "/group-calls.js?v=whatsapp-fix-20261031c");
-  includes(files.sw, "/group-calls.js?v=whatsapp-fix-20261031c");
+  includes(files.html, "/feature-gaps.js?v=whatsapp-fix-20261031d");
+  includes(files.sw, "/feature-gaps.js?v=whatsapp-fix-20261031d");
+  includes(files.html, "/group-calls.js?v=whatsapp-fix-20261031d");
+  includes(files.sw, "/group-calls.js?v=whatsapp-fix-20261031d");
 });
 check("inline HTML scripts parse", () => {
   const scripts = [...files.html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
@@ -90,10 +90,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-fix-20261031c");
-  includes(files.sw, "whatsapp-fix-20261031c");
-  includes(files.manifest, "whatsapp-fix-20261031c");
-  includes(files.sw, "whatsapp-final-shell-v64");
+  includes(files.html, "whatsapp-fix-20261031d");
+  includes(files.sw, "whatsapp-fix-20261031d");
+  includes(files.manifest, "whatsapp-fix-20261031d");
+  includes(files.sw, "whatsapp-final-shell-v65");
 });
 check("mobile settings use a full-width account detail pane", () => {
   includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
@@ -168,7 +168,29 @@ check("WebView attachment inputs remain clickable and native calls set audio mod
   includes(files.app, 'addInput.style.cssText="position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none;z-index:-1');
   includes(files.calls, "beginNativeCallAudioSession();");
   includes(files.calls, "endNativeCallAudioSession();");
+  includes(files.calls, "beginCallAudio(speakerOn)");
   includes(files.nativeActivity, "AudioManager.MODE_IN_COMMUNICATION");
+  includes(files.nativeActivity, "AudioManager.STREAM_VOICE_CALL");
+  includes(files.nativeActivity, "getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)");
+  includes(files.nativeActivity, "setCommunicationDevice(device)");
+});
+check("call speaker begins on the earpiece and has a compressed remote-audio boost", () => {
+  includes(files.calls, "speakerOn=false");
+  includes(files.calls, "gain.gain.value=2.5");
+  includes(files.calls, "createDynamicsCompressor()");
+  includes(files.calls, "element.volume=1");
+  excludes(files.calls, "audio.volume=speakerOn?1:.45");
+});
+check("missed and connected call events are synced as WhatsApp-style chat cards", () => {
+  includes(files.calls, "CALL_MESSAGE_PREFIX+JSON.stringify(event)");
+  includes(files.calls, 'outcome=callStart>0?"completed":"missed"');
+  includes(files.backend, "CALL_MESSAGE_PREFIX");
+  includes(files.backend, "callEvent");
+  includes(files.backend, "participants.includes(String(chat.id))");
+  includes(files.app, "wa-call-event-card");
+  includes(files.app, "call-event-message");
+  includes(files.css, ".wa-call-event-card.missed{background:#d93645");
+  includes(files.css, ".wa-call-event-card.completed");
 });
 check("attachment menu opens the Android file picker before closing and has a WebView fallback", () => {
   const start = files.app.indexOf("function runMenuAction");
