@@ -77,9 +77,9 @@ check("media, privacy, subgroup and synced-list handlers are present", () => {
 });
 check("feature-gap module is in the app shell cache", () => {
   includes(files.html, "/feature-gaps.js?v=whatsapp-fix-20261101a");
-  includes(files.sw, "/feature-gaps.js?v=whatsapp-fix-20261031d");
+  includes(files.sw, "/feature-gaps.js?v=whatsapp-fix-20261101a");
   includes(files.html, "/group-calls.js?v=whatsapp-fix-20261101a");
-  includes(files.sw, "/group-calls.js?v=whatsapp-fix-20261031d");
+  includes(files.sw, "/group-calls.js?v=whatsapp-fix-20261101a");
 });
 check("inline HTML scripts parse", () => {
   const scripts = [...files.html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
@@ -91,8 +91,8 @@ check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
   includes(files.html, "whatsapp-fix-20261101a");
-  includes(files.sw, "whatsapp-fix-20261031e");
-  includes(files.manifest, "whatsapp-fix-20261031e");
+  includes(files.sw, "whatsapp-fix-20261101a");
+  includes(files.manifest, "whatsapp-fix-20261101a");
   includes(files.sw, "whatsapp-final-shell-v67");
 });
 check("mobile settings use a full-width account detail pane", () => {
