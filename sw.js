@@ -1,22 +1,22 @@
-const CACHE_NAME = "whatsapp-final-shell-v66";
+const CACHE_NAME = "whatsapp-final-shell-v67";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/app.js?v=whatsapp-fix-20261031e",
-  "/feature-gaps.js?v=whatsapp-fix-20261031d",
-  "/group-calls.js?v=whatsapp-fix-20261031d",
-  "/backend.js?v=whatsapp-fix-20261031d",
-  "/calls.js?v=whatsapp-fix-20261031d",
-  "/updater.js?v=whatsapp-fix-20261031d",
-  "/styles.css?v=whatsapp-fix-20261031d",
-  "/manifest.webmanifest?v=whatsapp-fix-20261031d",
-  "/whatsapp-favicon.svg?v=whatsapp-fix-20261031d",
+  "/app.js?v=whatsapp-fix-20261101a",
+  "/feature-gaps.js?v=whatsapp-fix-20261101a",
+  "/group-calls.js?v=whatsapp-fix-20261101a",
+  "/backend.js?v=whatsapp-fix-20261101a",
+  "/calls.js?v=whatsapp-fix-20261101a",
+  "/updater.js?v=whatsapp-fix-20261101a",
+  "/styles.css?v=whatsapp-fix-20261101a",
+  "/manifest.webmanifest?v=whatsapp-fix-20261101a",
+  "/whatsapp-favicon.svg?v=whatsapp-fix-20261101a",
   "/icon.svg",
   "/icon-192.svg",
   "/icon-512.svg",
-  "/icon.svg?v=whatsapp-fix-20261031d",
-  "/icon-192.svg?v=whatsapp-fix-20261031d",
-  "/icon-512.svg?v=whatsapp-fix-20261031d",
+  "/icon.svg?v=whatsapp-fix-20261101a",
+  "/icon-192.svg?v=whatsapp-fix-20261101a",
+  "/icon-512.svg?v=whatsapp-fix-20261101a",
 ];
 
 self.addEventListener("install", event => {
@@ -152,9 +152,12 @@ self.addEventListener("notificationclick", event => {
   const data = event.notification.data || {};
   const action = event.action || "open";
   event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async clients => {
-    const client = clients.find(item => "focus" in item);
+    const client = clients.find(item => item.visibilityState === "visible" && item.focused)
+      || clients.find(item => item.visibilityState === "visible")
+      || clients.find(item => item.focused)
+      || clients.find(item => "focus" in item);
     if (client) {
-      await client.focus();
+      try { await client.focus(); } catch (_) {}
       client.postMessage({
         type: "whatsapp-notification-action",
         kind: data.kind,
