@@ -27,6 +27,7 @@ const files = {
   push: read("supabase/functions/whatsapp-push/index.ts"),
   turn: read("supabase/functions/master-chat-turn-credentials/index.ts"),
   pushMigration: read("supabase/migrations/20261028123000_whatsapp_device_push_notifications.sql"),
+  connectedCallMigration: read("supabase/migrations/20261101121857_add_aeroshell_call_connected_timestamp.sql"),
   deviceMigration: read("supabase/migrations/20261028130000_whatsapp_linked_devices.sql"),
   signalFallbackMigration: read("supabase/migrations/20261030081609_add_webrtc_direct_fallback_signal_kinds.sql"),
   signalFallbackRlsMigration: read("supabase/migrations/20261030081801_extend_webrtc_direct_fallback_signaling_rls.sql"),
@@ -201,7 +202,14 @@ check("call speaker begins on the earpiece and has a compressed remote-audio boo
 });
 check("missed and connected call events are synced as WhatsApp-style chat cards", () => {
   includes(files.calls, "CALL_MESSAGE_PREFIX+JSON.stringify(event)");
-  includes(files.calls, 'outcome=callStart>0?"completed":"missed"');
+  includes(files.calls, 'const outcome=connected?"completed":"missed";');
+  includes(files.calls, "function markCallConnectedOnServer(callId)");
+  includes(files.calls, 'action:"mark-call-connected"');
+  includes(files.calls, "transitionBody.connectedAt=connectedAtForEnd");
+  includes(files.push, "async function markCallConnected(userId: string, body: any, authorization: string)");
+  includes(files.push, "async function persistDirectCallHistory(userClient: any, userId: string, call: any)");
+  includes(files.push, 'body.action === "mark-call-connected"');
+  includes(files.connectedCallMigration, "ADD COLUMN IF NOT EXISTS connected_at timestamptz");
   includes(files.backend, "CALL_MESSAGE_PREFIX");
   includes(files.backend, "callEvent");
   includes(files.backend, "participants.includes(String(chat.id))");
