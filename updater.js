@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  const APP_BUILD = "whatsapp-fix-20261101a";
+  const APP_BUILD = "whatsapp-fix-20261101b";
   const native = window.WhatsAppNativeAndroid;
   const nativeApp = !!(native && typeof native.isNativeApp === "function" && native.isNativeApp());
 
