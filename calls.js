@@ -6,6 +6,14 @@
   const db = () => bridge.supabase;
   const me = () => bridge.getCurrentUser();
   const say = message => bridge.toast(message);
+  const NO_INTERNET_MESSAGE="No internet connection. Connect to Wi-Fi or mobile data, then try again.";
+  function isNetworkFailure(error){
+    if(navigator.onLine===false)return true;
+    const name=String(error&&error.name||"").toLowerCase();
+    const message=[error&&error.message,error&&error.cause&&error.cause.message,error&&error.context&&error.context.message].filter(Boolean).join(" ").toLowerCase();
+    return name==="networkerror"||name==="functionsfetcherror"||/failed to fetch|failed to send a request|network request failed|load failed|networkerror|internet connection|offline/.test(message);
+  }
+  function callFailureMessage(error,fallback){return isNetworkFailure(error)?NO_INTERNET_MESSAGE:(error instanceof Error?error.message:fallback);}
   const esc = value => bridge.escapeHTML(String(value == null ? "" : value));
   const root = () => {
     let element=$("#call-overlay-root");
@@ -168,6 +176,14 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     }
     if(pending.action==="open")clearPendingNotificationAction();
   }
+  function applyLatestNotificationAction(callId){
+    const latest=pendingNotificationAction;
+    if(!latest||latest.kind!=="call"||String(latest.callId)!==String(callId))return;
+    if(activeCall&&String(activeCall.id)===String(callId)&&phase==="incoming"){
+      if(latest.action==="decline"||(latest.action==="accept"&&incomingOffer)){runPendingNotificationAction();return;}
+    }
+    void pollIncomingCallState({force:true});
+  }
   function handleNotificationAction(data){
     if(!data)return;
     if(data.kind==="call-ended"){
@@ -180,13 +196,18 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       return;
     }
     if(data.kind!=="call")return;
-    setPendingNotificationAction({kind:"call",callId:String(data.callId||""),action:data.action||"open"});
+    const callId=String(data.callId||""),action=data.action||"open";
+    if(action==="accept"&&navigator.onLine===false){clearPendingNotificationAction();say(NO_INTERNET_MESSAGE);return;}
+    setPendingNotificationAction({kind:"call",callId,action});
     const current=me(),client=db();
     if(current&&current.isSupabase&&client){
-      void recoverPendingNotificationCall(current,client).catch(error=>{
-        console.warn("[calls] Native call action recovery failed:",error&&error.message||error);
-        void pollIncomingCallState({force:true});
-      });
+      void recoverPendingNotificationCall(current,client)
+        .then(()=>applyLatestNotificationAction(callId))
+        .catch(error=>{
+          console.warn("[calls] Native call action recovery failed:",error&&error.message||error);
+          if(isNetworkFailure(error)){clearPendingNotificationAction();say(NO_INTERNET_MESSAGE);}
+          void pollIncomingCallState({force:true});
+        });
     }else{
       void pollIncomingCallState({force:true});
     }
@@ -653,6 +674,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
   async function startCall(person,mediaType) {
     const current=me(),client=db();
     if(!current||!current.isSupabase)return say("Sign in with a Supabase account before calling.");
+    if(navigator.onLine===false)return say(NO_INTERNET_MESSAGE);
     if(!client)return say("Supabase is not connected.");
     if(busy||activeCall)return say("Finish the current call before starting another.");
     if(!person||!person.id||person.id===current.id)return say("Choose a valid contact.");
@@ -734,7 +756,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
         await transitionCallStatus({id:newId,caller_id:current.id,callee_id:person.id},"ended",client,current);
       }catch(statusError){console.warn("[calls] Failed call cleanup was not confirmed:",statusError&&statusError.message||statusError);}
       cleanupLocal();
-      if(!wasCancelled)say(error instanceof Error?error.message:"Call could not start.");
+      if(!wasCancelled)say(callFailureMessage(error,"Call could not start."));
     }finally{busy=false;}
   }
   async function receiveSignal(signal){
@@ -802,6 +824,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
   }
   async function acceptCall(){
     if(!activeCall||phase!=="incoming"||busy)return;
+    if(navigator.onLine===false){say(NO_INTERNET_MESSAGE);return;}
     if(!incomingOffer){
       setPendingNotificationAction({kind:"call",callId:String(activeCall.id),action:"accept"});
       acceptRequested=true;
@@ -845,7 +868,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     }catch(error){
       try{await transitionCallStatus(call,statusAccepted?"ended":"rejected",client,current);}
       catch(statusError){console.warn("[calls] Failed acceptance cleanup was not confirmed:",statusError&&statusError.message||statusError);}
-      cleanupLocal();say(error instanceof Error?error.message:"Could not accept this call.");
+      cleanupLocal();say(callFailureMessage(error,"Could not accept this call."));
     }
     finally{busy=false;}
   }
@@ -940,7 +963,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       try{await transitionCallStatus(call,"rejected");}
       catch(error){
         console.warn("[calls] Decline was not confirmed:",error&&error.message||error);
-        say(error instanceof Error?error.message:"Could not notify the other phone that the call was declined. Check your internet and retry.");
+        say(callFailureMessage(error,"Could not notify the other phone that the call was declined. Check your internet and retry."));
         return;
       }
     }
