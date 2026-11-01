@@ -77,10 +77,10 @@ check("media, privacy, subgroup and synced-list handlers are present", () => {
   includes(files.app, "WhatsAppFeatureGaps.onBackendData");
 });
 check("feature-gap module is in the app shell cache", () => {
-  includes(files.html, "/feature-gaps.js?v=whatsapp-fix-20261101a");
-  includes(files.sw, "/feature-gaps.js?v=whatsapp-fix-20261101a");
-  includes(files.html, "/group-calls.js?v=whatsapp-fix-20261101a");
-  includes(files.sw, "/group-calls.js?v=whatsapp-fix-20261101a");
+  includes(files.html, "/feature-gaps.js?v=whatsapp-fix-20261101b");
+  includes(files.sw, "/feature-gaps.js?v=whatsapp-fix-20261101b");
+  includes(files.html, "/group-calls.js?v=whatsapp-fix-20261101b");
+  includes(files.sw, "/group-calls.js?v=whatsapp-fix-20261101b");
 });
 check("inline HTML scripts parse", () => {
   const scripts = [...files.html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
@@ -91,10 +91,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-fix-20261101a");
-  includes(files.sw, "whatsapp-fix-20261101a");
-  includes(files.manifest, "whatsapp-fix-20261101a");
-  includes(files.sw, "whatsapp-final-shell-v67");
+  includes(files.html, "whatsapp-fix-20261101b");
+  includes(files.sw, "whatsapp-fix-20261101b");
+  includes(files.manifest, "whatsapp-fix-20261101b");
+  includes(files.sw, "whatsapp-final-shell-v68");
 });
 check("mobile settings use a full-width account detail pane", () => {
   includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
@@ -782,7 +782,9 @@ check("incoming call recovery resumes an already-accepted call after a WebView r
   includes(files.nativeActivity, "window.WhatsAppCalls&&window.WhatsAppCalls.resume");
 });
 check("accept, decline and hang-up use verified call-state transitions", () => {
-  includes(files.calls, 'client.functions.invoke("whatsapp-push",{body:{action:"transition-call",callId:String(call.id),status:nextStatus}})');
+  includes(files.calls, 'client.functions.invoke("whatsapp-push",{body:transitionBody})');
+  includes(files.calls, "const connectedAtForEnd=nextStatus===\"ended\"?");
+  includes(files.calls, "await withCallTimeout(callConnectedPromise,2500");
   includes(files.calls, 'await transitionCallStatus(call,"accepted",client,current)');
   includes(files.calls, 'await transitionCallStatus(call,"rejected")');
   includes(files.calls, 'await transitionCallStatus(call,"ended")');
