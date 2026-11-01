@@ -512,6 +512,29 @@ async function persistDirectCallHistory(userClient: any, userId: string, call: a
     console.error("[whatsapp-push] Could not persist call history:", clean(error.message || error, 220));
     return false;
   }
+  if (error && error.code === "23505" && completed && admin) {
+    // A peer may report connected just after the other phone created a missed
+    // card. Upgrade only this call's own event row; never touch ordinary chat text.
+    const existing = await admin.from("aeroshell_messages")
+      .select("id,sender_id,recipient_id,body,message_type")
+      .eq("id", String(call.id)).maybeSingle();
+    const existingBody = existing.data && String(existing.data.body || "");
+    const samePair = existing.data &&
+      ((String(existing.data.sender_id) === callerId && String(existing.data.recipient_id) === calleeId) ||
+       (String(existing.data.sender_id) === calleeId && String(existing.data.recipient_id) === callerId));
+    if (!existing.error && existing.data && samePair && existing.data.message_type === "text" &&
+        existingBody.startsWith(CALL_MESSAGE_PREFIX)) {
+      try {
+        const prior = JSON.parse(existingBody.slice(CALL_MESSAGE_PREFIX.length));
+        if (prior && prior.v === 1 && String(prior.callId) === String(call.id) && prior.outcome === "missed") {
+          const upgraded = await admin.from("aeroshell_messages")
+            .update({ body: CALL_MESSAGE_PREFIX + JSON.stringify(event) })
+            .eq("id", String(call.id)).eq("message_type", "text");
+          if (upgraded.error) console.error("[whatsapp-push] Could not upgrade a late-connected call card:", clean(upgraded.error.message || upgraded.error, 220));
+        }
+      } catch (_) {}
+    }
+  }
   return true;
 }
 
