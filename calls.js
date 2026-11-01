@@ -1014,7 +1014,12 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       .select("id,call_id,from_user_id,to_user_id,kind,payload,created_at")
       .eq("call_id",callId).eq("to_user_id",userId).eq("kind","offer")
       .order("created_at",{ascending:true}).limit(1);
-    if(!error&&data&&data[0])await receiveSignal(data[0]);
+    if(!error&&data&&data[0]){
+      // A realtime event can be seen before its call row is ready. Let the
+      // recovery query re-process that exact offer instead of dropping it.
+      seenSignals.delete(data[0].id);
+      await receiveSignal(data[0]);
+    }
   }
   async function restorePendingNotificationAction(){
     const current=me(),client=db();
@@ -1150,7 +1155,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       if(offerError)throw offerError;
       if(offers&&offers[0]){
         // Reattach the exact offer even if an earlier realtime callback marked it seen.
-        incomingOffer=offers[0];phase="incoming";acceptRequested=false;
+        incomingOffer=offers[0];seenSignals.add(offers[0].id);phase="incoming";acceptRequested=false;
         renderCallOverlay();runPendingNotificationAction();
       }else if(pending.action==="accept"){
         acceptRequested=true;renderCallOverlay("Waiting for the caller to connect…");
