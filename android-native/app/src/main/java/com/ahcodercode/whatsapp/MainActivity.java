@@ -274,22 +274,21 @@ public final class MainActivity extends Activity {
         if (webView == null || pendingNativeCallId.isEmpty() || pendingNativeCallDispatching) return;
         pendingNativeCallDispatching = true;
         int attempt = ++pendingNativeCallDispatchAttempts;
-        String script = "(function(){var api=window.WhatsAppCalls;"
-            + "if(!api||typeof api.handleNotificationAction!=='function')return false;"
-            + "api.handleNotificationAction({kind:'call',callId:" + JSONObject.quote(pendingNativeCallId)
-            + ",action:" + JSONObject.quote(pendingNativeCallAction) + "});return true;})()";
+        String script = "(function(){var action={kind:'call',callId:" + JSONObject.quote(pendingNativeCallId)
+            + ",action:" + JSONObject.quote(pendingNativeCallAction) + ",savedAt:Date.now()};"
+            + "try{localStorage.setItem('wa_pending_native_call_action_v1',JSON.stringify(action));}catch(e){}"
+            + "var api=window.WhatsAppCalls;if(!api||typeof api.handleNotificationAction!=='function')return false;"
+            + "api.handleNotificationAction(action);return true;})()";
         webView.evaluateJavascript(script, value -> {
             pendingNativeCallDispatching = false;
             if ("true".equals(value)) {
                 pendingNativeCallId = "";
                 pendingNativeCallAction = "";
                 pendingNativeCallDispatchAttempts = 0;
-            } else if (pendingNativeCallDispatchAttempts < 12 && webView != null) {
+            } else if (pendingNativeCallDispatchAttempts < 40 && webView != null) {
                 webView.postDelayed(MainActivity.this::dispatchPendingNativeCallAction, 300);
             } else {
-                android.util.Log.w("WhatsApp", "Native call action could not be forwarded to the call controller after WebView startup.");
-                pendingNativeCallId = "";
-                pendingNativeCallAction = "";
+                android.util.Log.w("WhatsApp", "Native call action is still queued; it will be retried when the app resumes.");
                 pendingNativeCallDispatchAttempts = 0;
             }
         });
@@ -709,10 +708,14 @@ public final class MainActivity extends Activity {
         refreshFcmToken();
         publishFcmToken();
         if (webView != null) {
-            webView.postDelayed(() -> webView.evaluateJavascript(
-                "if(window.waNativeAppResumed)window.waNativeAppResumed();"
-                    + "if(window.WhatsAppCalls&&window.WhatsAppCalls.resume)window.WhatsAppCalls.resume();", null
-            ), 350);
+            webView.postDelayed(() -> {
+                if (webView == null) return;
+                webView.evaluateJavascript(
+                    "if(window.waNativeAppResumed)window.waNativeAppResumed();"
+                        + "if(window.WhatsAppCalls&&window.WhatsAppCalls.resume)window.WhatsAppCalls.resume();", null
+                );
+                dispatchPendingNativeCallAction();
+            }, 350);
         }
     }
 
