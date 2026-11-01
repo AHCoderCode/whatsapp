@@ -25,7 +25,7 @@
   let pendingRecoveryPromise=null;
   let incomingOffer=null, callChannel=null, channelUser="", pendingSignals=new Map(), seenSignals=new Set();
   let incomingPollTimer=null,incomingPollBusy=false,incomingPollUser="",incomingPollVisibilityHandler=null,incomingPollLastErrorAt=0;
-  let callTimer=null, ringTimer=null, callSetupTimer=null, callPushReminderTimer=null, callStart=0, elapsed=0, muted=false, cameraOff=false, speakerOn=false, busy=false;
+  let callTimer=null, ringTimer=null, callSetupTimer=null, callPushReminderTimer=null, callStart=0, callConnectedAt="", callConnectedId="", callConnectedPromise=null, elapsed=0, muted=false, cameraOff=false, speakerOn=false, busy=false;
   const PENDING_CALL_ACTION_KEY="wa_pending_native_call_action_v1";
   const DIRECT_FALLBACK_ICE_SERVERS=[{urls:"stun:stun.relay.metered.ca:80"},{urls:"stun:stun.cloudflare.com:3478"},{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun1.l.google.com:19302"}];
   function configureDirectFallback(connection){
@@ -369,7 +369,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     localStream=null;
     if(remoteStream)remoteStream.getTracks().forEach(t=>{try{t.stop();}catch(_){}});
     remoteStream=null;
-    activeCall=null;incomingOffer=null;phase="idle";busy=false;muted=false;cameraOff=false;speakerOn=false;elapsed=0;callStart=0;
+    activeCall=null;incomingOffer=null;phase="idle";busy=false;muted=false;cameraOff=false;speakerOn=false;elapsed=0;callStart=0;callConnectedAt="";callConnectedId="";callConnectedPromise=null;
     pendingSignals.clear();seenSignals.clear();
     directFallbackAttempted=false;directFallbackLocalStarted=false;directFallbackBusy=false;directFallbackRequested=false;directFallbackRequestSent=false;directFallbackRemoteReady=false;pendingDirectCandidates=[];
     root().innerHTML="";
@@ -631,6 +631,30 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       if(activeCall&&activeCall.id===call.id)void endCall("The TURN relay failed and the direct connection retry could not be completed. Try again on a different network.");
     }finally{directFallbackBusy=false;}
   }
+  function markCallConnectedOnServer(callId){
+    const current=me(),client=db(),expectedId=String(callId||"");
+    if(!expectedId||expectedId.startsWith("pending-")||!current||!client)return Promise.resolve(false);
+    const connectedAt=callConnectedAt||(callStart?new Date(callStart).toISOString():new Date().toISOString());
+    callConnectedAt=connectedAt;
+    if(callConnectedId===expectedId&&callConnectedPromise)return callConnectedPromise;
+    callConnectedId=expectedId;
+    callConnectedPromise=(async()=>{
+      const result=await withCallTimeout(
+        client.functions.invoke("whatsapp-push",{body:{action:"mark-call-connected",callId:expectedId,connectedAt}}),
+        8000,
+        "The server did not save the call connection time."
+      );
+      if(result.error)throw result.error;
+      if(!result.data||!result.data.ok)throw new Error(result.data&&result.data.reason||"The server did not confirm that the call connected.");
+      if(activeCall&&String(activeCall.id)===expectedId)callConnectedAt=result.data.connectedAt||connectedAt;
+      return true;
+    })().catch(error=>{
+      console.warn("[calls] Server connection timestamp could not be saved yet:",error&&error.message||error);
+      return false;
+    });
+    return callConnectedPromise;
+  }
+
   function makePeer(call,servers) {
     const client=db(),current=me(),peer=call.caller_id===current.id?call.callee_id:call.caller_id;
     const connection=new RTCPeerConnection({iceServers:servers,iceTransportPolicy:"relay",iceCandidatePoolSize:1});
@@ -652,7 +676,10 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       if(connection.connectionState==="connected"){
         if(callSetupTimer!==null)clearTimeout(callSetupTimer);callSetupTimer=null;
         if(ringTimer!==null)clearTimeout(ringTimer);ringTimer=null;
-        callStart=Date.now();setPhase("connected");
+        if(!callStart)callStart=Date.now();
+        if(!callConnectedAt)callConnectedAt=new Date(callStart).toISOString();
+        void markCallConnectedOnServer(activeCall.id);
+        setPhase("connected");
         if(callTimer!==null)clearInterval(callTimer);
         callTimer=setInterval(()=>{if(phase==="connected"){elapsed=Math.floor((Date.now()-callStart)/1000);updateConnectedDuration();}},1000);
       }else if(connection.connectionState==="failed"||connection.connectionState==="disconnected"){
@@ -886,8 +913,10 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     if(!callerId||!calleeId||callerId===calleeId||![callerId,calleeId].includes(String(current.id)))return;
     const peerId=String(current.id)===callerId?calleeId:callerId;
     const mediaType=call.media_type==="video"?"video":"audio";
-    const outcome=callStart>0?"completed":"missed";
-    const durationSeconds=callStart>0?Math.max(0,Math.floor((Date.now()-callStart)/1000)):0;
+    const connected=!!(callConnectedAt||callStart>0);
+    const outcome=connected?"completed":"missed";
+    const connectedTimestamp=callConnectedAt||(callStart>0?new Date(callStart).toISOString():"");
+    const durationSeconds=connected?Math.max(0,Math.floor((Date.now()-(Date.parse(connectedTimestamp)||callStart))/1000)):0;
     const event={v:1,callId:String(call.id),callerId,calleeId,outcome,mediaType,durationSeconds};
     try{
       const {error}=await client.from("aeroshell_messages").insert({
@@ -910,8 +939,15 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     const allowedStatuses=nextStatus==="ended"?["ringing","accepted"]:["ringing"];
     let serverFailure=null;
     try{
+      const connectedAtForEnd=nextStatus==="ended"?(callConnectedAt||(callStart>0?new Date(callStart).toISOString():"")):"";
+      if(connectedAtForEnd&&callConnectedId===String(call.id)&&callConnectedPromise){
+        try{await withCallTimeout(callConnectedPromise,2500,"The connected-call marker is still being saved.");}
+        catch(error){console.warn("[calls] Continuing call end with the local connection timestamp:",error&&error.message||error);}
+      }
+      const transitionBody={action:"transition-call",callId:String(call.id),status:nextStatus};
+      if(connectedAtForEnd)transitionBody.connectedAt=connectedAtForEnd;
       const result=await withCallTimeout(
-        client.functions.invoke("whatsapp-push",{body:{action:"transition-call",callId:String(call.id),status:nextStatus}}),
+        client.functions.invoke("whatsapp-push",{body:transitionBody}),
         8000,
         "The call server did not confirm the status change in time."
       );
@@ -924,8 +960,10 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     console.warn("[calls] Server call-state transition failed; checking the database fallback:",serverFailure&&serverFailure.message||serverFailure);
     let directFailure=null;
     try{
+      const fallbackPatch={status:nextStatus,updated_at:new Date().toISOString()};
+      if(nextStatus==="ended"&&callConnectedAt)fallbackPatch.connected_at=callConnectedAt;
       const result=await withCallTimeout(
-        client.from("aeroshell_calls").update({status:nextStatus,updated_at:new Date().toISOString()})
+        client.from("aeroshell_calls").update(fallbackPatch)
           .eq("id",call.id).in("status",allowedStatuses).select("id,status").maybeSingle(),
         8000,
         "The call status update timed out."
