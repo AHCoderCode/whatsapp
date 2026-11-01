@@ -476,6 +476,96 @@ async function notifyCallEnded(userId: string, body: any) {
   };
 }
 
+const CALL_MESSAGE_PREFIX = "wa-call-event:v1:";
+
+function isTerminalCallStatus(status: string) {
+  return status === "ended" || status === "rejected";
+}
+
+function normaliseConnectedAt(value: unknown, call: any) {
+  const timestamp = Date.parse(String(value || ""));
+  const createdAt = Date.parse(String(call?.created_at || ""));
+  if (!Number.isFinite(timestamp) || !Number.isFinite(createdAt)) return null;
+  if (timestamp < createdAt - 5000 || timestamp > Date.now() + 30000) return null;
+  return new Date(Math.max(timestamp, createdAt)).toISOString();
+}
+
+async function persistDirectCallHistory(userClient: any, userId: string, call: any) {
+  if (!call?.id || !call?.caller_id || !call?.callee_id ||
+      ![String(call.caller_id), String(call.callee_id)].includes(String(userId))) return false;
+  const callerId = String(call.caller_id), calleeId = String(call.callee_id);
+  const peerId = String(userId) === callerId ? calleeId : callerId;
+  const connectedAt = call.connected_at ? Date.parse(String(call.connected_at)) : NaN;
+  const completed = Number.isFinite(connectedAt);
+  const durationSeconds = completed ? Math.max(0, Math.min(86400, Math.floor((Date.now() - connectedAt) / 1000))) : 0;
+  const event = {
+    v: 1, callId: String(call.id), callerId, calleeId,
+    outcome: completed ? "completed" : "missed",
+    mediaType: call.media_type === "video" ? "video" : "audio",
+    durationSeconds
+  };
+  const { error } = await userClient.from("aeroshell_messages").insert({
+    id: String(call.id), sender_id: String(userId), recipient_id: peerId, group_id: null,
+    body: CALL_MESSAGE_PREFIX + JSON.stringify(event), message_type: "text"
+  });
+  if (error && error.code !== "23505") {
+    console.error("[whatsapp-push] Could not persist call history:", clean(error.message || error, 220));
+    return false;
+  }
+  return true;
+}
+
+async function markCallConnected(userId: string, body: any, authorization: string) {
+  if (!admin || !SUPABASE_URL) throw new Error("Push service is unavailable.");
+  const publishableKeysRaw = Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") || "";
+  let publishableKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+  if (publishableKeysRaw) {
+    try {
+      const keys = JSON.parse(publishableKeysRaw) as Record<string, string>;
+      publishableKey = keys.default || Object.values(keys)[0] || publishableKey;
+    } catch (_) {}
+  }
+  const authHeader = String(authorization || "").trim();
+  const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
+  if (!publishableKey || !bearer) throw new Error("A signed-in participant is required.");
+  const userClient = createClient(SUPABASE_URL, publishableKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: "Bearer " + bearer } }
+  });
+  const callId = String(body?.callId || "");
+  if (!uuidPattern.test(callId)) throw new Error("A valid call ID is required.");
+  const { data: call, error } = await userClient.from("aeroshell_calls")
+    .select("id,caller_id,callee_id,status,media_type,group_call_id,created_at,connected_at")
+    .eq("id", callId).maybeSingle();
+  if (error) throw error;
+  if (!call || call.group_call_id || (call.caller_id !== userId && call.callee_id !== userId)) {
+    return { ok: false, reason: "call-not-active-or-not-participant" };
+  }
+  if (call.connected_at) return { ok: true, connectedAt: call.connected_at, alreadyRecorded: true };
+  if (!["accepted", "ended"].includes(call.status)) {
+    return { ok: false, status: call.status, reason: "call-not-accepted" };
+  }
+  const connectedAt = normaliseConnectedAt(body?.connectedAt, call) || new Date().toISOString();
+  const { data: updated, error: updateError } = await userClient.from("aeroshell_calls")
+    .update({ connected_at: connectedAt })
+    .eq("id", callId).is("connected_at", null).in("status", ["accepted", "ended"])
+    .select("id,caller_id,callee_id,status,media_type,group_call_id,created_at,connected_at").maybeSingle();
+  if (updateError) throw updateError;
+  let saved = updated;
+  if (!saved) {
+    const latest = await userClient.from("aeroshell_calls")
+      .select("id,caller_id,callee_id,status,media_type,group_call_id,created_at,connected_at")
+      .eq("id", callId).maybeSingle();
+    if (latest.error) throw latest.error;
+    saved = latest.data;
+  }
+  if (!saved?.connected_at) return { ok: false, status: saved?.status || call.status, reason: "connection-time-not-saved" };
+  if (isTerminalCallStatus(saved.status)) {
+    await persistDirectCallHistory(userClient, userId, saved);
+  }
+  return { ok: true, connectedAt: saved.connected_at, alreadyRecorded: !updated };
+}
+
 async function transitionCall(userId: string, body: any, authorization: string) {
   if (!admin || !SUPABASE_URL) throw new Error("Push service is unavailable.");
   const publishableKeysRaw = Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") || "";
@@ -499,7 +589,7 @@ async function transitionCall(userId: string, body: any, authorization: string) 
   if (!["accepted", "rejected", "ended"].includes(nextStatus)) throw new Error("Invalid call status transition.");
 
   const { data: call, error } = await userClient.from("aeroshell_calls")
-    .select("id,caller_id,callee_id,status,media_type,group_call_id")
+    .select("id,caller_id,callee_id,status,media_type,group_call_id,accepted_at,created_at,connected_at")
     .eq("id", callId).maybeSingle();
   if (error) throw error;
   if (!call || call.group_call_id || (call.caller_id !== userId && call.callee_id !== userId)) {
@@ -509,10 +599,20 @@ async function transitionCall(userId: string, body: any, authorization: string) 
     return { ok: false, status: call.status, reason: "only-callee-can-respond" };
   }
 
-  if (call.status === nextStatus) return { ok: true, status: call.status, changed: false };
   const terminalStatuses = ["rejected", "ended"];
+  const suppliedConnectedAt = normaliseConnectedAt(body?.connectedAt, call);
+  const knownConnectedAt = call.connected_at || suppliedConnectedAt;
+  if (call.status === nextStatus) {
+    if (isTerminalCallStatus(nextStatus)) {
+      const historyCall = Object.assign({}, call, knownConnectedAt ? { connected_at: knownConnectedAt } : {});
+      await persistDirectCallHistory(userClient, userId, historyCall);
+    }
+    return { ok: true, status: call.status, changed: false };
+  }
   if (terminalStatuses.includes(call.status)) {
     if (terminalStatuses.includes(nextStatus)) {
+      const historyCall = Object.assign({}, call, knownConnectedAt ? { connected_at: knownConnectedAt } : {});
+      await persistDirectCallHistory(userClient, userId, historyCall);
       let push: any = { sent: 0, reason: "already-ended" };
       try { push = await notifyCallEnded(userId, { callId }); }
       catch (pushError: any) { console.error("[whatsapp-push] Could not repeat end-call push:", clean(pushError?.message || pushError, 180)); }
@@ -523,18 +623,25 @@ async function transitionCall(userId: string, body: any, authorization: string) 
 
   const allowedStatuses = nextStatus === "ended" ? ["ringing", "accepted"] : ["ringing"];
   if (!allowedStatuses.includes(call.status)) return { ok: false, status: call.status, reason: "call-state-changed" };
+  const callUpdate: Record<string, unknown> = { status: nextStatus, updated_at: new Date().toISOString() };
+  if (nextStatus === "accepted" && !call.accepted_at) callUpdate.accepted_at = new Date().toISOString();
+  if (knownConnectedAt && !call.connected_at) callUpdate.connected_at = knownConnectedAt;
   const { data: updated, error: updateError } = await userClient.from("aeroshell_calls")
-    .update({ status: nextStatus, updated_at: new Date().toISOString() })
+    .update(callUpdate)
     .eq("id", callId).eq("status", call.status)
-    .select("id,caller_id,callee_id,status,media_type,group_call_id").maybeSingle();
+    .select("id,caller_id,callee_id,status,media_type,group_call_id,accepted_at,created_at,connected_at").maybeSingle();
   if (updateError) throw updateError;
 
   if (!updated) {
     const { data: latest, error: latestError } = await userClient.from("aeroshell_calls")
-      .select("id,status").eq("id", callId).maybeSingle();
+      .select("id,caller_id,callee_id,status,media_type,group_call_id,created_at,connected_at").eq("id", callId).maybeSingle();
     if (latestError) throw latestError;
-    if (latest && latest.status === nextStatus) return { ok: true, status: latest.status, changed: false };
+    if (latest && latest.status === nextStatus) {
+      if (isTerminalCallStatus(latest.status)) await persistDirectCallHistory(userClient, userId, latest);
+      return { ok: true, status: latest.status, changed: false };
+    }
     if (latest && terminalStatuses.includes(nextStatus) && terminalStatuses.includes(latest.status)) {
+      await persistDirectCallHistory(userClient, userId, latest);
       let push: any = { sent: 0, reason: "already-ended" };
       try { push = await notifyCallEnded(userId, { callId }); }
       catch (pushError: any) { console.error("[whatsapp-push] Could not repeat end-call push:", clean(pushError?.message || pushError, 180)); }
@@ -543,6 +650,9 @@ async function transitionCall(userId: string, body: any, authorization: string) 
     return { ok: false, status: latest?.status || "missing", reason: "call-state-changed" };
   }
 
+  if (isTerminalCallStatus(updated.status)) {
+    await persistDirectCallHistory(userClient, userId, updated);
+  }
   let push: any = { sent: 0, reason: "not-needed" };
   if (nextStatus === "rejected" || nextStatus === "ended") {
     try { push = await notifyCallEnded(userId, { callId }); }
@@ -666,6 +776,7 @@ Deno.serve(async (req: Request) => {
     if (body.action === "notify-message") return response(await notifyMessage(user.id, body));
     if (body.action === "notify-call") return response(await notifyCall(user.id, body));
     if (body.action === "notify-group-call") return response(await notifyGroupCall(user.id, body));
+    if (body.action === "mark-call-connected") return response(await markCallConnected(user.id, body, req.headers.get("Authorization") || ""));
     if (body.action === "transition-call") return response(await transitionCall(user.id, body, req.headers.get("Authorization") || ""));
     if (body.action === "notify-call-ended") return response(await notifyCallEnded(user.id, body));
     if (body.action === "test-call-push") return response(await testCallPush(user.id, body.delaySeconds));
