@@ -76,9 +76,9 @@ check("media, privacy, subgroup and synced-list handlers are present", () => {
   includes(files.app, "WhatsAppFeatureGaps.onBackendData");
 });
 check("feature-gap module is in the app shell cache", () => {
-  includes(files.html, "/feature-gaps.js?v=whatsapp-fix-20261031d");
+  includes(files.html, "/feature-gaps.js?v=whatsapp-fix-20261101a");
   includes(files.sw, "/feature-gaps.js?v=whatsapp-fix-20261031d");
-  includes(files.html, "/group-calls.js?v=whatsapp-fix-20261031d");
+  includes(files.html, "/group-calls.js?v=whatsapp-fix-20261101a");
   includes(files.sw, "/group-calls.js?v=whatsapp-fix-20261031d");
 });
 check("inline HTML scripts parse", () => {
@@ -90,10 +90,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-fix-20261031e");
+  includes(files.html, "whatsapp-fix-20261101a");
   includes(files.sw, "whatsapp-fix-20261031e");
   includes(files.manifest, "whatsapp-fix-20261031e");
-  includes(files.sw, "whatsapp-final-shell-v66");
+  includes(files.sw, "whatsapp-final-shell-v67");
 });
 check("mobile settings use a full-width account detail pane", () => {
   includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
@@ -676,7 +676,7 @@ check("call-ended push dismisses matching Android and browser incoming-call UI",
 check("native Accept actions reach the call controller after WebView startup", () => {
   includes(files.nativeActivity, "rememberPendingNativeCallAction(intent, url);");
   includes(files.nativeActivity, "dispatchPendingNativeCallAction");
-  includes(files.nativeActivity, "api.handleNotificationAction({kind:'call',callId:");
+  includes(files.nativeActivity, "api.handleNotificationAction(action)");
   includes(files.calls, "window.WhatsAppCalls={");
   includes(files.calls, "if(pending&&pending.kind===\"call\"&&pending.callId)");
 });
@@ -684,7 +684,7 @@ check("cold-start Accept restores the exact call before chat hydration", () => {
   includes(files.calls, "async function restorePendingNotificationAction()");
   includes(files.calls, 'eq("id",pending.callId).eq("callee_id",current.id).maybeSingle()');
   includes(files.calls, "await showIncomingCallRecord(row);");
-  includes(files.calls, "incomingOffer=offers[0];phase=\"incoming\";acceptRequested=false;");
+  includes(files.calls, "incomingOffer=offers[0];seenSignals.add(offers[0].id);phase=\"incoming\";acceptRequested=false;");
   includes(files.calls, "restorePendingNotificationAction,");
   includes(files.backend, "void window.WhatsAppCalls.restorePendingNotificationAction()");
   assert.ok(files.backend.indexOf("restorePendingNotificationAction()") < files.backend.indexOf("await loadData(false);"));
