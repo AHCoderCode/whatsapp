@@ -748,6 +748,22 @@ check("pending native Accept survives URL cleanup and WebView/service-worker rel
   includes(files.calls, "clearPendingNotificationAction();");
   includes(files.nativeActivity, "if (isCallLaunchIntent(intent, url) && pageLoaded)");
 });
+check("foreground Accept is applied after an earlier notification recovery finishes", () => {
+  includes(files.calls, "function applyLatestNotificationAction(callId)");
+  includes(files.calls, ".then(()=>applyLatestNotificationAction(callId))");
+  includes(files.calls, 'latest.action==="accept"&&incomingOffer');
+  includes(files.sw, 'clients.find(item => item.visibilityState === "visible" && item.focused)');
+});
+check("call start and accept clearly identify an unavailable internet connection", () => {
+  includes(files.calls, 'const NO_INTERNET_MESSAGE="No internet connection. Connect to Wi-Fi or mobile data, then try again."');
+  includes(files.calls, "navigator.onLine===false");
+  includes(files.calls, "callFailureMessage(error");
+});
+check("Android notification Accept is persisted and retried until the call controller is ready", () => {
+  includes(files.nativeActivity, "wa_pending_native_call_action_v1");
+  includes(files.nativeActivity, "pendingNativeCallDispatchAttempts < 40");
+  includes(files.nativeActivity, "dispatchPendingNativeCallAction();");
+});
 check("incoming call recovery resumes an already-accepted call after a WebView reload", () => {
   includes(files.calls, 'target.status==="accepted"&&pending.action==="accept"');
   includes(files.calls, 'row.status==="accepted"&&pendingMatches&&pending.action==="accept"');
