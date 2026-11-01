@@ -924,7 +924,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
         body:CALL_MESSAGE_PREFIX+JSON.stringify(event),message_type:"text"
       });
       if(error&&error.code!=="23505")throw error;
-      if(!error&&window.waBackend&&typeof window.waBackend.load==="function"){
+      if(window.waBackend&&typeof window.waBackend.load==="function"){
         void window.waBackend.load().catch(loadError=>console.warn("[calls] Call card refresh failed:",loadError&&loadError.message||loadError));
       }
     }catch(error){console.warn("[calls] Could not write the call card to chat:",error&&error.message||error);}
