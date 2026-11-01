@@ -752,6 +752,8 @@ check("foreground Accept is applied after an earlier notification recovery finis
   includes(files.calls, "function applyLatestNotificationAction(callId)");
   includes(files.calls, ".then(()=>applyLatestNotificationAction(callId))");
   includes(files.calls, 'latest.action==="accept"&&incomingOffer');
+  includes(files.calls, "seenSignals.delete(data[0].id)");
+  includes(files.calls, "seenSignals.add(offers[0].id)");
   includes(files.sw, 'clients.find(item => item.visibilityState === "visible" && item.focused)');
 });
 check("call start and accept clearly identify an unavailable internet connection", () => {
