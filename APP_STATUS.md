@@ -116,3 +116,15 @@ Security and product boundaries that remain:
 
 
 **Android release:** GitHub Actions run #105 completed successfully and published the permanently signed **WhatsApp Android 1.4.105** APK. The debug APK artifact and signed release artifact were uploaded successfully.
+
+## Security hardening implementation — November 8, 2026
+
+This branch and the linked Supabase project now contain the first security-hardening layer:
+- Applied migration: `whatsapp_security_hardening` (recovery-code hash table, IP limit table, moderator roles, temporary restrictions, moderation audit, restrictive policies for group/direct message visibility and friend request blocks, report-rate trigger).
+- Deployed Edge Functions: `whatsapp-account-recovery` and `whatsapp-moderation`.
+- Frontend security centre added on this feature branch for recovery-code generation, recovery flow and moderator report actions.
+- No moderator role is preassigned; a trusted adult project administrator must assign one.
+- Account deletion remains deliberately unavailable because this Auth user is shared with Windows 12 Master Chat. A project/data separation migration is required before implementing app-only account deletion.
+- End-to-end encryption remains unavailable. Message text and attachments are not E2EE; see `docs/E2EE_RELEASE_GATE.md`.
+- A successful migration/function deployment is not proof of cryptographic correctness, complete UI operation, or device interoperability. Full manual test results must be recorded before production claims.
+
