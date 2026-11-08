@@ -213,3 +213,24 @@ drop trigger if exists whatsapp_user_reports_rate_guard on public.whatsapp_user_
 create trigger whatsapp_user_reports_rate_guard
 before insert on public.whatsapp_user_reports
 for each row execute function private.whatsapp_guard_report_rate();
+
+
+create policy "Prevent accepting requests across a block"
+on public.aeroshell_friend_requests
+as restrictive
+for update
+to authenticated
+using (true)
+with check (
+  not (
+    public.aeroshell_friend_requests.status = 'accepted'
+    and exists (
+      select 1
+      from public.whatsapp_user_blocks b
+      where
+        (b.blocker_id = public.aeroshell_friend_requests.requester_id and b.blocked_id = public.aeroshell_friend_requests.recipient_id)
+        or
+        (b.blocker_id = public.aeroshell_friend_requests.recipient_id and b.blocked_id = public.aeroshell_friend_requests.requester_id)
+    )
+  )
+);
