@@ -47,7 +47,7 @@
       ["key","Security notifications","Get notified when security codes change.","toggle"],
       ["shield","Two-step verification","Add an extra layer of security to your account.","button"],
       ["key","Account recovery code","Create a one-time backup code to recover your password without a phone number.","button"],
-      ["shield-alert","Moderation centre","Authorized moderators can review reports and apply temporary messaging restrictions.","button"],
+      ["shield","Moderation centre","Authorized moderators can review reports and apply temporary messaging restrictions.","button"],
       ["phone","Change number","Change the phone number linked to your account.","button"],
       ["database","Request account info","Request a report of your account information.","button"],
       ["log-out","Log out","Sign out on this device.","button"]
