@@ -169,3 +169,6 @@ Do not expose the Supabase service-role key or grant moderator access to an untr
 - Recovery codes are a backup credential, not a verified identity check. Anyone who obtains the code and username can reset the shared account password. Store the code securely.
 - Recovery and moderation functions were deployed to Supabase; browser/device workflows still require full two-account and moderator-role testing. Do not treat deployment status as a security audit.
 
+
+
+**Shared-group blocking behavior:** when you block a person, their messages are hidden from your view in shared groups. Their messages remain visible to other group members, and blocking does not remove them from the group or block group calls. Direct-message blocking continues to prevent both accounts from reading/sending direct messages to one another.
