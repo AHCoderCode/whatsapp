@@ -355,7 +355,7 @@
         open(blocked ? "Unblock " + chat.name + "?" : "Block " + chat.name + "?",
           "<p class='screen-description'>" + (blocked
             ? "This will allow direct messages between both accounts again."
-            : "This prevents direct message reads and sends between both accounts. Existing friend requests are not deleted.") + "</p>",
+            : "This prevents direct messages between both accounts. It also hides messages from this contact in shared groups from your view; it does not remove either person from the group or block group calls.") + "</p>",
           "<button class='secondary-button' data-action='close-dialog'>Cancel</button>" +
           "<button class='danger-button' data-dialog-action='wa-confirm-block' data-user-id='" + esc(chat.id) + "' data-blocked='" + (blocked ? "true" : "false") + "'>" + (blocked ? "Unblock" : "Block") + "</button>");
       } catch (error) { say("Could not check block status: " + String(error?.message || "Try again.")); }
@@ -367,7 +367,7 @@
       open("Report " + (chat.type === "group" ? "group" : chat.name),
         "<div class='dialog-field'><label for='wa-report-reason'>Reason</label><select id='wa-report-reason'><option value='spam'>Spam</option><option value='harassment'>Harassment</option><option value='impersonation'>Impersonation</option><option value='inappropriate_content'>Inappropriate content</option><option value='other'>Other</option></select></div>" +
         "<div class='dialog-field'><label for='wa-report-details'>Details (optional)</label><textarea id='wa-report-details' maxlength='1000' rows='4' placeholder='Describe the issue'></textarea></div>" +
-        "<p class='field-hint'>Your report is stored securely for review. This project does not yet have a moderation dashboard.</p>",
+        "<p class='field-hint'>Your report is stored securely for review. Reports are stored for authorized moderators to review. Review actions are available to accounts explicitly assigned a moderator role.</p>",
         "<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='danger-button' data-dialog-action='wa-submit-report' data-user-id='" + esc(reported) + "' data-chat-id='" + (chat.type === "group" ? esc(chat.id) : "") + "'>Submit report</button>");
     }
   }
