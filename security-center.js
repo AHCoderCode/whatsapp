@@ -154,16 +154,18 @@
     }
     moderationBusy = true;
     button.disabled = true;
+    let completed = false;
     try {
       await invokeModeration(body);
+      completed = true;
       toast("Moderation action saved.");
-      await loadModerationCentre();
     } catch (error) {
       toast("The moderation action could not be completed. Check moderator access and try again.");
     } finally {
       moderationBusy = false;
       if (button.isConnected) button.disabled = false;
     }
+    if (completed) await loadModerationCentre();
   }
 
   function installLoginRecoveryLink() {
