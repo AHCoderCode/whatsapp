@@ -137,3 +137,35 @@ Direct-call cards in chats are **red** for missed/unanswered calls (incoming or 
 
 
 Create custom chat lists such as **Family**, **Work**, or **Wishlist**, choose which conversations appear in each list, and edit or remove a list later. Custom list names and selected conversation IDs sync through Supabase to the signed-in account. Contact display-name aliases remain local to each device.
+
+
+## Security hardening branch — November 8, 2026
+
+The `security-and-recovery-2026-11-08` branch adds the following server-backed protections to the connected Supabase project:
+
+- **One-time account recovery codes:** users can generate a random 256-bit recovery code from Settings → Account. Only its SHA-256 hash is stored. A recovery code can reset the password once; repeated failures are throttled and the code locks after five incorrect attempts. Recovery does not need a phone number, SIM or email address. It does require the user to have generated and safely saved the code in advance.
+- **Important shared-identity effect:** the current Supabase Auth identity is shared with Windows 12 Master Chat. Resetting a password through this recovery feature changes the same shared Auth password, so it also affects sign-in to that app.
+- **Moderation service:** `whatsapp-moderation` provides authenticated report review and audit logging. Moderator roles are stored separately in `whatsapp_moderator_roles`; a trusted adult project administrator must explicitly assign a role. No moderator is automatically assigned.
+- **Temporary messaging restriction:** moderators may restrict an account from sending messages for up to 30 days. This does not suspend login, calling or other shared-app features.
+- **Group blocking:** messages sent by an account blocked by a group participant are hidden from that participant in shared groups; direct-message blocking remains enforced. Blocking does not remove the other account from a group or silence group calls.
+- **Report spam control:** each account is limited to six report submissions per hour by a database trigger.
+
+### Assigning the first moderator
+
+Only the trusted adult who controls the Supabase project should perform this step. Obtain the moderator's real Auth user UUID from Supabase → Authentication → Users, then run this query in the SQL editor after verifying the identity:
+
+```sql
+insert into public.whatsapp_moderator_roles (user_id, role)
+values ('REPLACE_WITH_VERIFIED_AUTH_USER_UUID', 'admin')
+on conflict (user_id) do update set role = excluded.role;
+```
+
+Do not expose the Supabase service-role key or grant moderator access to an untrusted person. The moderation dashboard is available under Settings → Account → Moderation centre after a role has been assigned.
+
+### Remaining release blockers
+
+- **End-to-end encryption is still not implemented.** This branch does not add a custom cryptographic scheme. Read `docs/E2EE_RELEASE_GATE.md` before making any privacy claims.
+- **Account deletion is not yet safely separable.** The current Auth identity and parts of the `aeroshell_*` data model are shared with Windows 12 Master Chat. Deleting the Auth user or shared profile could remove access/data from both apps. A proper app-only deletion feature requires separating the WhatsApp project/auth identity and migrating its data first. Do not invoke the existing Windows 12 account-deletion function for WhatsApp users.
+- Recovery codes are a backup credential, not a verified identity check. Anyone who obtains the code and username can reset the shared account password. Store the code securely.
+- Recovery and moderation functions were deployed to Supabase; browser/device workflows still require full two-account and moderator-role testing. Do not treat deployment status as a security audit.
+
