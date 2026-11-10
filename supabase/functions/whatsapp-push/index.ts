@@ -297,13 +297,11 @@ async function notifyMessage(userId: string, body: any) {
   const { data: sender } = await admin.from("aeroshell_profiles")
     .select("id,username,display_name").eq("id", userId).maybeSingle();
   const senderName = clean(sender?.display_name || sender?.username || "New message", 80);
-  const messageText = message.message_type === "voice" ? "🎤 Voice message"
-    : message.message_type === "file" ? "📎 " + clean(message.attachment_name || "Attachment", 100)
-    : clean(message.body || "New message", 180);
-
+  // Keep message previews out of push-provider payloads and lock-screen banners.
+  // The authenticated app fetches message content after the recipient opens it.
   let recipientIds: string[] = [];
   let title = senderName;
-  let notificationBody = messageText;
+  let notificationBody = "New message";
   let chatId = message.sender_id;
   let preferenceColumn: "messages_enabled" | "groups_enabled" = "messages_enabled";
   if (message.recipient_id) {
@@ -316,7 +314,7 @@ async function notifyMessage(userId: string, body: any) {
     if (membersResult.error) throw membersResult.error;
     recipientIds = (membersResult.data || []).map((row: any) => row.user_id).filter((id: string) => id !== userId);
     title = clean(groupResult.data?.name || "Group message", 80);
-    notificationBody = senderName + ": " + messageText;
+    notificationBody = "New group message";
     chatId = message.group_id;
     preferenceColumn = "groups_enabled";
   } else {

@@ -112,15 +112,15 @@ jobs:
         with:
           gradle-version: '8.13'
 
-      - name: Build debug APK
+      - name: Build direct-install debug APK
         working-directory: android-native
-        run: gradle --no-daemon assembleDebug
+        run: gradle --no-daemon assembleDirectDebug
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: whatsapp-native-debug-apk
-          path: android-native/app/build/outputs/apk/debug/app-debug.apk
+          path: android-native/app/build/outputs/apk/direct/debug/app-direct-debug.apk
           if-no-files-found: error
           retention-days: 7
 
@@ -158,7 +158,7 @@ jobs:
             -alias "$ANDROID_SIGNING_KEY_ALIAS" >/dev/null
           echo "Permanent release keystore and alias validated."
 
-      - name: Build permanent signed release APK
+      - name: Build permanent signed direct-install APK and Play Store bundle
         if: steps.signing.outputs.configured == 'true'
         id: release
         env:
@@ -171,9 +171,11 @@ jobs:
         run: |
           WA_VERSION_CODE=$((1000 + RUN_NUMBER))
           WA_VERSION_NAME="1.4.$RUN_NUMBER"
-          gradle --no-daemon -PwaVersionCode="$WA_VERSION_CODE" -PwaVersionName="$WA_VERSION_NAME" assembleRelease
+          gradle --no-daemon -PwaVersionCode="$WA_VERSION_CODE" -PwaVersionName="$WA_VERSION_NAME" assembleDirectRelease bundlePlayRelease
           mkdir -p app/build/outputs/whatsapp-release
-          cp app/build/outputs/apk/release/app-release.apk app/build/outputs/whatsapp-release/whatsapp.apk
+          cp app/build/outputs/apk/direct/release/app-direct-release.apk app/build/outputs/whatsapp-release/whatsapp.apk
+          mkdir -p app/build/outputs/whatsapp-play-store
+          cp app/build/outputs/bundle/playRelease/app-play-release.aab app/build/outputs/whatsapp-play-store/whatsapp-play-store.aab
           SHA256="$(sha256sum app/build/outputs/whatsapp-release/whatsapp.apk | cut -d ' ' -f1)"
           echo "version_code=$WA_VERSION_CODE" >> "$GITHUB_OUTPUT"
           echo "version_name=$WA_VERSION_NAME" >> "$GITHUB_OUTPUT"
@@ -185,6 +187,15 @@ jobs:
         with:
           name: whatsapp-native-release-apk
           path: android-native/app/build/outputs/whatsapp-release/whatsapp.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Google Play App Bundle artifact
+        if: steps.signing.outputs.configured == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: whatsapp-native-play-store-aab
+          path: android-native/app/build/outputs/whatsapp-play-store/whatsapp-play-store.aab
           if-no-files-found: error
           retention-days: 14
 

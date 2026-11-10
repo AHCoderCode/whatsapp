@@ -137,3 +137,13 @@ Direct-call cards in chats are **red** for missed/unanswered calls (incoming or 
 
 
 Create custom chat lists such as **Family**, **Work**, or **Wishlist**, choose which conversations appear in each list, and edit or remove a list later. Custom list names and selected conversation IDs sync through Supabase to the signed-in account. Contact display-name aliases remain local to each device.
+
+## Security update (November 10, 2026)
+
+- Message and attachment traffic uses HTTPS/TLS and the Supabase project's private Storage bucket with Row Level Security. Supabase-managed encryption at rest is not the same as end-to-end encryption.
+- **This release does not provide end-to-end encryption or zero-knowledge message storage.** Message bodies are stored as readable database values; the service and privileged operators can process them. Do not treat this app as suitable for secrets or highly sensitive conversations.
+- Message text and attachment filenames are now omitted from push notification payloads. The recipient fetches the content after opening the authenticated app. This reduces lock-screen and push-provider exposure, but it does not encrypt the database message body.
+- Android has separate direct-install and Google Play build variants. Only the direct-install variant requests package-install permission for its existing signed APK updater. The Play variant omits that permission and delegates updates to Google Play.
+- The Play Store App Bundle is built as a separate CI artifact. Uploading it to Play Console, completing Data safety and app-access declarations, providing a privacy policy, and passing Play review are still manual release tasks.
+- The Android build targets API 36. Physical-device, two-account, backup/restore, call, notification, and accessibility testing remain required before claiming complete production readiness.
+

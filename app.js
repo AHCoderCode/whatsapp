@@ -917,18 +917,24 @@
     let content="";
     if(settingsTab==="updates"){
       const info=typeof window.waNativeUpdateGetState==="function"?window.waNativeUpdateGetState():null;
-      const nativeApp=!!(info&&info.nativeApp);
+      const playStoreBuild=!!window.waNativePlayStoreBuild;
+      const playStoreInfo=window.waNativePlayStoreInfo||{};
+      const nativeApp=!!(info&&info.nativeApp)||playStoreBuild;
       const available=!!(info&&info.updateAvailable);
-      const installedName=info&&info.installedVersionName?String(info.installedVersionName):"Installed Android app";
-      const installedCode=info&&info.installedVersionCode?String(info.installedVersionCode):"";
+      const installedName=info&&info.installedVersionName?String(info.installedVersionName):(playStoreInfo.installedVersionName||"Installed Android app");
+      const installedCode=info&&info.installedVersionCode?String(info.installedVersionCode):(playStoreInfo.installedVersionCode?String(playStoreInfo.installedVersionCode):"");
       const latestName=info&&info.versionName?String(info.versionName):"";
       const latestCode=info&&info.versionCode?String(info.versionCode):"";
       let statusTitle="Check for updates";
       let statusCopy="Check GitHub Releases for the latest signed Android version.";
       let statusClass="idle";
-      if(!nativeApp){
+      if(playStoreBuild){
+        statusTitle="Updates through Google Play";
+        statusCopy="This build receives app updates through Google Play. APK self-installation is disabled in this edition.";
+        statusClass="current";
+      }else if(!nativeApp){
         statusTitle="Android app updates";
-        statusCopy="The signed APK updater is available inside the installed Android app.";
+        statusCopy="The signed APK updater is available inside the direct-install Android app.";
       }else if(info.checking){
         statusTitle="Checking for updates…";
         statusCopy="Contacting the official project release feed.";
@@ -952,18 +958,18 @@
       }
       const checkedAt=info&&info.lastCheckAt?new Date(info.lastCheckAt).toLocaleString([],{hour:"numeric",minute:"2-digit",day:"numeric",month:"short"}):"Not checked yet";
       const releaseLink=info&&info.releaseUrl?"<a class='wa-update-release-link' href='"+esc(info.releaseUrl)+"' target='_blank' rel='noopener noreferrer'>View release notes</a>":"";
-      const installButton=available
+      const installButton=!playStoreBuild&&available
         ? "<button type='button' class='wa-update-primary' data-wa-native-update-install "+(info.installing?"disabled":"")+">"+(info.installing?"Preparing…":"Download and install")+"</button>"
         : "";
       const message=info&&info.message?"<p class='wa-update-error'>"+esc(info.message)+"</p>":"";
       content="<section class='wa-update-panel'>"+
-        "<div class='wa-update-hero'><span class='wa-update-icon'>"+icon("download")+"</span><div><span class='wa-settings-kicker'>APP MAINTENANCE</span><h4>WhatsApp updates</h4><p>Find, download and install the latest signed Android release from inside the app.</p></div></div>"+
+        "<div class='wa-update-hero'><span class='wa-update-icon'>"+icon("download")+"</span><div><span class='wa-settings-kicker'>APP MAINTENANCE</span><h4>WhatsApp updates</h4><p>Manage app updates for your Android distribution.</p></div></div>"+
         "<div class='wa-update-status "+statusClass+"'><span class='wa-update-status-dot'></span><div><strong>"+esc(statusTitle)+"</strong><small>"+esc(statusCopy)+"</small></div></div>"+
         "<div class='wa-update-version-grid'><div><small>Installed version</small><strong>"+esc(installedName)+(installedCode?" · "+esc(installedCode):"")+"</strong></div>"+
         "<div><small>Latest release</small><strong>"+esc(available?(latestName||"Version "+latestCode):(latestName||"Checked against Releases"))+"</strong></div></div>"+
-        "<div class='wa-update-actions'><button type='button' class='wa-update-secondary' data-wa-native-update-check "+(info&&info.checking?"disabled":"")+">"+(info&&info.checking?"Checking…":"Check for updates")+"</button>"+installButton+"</div>"+
+        (playStoreBuild ? "<p class='screen-description'>To update, open Google Play Store, find WhatsApp, and select Update when it is offered.</p>" : "<div class='wa-update-actions'><button type='button' class='wa-update-secondary' data-wa-native-update-check "+(info&&info.checking?"disabled":"")+">"+(info&&info.checking?"Checking…":"Check for updates")+"</button>"+installButton+"</div>")+
         "<div class='wa-update-footer'><span>Last checked: "+esc(checkedAt)+"</span>"+releaseLink+"</div>"+message+
-        "<p class='wa-update-safety-note'>Your chats remain in your account. After the download is verified, Android’s installer opens and asks you to confirm the update.</p>"+
+        "<p class='wa-update-safety-note'>Your chats remain in your account. "+(playStoreBuild?"Google Play manages installation and app updates for this edition.":"After the download is verified, Android’s installer opens and asks you to confirm the update.")+"</p>"+
         "</section>";
       return "<div class='settings-detail-header'><h3>"+esc(tab[2])+"</h3></div><div class='settings-detail-content'>"+content+"</div>";
     }

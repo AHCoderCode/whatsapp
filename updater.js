@@ -1,8 +1,20 @@
 (() => {
   "use strict";
-  const APP_BUILD = "whatsapp-fix-20261101b";
+  const APP_BUILD = "whatsapp-secure-release-20261110a";
   const native = window.WhatsAppNativeAndroid;
   const nativeApp = !!(native && typeof native.isNativeApp === "function" && native.isNativeApp());
+  const playStoreBuild = !!(nativeApp && typeof native.isPlayStoreBuild === "function" && native.isPlayStoreBuild());
+  if (playStoreBuild) {
+    window.waNativePlayStoreBuild = true;
+    window.waNativePlayStoreInfo = {
+      installedVersionCode: Number(native.getVersionCode()) || 0,
+      installedVersionName: String(native.getVersionName() || "")
+    };
+    // Google Play owns APK updates for this edition, but the web shell still
+    // refreshes independently when the hosted app assets change.
+    setupWebUpdateNotice();
+    return;
+  }
 
   function setupWebUpdateNotice() {
     if (!("serviceWorker" in navigator)) return;

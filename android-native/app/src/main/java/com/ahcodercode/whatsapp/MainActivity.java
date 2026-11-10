@@ -95,6 +95,10 @@ public final class MainActivity extends Activity {
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(true);
+        settings.setJavaScriptCanOpenWindowsAutomatically(false);
+        settings.setSupportMultipleWindows(false);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        if (Build.VERSION.SDK_INT >= 26) settings.setSafeBrowsingEnabled(true);
         webView.setOverScrollMode(WebView.OVER_SCROLL_NEVER);
         webView.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -721,10 +725,15 @@ public final class MainActivity extends Activity {
 
     private final class NativeAppBridge {
         @JavascriptInterface public boolean isNativeApp() { return true; }
+        @JavascriptInterface public boolean isPlayStoreBuild() { return BuildConfig.PLAY_STORE_BUILD; }
         @JavascriptInterface public int getVersionCode() { return BuildConfig.VERSION_CODE; }
         @JavascriptInterface public String getVersionName() { return BuildConfig.VERSION_NAME; }
-        @JavascriptInterface public void checkForUpdates() { MainActivity.this.checkForUpdates(); }
-        @JavascriptInterface public void downloadAndInstallUpdate(String url, String sha256) { MainActivity.this.downloadAndInstallUpdate(url, sha256); }
+        @JavascriptInterface public void checkForUpdates() {
+            if (!BuildConfig.PLAY_STORE_BUILD) MainActivity.this.checkForUpdates();
+        }
+        @JavascriptInterface public void downloadAndInstallUpdate(String url, String sha256) {
+            if (!BuildConfig.PLAY_STORE_BUILD) MainActivity.this.downloadAndInstallUpdate(url, sha256);
+        }
         @JavascriptInterface public boolean beginCallAudio(boolean useSpeaker) {
             try { return beginNativeCallAudio(useSpeaker); }
             catch (Exception error) { android.util.Log.e("WhatsApp", "Native audio focus failed", error); return false; }
