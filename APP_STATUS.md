@@ -116,3 +116,19 @@ Security and product boundaries that remain:
 
 
 **Android release:** GitHub Actions run #105 completed successfully and published the permanently signed **WhatsApp Android 1.4.105** APK. The debug APK artifact and signed release artifact were uploaded successfully.
+
+## November 10 security and Android distribution work
+
+The security-readiness branch adds a separate Play Store Android product flavor and preserves the direct-install flavor:
+- Both Android variants target API 36.
+- The common Android manifest no longer requests `REQUEST_INSTALL_PACKAGES`.
+- The direct-install variant adds that permission only in its own manifest, retaining the existing user-driven signed APK updater.
+- The Play Store variant does not contain that permission and disables the in-app APK updater; Google Play controls updates for that edition.
+- CI builds a signed direct-install APK for the existing GitHub Release updater and a signed Play Store AAB as a separate Actions artifact.
+- Native WebView settings now disallow mixed content, JavaScript pop-ups, and multiple windows, and enable Android Safe Browsing on supported devices.
+- Message text and attachment names are omitted from message push notifications to reduce lock-screen and push-provider disclosure.
+
+**Encryption limitation:** this work does not implement end-to-end encryption or zero-knowledge storage. Supabase-managed encryption at rest and HTTPS transport do not provide those guarantees. A reviewed per-device identity/key system, authenticated key changes, multi-device recovery, group-key rotation, encrypted attachment envelopes and interoperability tests remain a separate engineering project. Do not advertise E2EE until that work has been independently reviewed and verified.
+
+The new Play AAB is an artifact only; it is not submitted to or published on Google Play automatically. Play Console declarations, privacy policy, Data safety, app-access review, content rating, and manual test evidence still need the app owner's completion. Automated source tests and CI build success do not establish physical-device reliability or Play approval.
+
