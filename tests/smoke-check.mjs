@@ -908,7 +908,7 @@ check("Play Store and direct-install variants have separate update permissions",
   includes(files.nativeActivity, "isPlayStoreBuild()");
   includes(files.nativeActivity, "if (!BuildConfig.PLAY_STORE_BUILD) MainActivity.this.checkForUpdates()");
   includes(files.updater, "waNativePlayStoreBuild = true");
-  includes(files.updater, "Google Play owns updates");
+  includes(files.updater, "Google Play owns APK updates");
   includes(files.buildWorkflow, "bundlePlayRelease");
   includes(files.buildWorkflow, "whatsapp-play-store-aab");
 });
