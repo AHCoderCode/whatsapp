@@ -963,7 +963,7 @@
         : "";
       const message=info&&info.message?"<p class='wa-update-error'>"+esc(info.message)+"</p>":"";
       content="<section class='wa-update-panel'>"+
-        "<div class='wa-update-hero'><span class='wa-update-icon'>"+icon("download")+"</span><div><span class='wa-settings-kicker'>APP MAINTENANCE</span><h4>WhatsApp updates</h4><p>Find, download and install the latest signed Android release from inside the app.</p></div></div>"+
+        "<div class='wa-update-hero'><span class='wa-update-icon'>"+icon("download")+"</span><div><span class='wa-settings-kicker'>APP MAINTENANCE</span><h4>WhatsApp updates</h4><p>Manage app updates for your Android distribution.</p></div></div>"+
         "<div class='wa-update-status "+statusClass+"'><span class='wa-update-status-dot'></span><div><strong>"+esc(statusTitle)+"</strong><small>"+esc(statusCopy)+"</small></div></div>"+
         "<div class='wa-update-version-grid'><div><small>Installed version</small><strong>"+esc(installedName)+(installedCode?" · "+esc(installedCode):"")+"</strong></div>"+
         "<div><small>Latest release</small><strong>"+esc(available?(latestName||"Version "+latestCode):(latestName||"Checked against Releases"))+"</strong></div></div>"+
