@@ -508,6 +508,7 @@ check("incoming realtime messages append without replacing the active composer o
 });
 check("typing and voice recording activity use ephemeral realtime signals and animated indicators", () => {
   includes(files.backend,'event:"chat-activity"');
+  includes(files.backend,'chat_id:chat.type==="group"?String(chat.id):String(me.id)');
   includes(files.backend,'setChatActivity("recording",true,chat)');
   includes(files.app,"wa-activity-dots");
   includes(files.app,"wa-activity-wave");
