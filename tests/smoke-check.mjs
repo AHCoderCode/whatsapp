@@ -910,7 +910,7 @@ check("Play Store and direct-install variants have separate update permissions",
   includes(files.updater, "waNativePlayStoreBuild = true");
   includes(files.updater, "Google Play owns APK updates");
   includes(files.buildWorkflow, "bundlePlayRelease");
-  includes(files.buildWorkflow, "whatsapp-play-store-aab");
+  includes(files.buildWorkflow, "whatsapp-native-play-store-aab");
 });
 check("push notifications never expose message text or attachment names", () => {
   includes(files.push, 'let notificationBody = "New message";');
