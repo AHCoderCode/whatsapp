@@ -10,8 +10,9 @@
       installedVersionCode: Number(native.getVersionCode()) || 0,
       installedVersionName: String(native.getVersionName() || "")
     };
-    // Google Play owns updates for the Play-distributed package. Never side-load
-    // an APK from this build or request package-install permission.
+    // Google Play owns APK updates for this edition, but the web shell still
+    // refreshes independently when the hosted app assets change.
+    setupWebUpdateNotice();
     return;
   }
 
