@@ -79,10 +79,10 @@ check("media, privacy, subgroup and synced-list handlers are present", () => {
   includes(files.app, "WhatsAppFeatureGaps.onBackendData");
 });
 check("feature-gap module is in the app shell cache", () => {
-  includes(files.html, "/feature-gaps.js?v=whatsapp-secure-release-20261110a");
-  includes(files.sw, "/feature-gaps.js?v=whatsapp-secure-release-20261110a");
-  includes(files.html, "/group-calls.js?v=whatsapp-secure-release-20261110a");
-  includes(files.sw, "/group-calls.js?v=whatsapp-secure-release-20261110a");
+  includes(files.html, "/feature-gaps.js?v=whatsapp-secure-release-20261110b");
+  includes(files.sw, "/feature-gaps.js?v=whatsapp-secure-release-20261110b");
+  includes(files.html, "/group-calls.js?v=whatsapp-secure-release-20261110b");
+  includes(files.sw, "/group-calls.js?v=whatsapp-secure-release-20261110b");
 });
 check("inline HTML scripts parse", () => {
   const scripts = [...files.html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
@@ -93,10 +93,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-secure-release-20261110a");
-  includes(files.sw, "whatsapp-secure-release-20261110a");
-  includes(files.manifest, "whatsapp-secure-release-20261110a");
-  includes(files.sw, "whatsapp-final-shell-v69");
+  includes(files.html, "whatsapp-secure-release-20261110b");
+  includes(files.sw, "whatsapp-secure-release-20261110b");
+  includes(files.manifest, "whatsapp-secure-release-20261110b");
+  includes(files.sw, "whatsapp-final-shell-v70");
 });
 check("mobile settings use a full-width account detail pane", () => {
   includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
@@ -494,6 +494,29 @@ check("voice notes use inline audio playback", () => {
   includes(files.backend, "wa-inline-voice-audio");
   includes(files.backend, "createSignedUrl(message.attachmentPath,120)");
   includes(files.backend, 'action==="open-attachment"');
+});
+check("incoming realtime messages append without replacing the active composer or draft", () => {
+  const start=files.backend.indexOf("function insertMessageIntoUI");
+  const end=files.backend.indexOf("function isBackendUserOnline",start);
+  const source=files.backend.slice(start,end);
+  includes(source,"bridge.appendBackendMessage(msg,chat)");
+  excludes(source,"bridge.renderMain()");
+  includes(files.app,"draftSnapshot");
+  includes(files.app,"appendBackendMessage: (message,chat)");
+});
+check("typing and voice recording activity use ephemeral realtime signals and animated indicators", () => {
+  includes(files.backend,'event:"chat-activity"');
+  includes(files.backend,'setChatActivity("recording",true,chat)');
+  includes(files.app,"wa-activity-dots");
+  includes(files.app,"wa-activity-wave");
+  includes(files.css,"@keyframes wa-typing-dot");
+  includes(files.css,"@keyframes wa-activity-wave");
+});
+check("outgoing call status advances from Calling to Ringing on peer presence and Connecting on acceptance", () => {
+  includes(files.calls,'activeCall.peerRinging?"Ringing…":"Calling…"');
+  includes(files.calls,"syncOutgoingPresenceStatus");
+  includes(files.calls,'setPhase("connecting","Connecting…")');
+  includes(files.backend,"isBackendUserOnline=isBackendUserOnline");
 });
 check("read receipt setting prevents database reads when disabled", () => includes(files.backend, "if(settings.readReceipts===false)return;"));
 check("read ticks have distinct grey and blue states", () => {

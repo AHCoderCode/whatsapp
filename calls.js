@@ -165,7 +165,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       // Supabase/WebView. Keep the real call screen visible while we recover it.
       if(!incomingOffer){
         acceptRequested=true;
-        renderCallOverlay("Waiting for the caller to connect…");
+        renderCallOverlay("Connecting…");
         return;
       }
       void acceptCall();
@@ -412,7 +412,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     const peer=callPeer(activeCall)||{};
     const waitingForOffer=phase==="incoming"&&acceptRequested;
     const incoming=phase==="incoming"&&!acceptRequested, video=activeCall.media_type==="video";
-    const status=notice||(waitingForOffer?"Waiting for the caller to connect…":incoming?"Incoming "+(video?"video":"voice")+" call":phase==="outgoing"?"Calling @"+(peer.username||peer.name||"contact")+"…":phase==="connecting"?"Connecting through the secure relay…":phase==="connected"?formatTime(elapsed):"Preparing call…");
+    const status=notice||(waitingForOffer?"Connecting…":incoming?"Incoming "+(video?"video":"voice")+" call":(activeCall.direction==="outgoing"&&(phase==="outgoing"||phase==="preparing"))?(activeCall.peerRinging?"Ringing…":"Calling…"):phase==="connecting"?"Connecting…":phase==="connected"?formatTime(elapsed):"Preparing call…");
     if(incoming){
       const waiting=!incomingOffer;
       if(!activeCall.notificationShown){activeCall.notificationShown=true;void notifyIncomingCall(activeCall,peer);}
@@ -420,7 +420,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       return;
     }
     host.innerHTML="<div class='wa-call-backdrop wa-call-fullscreen'><section class='wa-call-window "+(video?"video-call":"audio-call")+"' role='dialog' aria-modal='true' aria-label='"+(video?"Video call":"Voice call")+"'>"+
-      "<header class='wa-call-header'><div class='wa-call-title'><span class='wa-call-status-dot'></span><div><strong>"+esc(peer.name||peer.username||"Contact")+"</strong><small>"+esc(status)+"</small></div></div><button class='wa-call-close' type='button' data-wa-call='end' aria-label='End call'>" + bridge.icon("x") + "</button></header>"+
+      "<header class='wa-call-header'><div class='wa-call-title'><span class='wa-call-status-dot "+(activeCall.direction==="outgoing"?(activeCall.peerRinging?"is-ringing":"is-calling"):phase==="connecting"?"is-connecting":"")+"'></span><div><strong>"+esc(peer.name||peer.username||"Contact")+"</strong><small>"+esc(status)+"</small></div></div><button class='wa-call-close' type='button' data-wa-call='end' aria-label='End call'>" + bridge.icon("x") + "</button></header>"+
       (video?"<div class='wa-call-stage'><video class='wa-call-remote-video' id='wa-call-remote-video' autoplay playsinline></video><div class='wa-call-video-placeholder' id='wa-call-video-placeholder'><div class='wa-call-avatar'>"+esc(peer.avatar||String(peer.name||peer.username||"U").slice(0,2).toUpperCase())+"</div><strong>"+esc(peer.name||peer.username||"Contact")+"</strong><span>"+esc(phase==="incoming"?"Incoming video call":phase==="connected"?"Waiting for video…":"Waiting for video…")+"</span></div><video class='wa-call-local-video' id='wa-call-local-video' autoplay muted playsinline></video></div>":
       "<div class='wa-call-audio-stage'><div class='wa-call-avatar'>"+esc(peer.avatar||String(peer.name||peer.username||"U").slice(0,2).toUpperCase())+"</div><h2>"+esc(peer.name||peer.username||"Contact")+"</h2><p>"+esc(status)+"</p><audio id='wa-call-remote-audio' autoplay playsinline></audio></div>")+
       "<div class='wa-call-security'><span>" + bridge.icon("lock") + "</span> "+(directFallbackAttempted?"WebRTC media · Encrypted direct fallback (network address may be visible)":"WebRTC media · TURN relay connection")+"</div>"+
@@ -442,6 +442,11 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     if(placeholder&&remoteStream&&remoteStream.getVideoTracks().some(t=>t.readyState==="live"))placeholder.style.display="none";
   }
   function setPhase(next,notice){phase=next;renderCallOverlay(notice);}
+  function syncOutgoingPresenceStatus(){
+    if(!activeCall||activeCall.direction!=="outgoing"||!activeCall.offerSent||!(phase==="preparing"||phase==="outgoing"))return;
+    const online=!!(bridge.isBackendUserOnline&&bridge.isBackendUserOnline(activeCall.callee_id));
+    if(!!activeCall.peerRinging!==online){activeCall.peerRinging=online;renderCallOverlay();}
+  }
   function updateConnectedDuration(){
     const text=formatTime(elapsed),host=root();
     const header=host.querySelector(".wa-call-title small");
@@ -734,8 +739,8 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
         try{await client.from("aeroshell_calls").update({status:"ended"}).eq("id",newId);}catch(_){}
         return;
       }
-      activeCall=Object.assign({},data,{direction:"outgoing",peer:person});
-      renderCallOverlay("Calling @"+(person.username||person.name)+"…");
+      activeCall=Object.assign({},data,{direction:"outgoing",peer:person,offerSent:false,peerRinging:false});
+      renderCallOverlay("Calling…");
       ringTimer=null; // Keep the call active until either side ends it.
 
       // Notify the callee after local media is ready, but do not make ICE setup wait
@@ -767,16 +772,21 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
         }
       })();
       if(!activeCall||activeCall.id!==newId)return;
-      setPhase("preparing","Preparing the secure relay…");
+      renderCallOverlay("Calling…");
       const servers=await withCallTimeout(relayServers(newId),12000,"Secure relay setup timed out. Check the TURN configuration and connection, then try again.");
       if(!activeCall||activeCall.id!==newId)return;
-      setPhase("preparing","Starting the audio connection…");
+      renderCallOverlay("Calling…");
       makePeer(activeCall,servers);
       const offer=await withCallTimeout(pc.createOffer(),8000,"The call offer could not be created. Try again.");
       await withCallTimeout(pc.setLocalDescription(offer),8000,"The local call description timed out. Try again.");
       if(!activeCall||activeCall.id!==newId)return;
       await withCallTimeout(sendSignal(activeCall,"offer",{type:"offer",sdp:pc.localDescription.sdp}),8000,"The call offer could not be delivered. Check the connection and try again.");
-      if(activeCall&&activeCall.id===newId)setPhase("outgoing","Calling @"+(person.username||person.name)+"…");
+      if(activeCall&&activeCall.id===newId){
+        activeCall.offerSent=true;
+        activeCall.peerRinging=!!(bridge.isBackendUserOnline&&bridge.isBackendUserOnline(person.id));
+        setPhase("outgoing");
+        syncOutgoingPresenceStatus();
+      }
     }catch(error){
       const wasCancelled=!activeCall||(newId?activeCall.id!==newId:activeCall.id!==pendingId);
       if(newId)try{
@@ -855,7 +865,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     if(!incomingOffer){
       setPendingNotificationAction({kind:"call",callId:String(activeCall.id),action:"accept"});
       acceptRequested=true;
-      renderCallOverlay("Waiting for the caller to connect…");
+      renderCallOverlay("Connecting…");
       return;
     }
     acceptRequested=false;
@@ -864,7 +874,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     if(ringTimer!==null)clearTimeout(ringTimer);ringTimer=null;
     callSetupTimer=setTimeout(()=>{if(activeCall&&activeCall.id===call.id&&phase!=="connected")void endCall("Call setup timed out. Check microphone permission, relay and internet, then try again.");},40000);
     try{
-      setPhase("preparing","Preparing the secure relay and requesting microphone permission…");
+      setPhase("preparing","Connecting…");
       // Relay credentials are fetched only after the user taps Accept. The promise
       // is started before the Android permission prompt, so both waits overlap.
       const relaySetup=relayServers(call.id).then(servers=>({servers}),error=>({error}));
@@ -876,7 +886,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       if(relayResult.error)throw relayResult.error;
       const servers=relayResult.servers;
       if(!activeCall||activeCall.id!==call.id){localStream.getTracks().forEach(track=>track.stop());localStream=null;return;}
-      setPhase("preparing","Joining the audio connection…");
+      setPhase("preparing","Connecting…");
       makePeer(call,servers);
       const offer=incomingOffer&&incomingOffer.payload&&incomingOffer.payload.sdp;
       if(!offer)throw new Error("The caller's offer is missing. Decline and ask them to call again.");
@@ -891,7 +901,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       if(!activeCall||activeCall.id!==call.id)return;
       await withCallTimeout(sendSignal(call,"answer",{type:"answer",sdp:pc.localDescription.sdp}),8000,"The call answer could not be delivered. Check the connection and try again.");
       clearPendingNotificationAction();
-      setPhase("connecting","Connecting through the secure relay…");
+      setPhase("connecting","Connecting…");
     }catch(error){
       try{await transitionCallStatus(call,statusAccepted?"ended":"rejected",client,current);}
       catch(statusError){console.warn("[calls] Failed acceptance cleanup was not confirmed:",statusError&&statusError.message||statusError);}
@@ -1088,7 +1098,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
           return;
         }
         tracked.status=row.status;
-        if(row.status==="accepted"&&tracked.direction==="outgoing"&&phase==="outgoing")setPhase("connecting","Connecting through the secure relay…");
+        if(row.status==="accepted"&&tracked.direction==="outgoing"&&phase==="outgoing")setPhase("connecting","Connecting…");
         if(tracked.direction==="incoming"&&phase==="incoming"&&!incomingOffer)await recoverIncomingOffer(tracked.id,current.id,client);
         return;
       }
@@ -1182,7 +1192,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       }
       if(!activeCall||String(activeCall.id)!==String(target.id))await showIncomingCallRecord(target,{force:true});
       if(!activeCall||String(activeCall.id)!==String(target.id))return false;
-      if(pending.action==="accept"){acceptRequested=true;renderCallOverlay("Waiting for the caller to connect…");}
+      if(pending.action==="accept"){acceptRequested=true;renderCallOverlay("Connecting…");}
       const {data:offers,error:offerError}=await withCallTimeout(
         client.from("aeroshell_call_signals").select("id,call_id,from_user_id,to_user_id,kind,payload,created_at")
           .eq("call_id",target.id).eq("to_user_id",current.id).eq("kind","offer")
@@ -1196,7 +1206,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
         incomingOffer=offers[0];seenSignals.add(offers[0].id);phase="incoming";acceptRequested=false;
         renderCallOverlay();runPendingNotificationAction();
       }else if(pending.action==="accept"){
-        acceptRequested=true;renderCallOverlay("Waiting for the caller to connect…");
+        acceptRequested=true;renderCallOverlay("Connecting…");
       }
       return !!(activeCall&&String(activeCall.id)===String(target.id));
     })();
@@ -1222,7 +1232,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
             if(who==="outgoing"&&row.status==="rejected")say("The other person declined the call.");
             else if(row.status==="ended")say("The call has ended.");
           }else if(row.status==="accepted"&&activeCall.direction==="outgoing"&&phase==="outgoing"){
-            setPhase("connecting","Connecting through the secure relay…");
+            setPhase("connecting","Connecting…");
           }
         }).subscribe((status,error)=>{
           if(status==="SUBSCRIBED")console.info("[calls] Live call events connected.");
@@ -1299,6 +1309,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     hasPendingNotificationAction:()=>!!pendingNotificationAction,
     resume:()=>{if(me()&&me().isSupabase){void restorePendingNotificationAction().catch(error=>console.warn("[calls] Cold-start call restoration failed:",error&&error.message||error));void pollIncomingCallState({force:true});}},
     cleanup:()=>{cleanupLocal();stopIncomingCallPolling();if(callChannel&&db())void db().removeChannel(callChannel);callChannel=null;channelUser="";},
-    getPhase:()=>phase
+    getPhase:()=>phase,
+    onPeerPresenceChanged:syncOutgoingPresenceStatus
   };
 })();

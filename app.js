@@ -36,6 +36,7 @@
   let messageHoldTriggeredRow = null;
   let messageReactionPickerOpen = false;
   let forwardDraft = null;
+  const conversationActivityByChat = new Map();
   const settingsTabs = [
     ["account","key","Account"],["privacy","shield","Privacy"],["chats","chat","Chats"],
     ["notifications","bell","Notifications"],["personalization","palette","Appearance"],
@@ -509,9 +510,70 @@
     button.title = hasText ? "Send message" : "Record voice message";
     button.setAttribute("aria-label", hasText ? "Send message" : "Record voice message");
   }
+  function conversationSubtitleMarkup(chat) {
+    const activity=conversationActivityByChat.get(String(chat.id));
+    if(activity&&activity.kind){
+      const group=chat.type==="group",who=String(activity.sender||"Someone"),recording=activity.kind==="recording";
+      const label=recording?(group?who+" is recording audio…":"recording audio…"):(group?who+" is typing…":"typing…");
+      const animation=recording
+        ? "<span class='wa-activity-wave' aria-hidden='true'><i></i><i></i><i></i><i></i><i></i><i></i></span>"
+        : "<span class='wa-activity-dots' aria-hidden='true'><i></i><i></i><i></i></span>";
+      return "<span class='wa-chat-activity "+(recording?"is-recording":"is-typing")+"' role='status' aria-live='polite'><span>"+esc(label)+"</span>"+animation+"</span>";
+    }
+    return esc(chat.type==="group"
+      ? ((chat.participants||[]).slice(0,5).map(p=>typeof p==="string"?p:(p.name||p.username||"Member")).join(", ") || "Group")
+      : (chat.online ? "online" : "offline"));
+  }
+  function updateConversationActivity(chatId,kind,sender){
+    const key=String(chatId||"");
+    if(!key)return;
+    if(kind==="typing"||kind==="recording")conversationActivityByChat.set(key,{kind,sender:String(sender||"")});
+    else conversationActivityByChat.delete(key);
+    const chat=currentChat(),subtitle=$(".person-subtitle",main);
+    if(chat&&String(chat.id)===key&&subtitle)subtitle.innerHTML=conversationSubtitleMarkup(chat);
+  }
+  function updateConversationPresence(chat){
+    if(!chat||chat.type!=="person"||conversationActivityByChat.has(String(chat.id)))return;
+    const selected=currentChat(),subtitle=$(".person-subtitle",main);
+    if(selected&&String(selected.id)===String(chat.id)&&subtitle)subtitle.textContent=chat.online?"online":"offline";
+  }
+  function appendBackendMessageToConversation(message,chat){
+    if(!message||!chat||view!=="chats"||String(selectedChatId)!==String(chat.id))return false;
+    const sc=$("#message-scroll",main);
+    if(!sc)return false;
+    const nearBottom=sc.scrollHeight-sc.scrollTop-sc.clientHeight<90;
+    const previous=(chat.messages||[]).length>1?chat.messages[chat.messages.length-2]:null;
+    if(message.date&&(!previous||previous.date!==message.date)){
+      const date=document.createElement("div");
+      date.className="date-separator";
+      const raw=String(message.date).toLowerCase();
+      date.textContent=message.date==="TODAY"?"Today":message.date==="YESTERDAY"?"Yesterday":raw.charAt(0).toUpperCase()+raw.slice(1);
+      sc.appendChild(date);
+    }
+    const holder=document.createElement("div");
+    holder.innerHTML=messageHTML(message,chat);
+    const row=holder.firstElementChild;
+    if(!row)return false;
+    sc.appendChild(row);
+    syncMessageSelectionUI();
+    if(nearBottom)sc.scrollTop=sc.scrollHeight;
+    return true;
+  }
   function renderConversation(chat) {
     if (!chat) { renderWelcome(); return; }
-    const subtitle = chat.type==="group" ? ((chat.participants||[]).slice(0,5).map(p=>typeof p==="string"?p:(p.name||p.username||"Member")).join(", ") || "Group") : (chat.online ? "online" : "offline");
+    const previousInput=$("#message-input",main);
+    const draftSnapshot=previousInput?{
+      value:previousInput.value,
+      focused:document.activeElement===previousInput,
+      start:typeof previousInput.selectionStart==="number"?previousInput.selectionStart:null,
+      end:typeof previousInput.selectionEnd==="number"?previousInput.selectionEnd:null
+    }:null;
+    const previousScroll=$("#message-scroll",main);
+    const scrollSnapshot=previousScroll?{
+      top:previousScroll.scrollTop,
+      nearBottom:previousScroll.scrollHeight-previousScroll.scrollTop-previousScroll.clientHeight<90
+    }:null;
+    const subtitle=conversationSubtitleMarkup(chat);
     const pinned = chat.pinnedMessage ? "<div class='pinned-banner'>" + icon("pin") + "<div class='pinned-copy'><strong>Pinned message</strong><span>" + esc(chat.pinnedMessage.text) + "</span></div><button class='icon-button' data-action='pinned-menu' aria-label='Pinned messages'>" + icon("more") + "</button></div>" : "";
     let messages = "";
     let previousDate = "";
@@ -533,8 +595,27 @@
     updateReplyPreview();
     syncMessageSelectionUI();
     const composerInput = $("#message-input", main);
-    if (composerInput) { composerInput.addEventListener("input", () => syncComposerButton(composerInput)); syncComposerButton(composerInput); }
-    requestAnimationFrame(()=>{const sc=$("#message-scroll");if(sc)sc.scrollTop=sc.scrollHeight;});
+    if (composerInput) {
+      if(draftSnapshot){
+        composerInput.value=draftSnapshot.value;
+        composerInput.style.height="auto";
+        if(draftSnapshot.value)composerInput.style.height=Math.min(composerInput.scrollHeight,106)+"px";
+        syncComposerButton(composerInput);
+        if(draftSnapshot.focused){
+          composerInput.focus({preventScroll:true});
+          if(draftSnapshot.start!==null&&draftSnapshot.end!==null){
+            try{composerInput.setSelectionRange(draftSnapshot.start,draftSnapshot.end);}catch(_){}
+          }
+        }
+      }else syncComposerButton(composerInput);
+      composerInput.addEventListener("input", () => syncComposerButton(composerInput));
+    }
+    requestAnimationFrame(()=>{
+      const sc=$("#message-scroll");
+      if(!sc)return;
+      if(scrollSnapshot)sc.scrollTop=scrollSnapshot.nearBottom?sc.scrollHeight:Math.min(scrollSnapshot.top,Math.max(0,sc.scrollHeight-sc.clientHeight));
+      else sc.scrollTop=sc.scrollHeight;
+    });
   }
   function screenHeader(title,extra) { return "<header class='screen-header'><button class='icon-button mobile-only' data-action='back-to-list' aria-label='Back'>" + icon("back") + "</button><h2>" + esc(title) + "</h2>" + (extra||"") + "</header>"; }
   function settingRow(iconName,title,sub,action) { return "<button class='setting-row' data-action='" + esc(action||"not-ready") + "'><span class='row-icon'>" + icon(iconName) + "</span><span class='setting-copy'><span class='setting-title'>" + esc(title) + "</span><span class='setting-subtitle'>" + esc(sub) + "</span></span><span class='end-icon'>" + icon("chevron") + "</span></button>"; }
@@ -1197,6 +1278,7 @@
     const chat=findChat(id);if(!chat)return;
     if (replyingTo && String(replyingTo.chatId) !== String(chat.id)) replyingTo = null;
     if (selectedMessage && String(selectedMessage.chatId) !== String(chat.id)) dismissMessageSelection(false);
+    if(window.waAppBridge&&typeof window.waAppBridge.setBackendChatActivity==="function")window.waAppBridge.setBackendChatActivity("typing",false,selectedChatId);
     selectedChatId=chat.id;view="chats";archivedMode=false;chat.unread=0;
     closePopup();closeDialog();renderSidebar();renderMain();updateNav();updateMobile();
     requestAnimationFrame(()=>{const sc=$("#message-scroll");if(sc)sc.scrollTop=sc.scrollHeight;const input=$("#message-input");if(input&&!window.matchMedia("(max-width:700px)").matches)input.focus({preventScroll:true});});
@@ -2139,6 +2221,12 @@ function openSharedItemsDialog(chat,kind) {
       return;
     }
   });
+  document.addEventListener("focusout",event=>{
+    const target=event.target;
+    if(target&&target.id==="message-input"&&window.waAppBridge&&typeof window.waAppBridge.setBackendChatActivity==="function"){
+      window.waAppBridge.setBackendChatActivity("typing",false);
+    }
+  });
   document.addEventListener("input",event=>{
     const target=event.target;
     if(target.id==="chat-search"){searchQuery=target.value;renderSidebar();return;}
@@ -2174,6 +2262,9 @@ function openSharedItemsDialog(chat,kind) {
     if(target.id==="message-input"){
       target.style.height="auto";target.style.height=Math.min(target.scrollHeight,106)+"px";
       const send=$(".send-button");if(send)send.innerHTML=icon(target.value.trim()?"send":"mic");
+      if(currentUser&&currentUser.isSupabase&&window.waAppBridge&&typeof window.waAppBridge.setBackendChatActivity==="function"){
+        window.waAppBridge.setBackendChatActivity("typing",!!String(target.value||"").trim());
+      }
     }
   });
   document.addEventListener("input",event=>{const target=event.target;if(!target||target.id!=="wa-ringtone-volume")return;const value=Math.max(25,Math.min(300,Number(target.value)||300));if(window.WhatsAppCalls&&window.WhatsAppCalls.setRingtoneVolume)window.WhatsAppCalls.setRingtoneVolume(value);const label=$("#wa-ringtone-volume-label");if(label)label.textContent=value+"%";});
@@ -2449,6 +2540,9 @@ function openSharedItemsDialog(chat,kind) {
     getReplyToMessageId: () => { const chat=currentChat(); return replyingTo&&chat&&String(replyingTo.chatId)===String(chat.id)?replyingTo.id:null; },
     clearReplyToMessage: (id) => { if(replyingTo&&(!id||String(replyingTo.id)===String(id))){replyingTo=null;updateReplyPreview();} },
     getSelectedChatId: () => selectedChatId,
+    appendBackendMessage: (message,chat) => appendBackendMessageToConversation(message,chat),
+    setConversationActivity: (chatId,kind,sender) => updateConversationActivity(chatId,kind,sender),
+    updateConversationPresence: (chat) => updateConversationPresence(chat),
     setBackendUser: (authUser, profile) => {
       const name = String(profile.display_name || profile.username || "User");
       const phoneDigits = String(profile.custom_number || "").replace(/\D/g, "");
@@ -2504,7 +2598,9 @@ function openSharedItemsDialog(chat,kind) {
       const nextInput = $("#message-input");
       if (nextInput && draft) {
         nextInput.value = draft;
-        nextInput.dispatchEvent(new Event("input", { bubbles: true }));
+        nextInput.style.height="auto";
+        nextInput.style.height=Math.min(nextInput.scrollHeight,106)+"px";
+        syncComposerButton(nextInput);
       }
       if (nextInput && wasTyping) {
         nextInput.focus({ preventScroll: true });

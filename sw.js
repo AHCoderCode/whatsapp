@@ -1,22 +1,22 @@
-const CACHE_NAME = "whatsapp-final-shell-v69";
+const CACHE_NAME = "whatsapp-final-shell-v70";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/app.js?v=whatsapp-secure-release-20261110a",
-  "/feature-gaps.js?v=whatsapp-secure-release-20261110a",
-  "/group-calls.js?v=whatsapp-secure-release-20261110a",
-  "/backend.js?v=whatsapp-secure-release-20261110a",
-  "/calls.js?v=whatsapp-secure-release-20261110a",
-  "/updater.js?v=whatsapp-secure-release-20261110a",
-  "/styles.css?v=whatsapp-secure-release-20261110a",
-  "/manifest.webmanifest?v=whatsapp-secure-release-20261110a",
-  "/whatsapp-favicon.svg?v=whatsapp-secure-release-20261110a",
+  "/app.js?v=whatsapp-secure-release-20261110b",
+  "/feature-gaps.js?v=whatsapp-secure-release-20261110b",
+  "/group-calls.js?v=whatsapp-secure-release-20261110b",
+  "/backend.js?v=whatsapp-secure-release-20261110b",
+  "/calls.js?v=whatsapp-secure-release-20261110b",
+  "/updater.js?v=whatsapp-secure-release-20261110b",
+  "/styles.css?v=whatsapp-secure-release-20261110b",
+  "/manifest.webmanifest?v=whatsapp-secure-release-20261110b",
+  "/whatsapp-favicon.svg?v=whatsapp-secure-release-20261110b",
   "/icon.svg",
   "/icon-192.svg",
   "/icon-512.svg",
-  "/icon.svg?v=whatsapp-secure-release-20261110a",
-  "/icon-192.svg?v=whatsapp-secure-release-20261110a",
-  "/icon-512.svg?v=whatsapp-secure-release-20261110a",
+  "/icon.svg?v=whatsapp-secure-release-20261110b",
+  "/icon-192.svg?v=whatsapp-secure-release-20261110b",
+  "/icon-512.svg?v=whatsapp-secure-release-20261110b",
 ];
 
 self.addEventListener("install", event => {

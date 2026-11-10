@@ -15,6 +15,8 @@
   const usernamePattern = /^[a-z0-9_]{3,20}$/;
   let signedProfile = null, liveChannel = null, liveUserId = "", people = new Map(), activeChannelId = "";
   let presenceChannel = null, presenceUserId = "";
+  let activityChannel = null, activityUserId = "", activityReady = false;
+  const localChatActivities = new Map(), remoteChatActivities = new Map();
   let busy = false, loading = false, refreshQueued = false, searchTimer = null, searchCounter = 0;
   let deviceHeartbeatTimer = null, deviceSyncIdentity = "";
 
@@ -237,9 +239,129 @@
     if(msg.from==="them"&&String(bridge.getSelectedChatId?bridge.getSelectedChatId():"")!==String(chat.id))chat.unread=(chat.unread||0)+1;
     bridge.renderSidebar();
     if(String(bridge.getSelectedChatId?bridge.getSelectedChatId():"")===String(chat.id)){
-      bridge.renderMain();requestAnimationFrame(()=>{const sc=$("#message-scroll");if(sc)sc.scrollTop=sc.scrollHeight;});
+      const appended=typeof bridge.appendBackendMessage==="function"&&bridge.appendBackendMessage(msg,chat);
+      if(!appended)bridge.renderMain();
       if(msg.from==="them")void markReadForChat(chat);
     }
+  }
+  function isBackendUserOnline(userId){
+    const id=String(userId||"");
+    if(!id||!presenceChannel)return false;
+    try{return Object.values(presenceChannel.presenceState()||{}).flat().some(item=>item&&String(item.user_id||"")===id&&item.online!==false);}catch(_){return false;}
+  }
+  function getChatById(chatId){
+    const s=appState();
+    return s&&Array.isArray(s.chats)?s.chats.find(chat=>String(chat.id)===String(chatId)):null;
+  }
+  function clearActivityEntry(entry){
+    if(!entry)return;
+    if(entry.idleTimer)clearTimeout(entry.idleTimer);
+    if(entry.heartbeatTimer)clearInterval(entry.heartbeatTimer);
+  }
+  function chatActivityRecipients(chat,userId){
+    const source=chat&&chat.type==="group"
+      ?(Array.isArray(chat.participants)?chat.participants.map(person=>typeof person==="string"?person:person&&person.id):[])
+      :(chat&&chat.id?[chat.id]:[]);
+    return Array.from(new Set(source.map(String).filter(id=>id&&id!==String(userId))));
+  }
+  function publishChatActivity(chat,activity,active){
+    const me=getUser();
+    if(!activityReady||!activityChannel||!me||!chat)return;
+    const recipients=chatActivityRecipients(chat,me.id);
+    if(!recipients.length)return;
+    const payload={chat_id:String(chat.id),sender_id:String(me.id),sender_name:String(me.name||me.username||"Contact"),recipient_ids:recipients,activity,active:!!active,sent_at:Date.now()};
+    void Promise.resolve(activityChannel.send({type:"broadcast",event:"chat-activity",payload}))
+      .catch(error=>console.warn("Could not publish chat activity:",error&&error.message||error));
+  }
+  function setChatActivity(activity,active,chat){
+    const me=getUser(),target=chat||currentSelectedChat();
+    if(!me||!me.isSupabase||!target||!target.id)return;
+    const key=String(target.id);
+    let entry=localChatActivities.get(key);
+    if(!active){
+      if(entry&&(!activity||entry.activity===activity)){
+        publishChatActivity(target,entry.activity,false);
+        clearActivityEntry(entry);
+        localChatActivities.delete(key);
+      }
+      return;
+    }
+    if(activity!=="typing"&&activity!=="recording")return;
+    for(const [otherId,otherEntry] of localChatActivities.entries()){
+      if(otherId===key)continue;
+      publishChatActivity(otherEntry.chat,otherEntry.activity,false);
+      clearActivityEntry(otherEntry);
+      localChatActivities.delete(otherId);
+    }
+    if(!entry||entry.activity!==activity){
+      if(entry){publishChatActivity(target,entry.activity,false);clearActivityEntry(entry);}
+      entry={chat:target,activity,lastSent:0,idleTimer:null,heartbeatTimer:null};
+      localChatActivities.set(key,entry);
+      publishChatActivity(target,activity,true);
+      entry.lastSent=Date.now();
+    }else if(Date.now()-entry.lastSent>=1100){
+      publishChatActivity(target,activity,true);
+      entry.lastSent=Date.now();
+    }
+    if(activity==="typing"){
+      if(entry.idleTimer)clearTimeout(entry.idleTimer);
+      entry.idleTimer=setTimeout(()=>setChatActivity("typing",false,target),1900);
+    }else{
+      if(entry.heartbeatTimer)clearInterval(entry.heartbeatTimer);
+      entry.heartbeatTimer=setInterval(()=>{
+        if(localChatActivities.get(key)!==entry)return;
+        publishChatActivity(target,"recording",true);
+        entry.lastSent=Date.now();
+      },2600);
+    }
+  }
+  function renderRemoteChatActivity(chatId){
+    const bySender=remoteChatActivities.get(String(chatId));
+    const latest=bySender?Array.from(bySender.values()).sort((a,b)=>b.updatedAt-a.updatedAt)[0]:null;
+    if(bridge.setConversationActivity)bridge.setConversationActivity(chatId,latest?latest.activity:"",latest?latest.sender:"");
+  }
+  function receiveChatActivity(event){
+    const payload=event&&event.payload||event,me=getUser(),s=appState();
+    if(!payload||!me||!s||String(payload.sender_id||"")===String(me.id))return;
+    if(!Array.isArray(payload.recipient_ids)||!payload.recipient_ids.map(String).includes(String(me.id)))return;
+    const chatId=String(payload.chat_id||""),senderId=String(payload.sender_id||"");
+    const chat=getChatById(chatId);
+    if(!chat||!senderId)return;
+    let bySender=remoteChatActivities.get(chatId);
+    if(!bySender){bySender=new Map();remoteChatActivities.set(chatId,bySender);}
+    const previous=bySender.get(senderId);
+    if(previous&&previous.timer)clearTimeout(previous.timer);
+    if(payload.active===false){
+      bySender.delete(senderId);
+    }else if(payload.activity==="typing"||payload.activity==="recording"){
+      const entry={activity:payload.activity,sender:String(payload.sender_name||chat.name||"Contact"),updatedAt:Date.now(),timer:null};
+      entry.timer=setTimeout(()=>{
+        const current=remoteChatActivities.get(chatId);
+        if(current&&current.get(senderId)===entry){
+          current.delete(senderId);
+          if(!current.size)remoteChatActivities.delete(chatId);
+          renderRemoteChatActivity(chatId);
+        }
+      },payload.activity==="recording"?7600:5200);
+      bySender.set(senderId,entry);
+    }else return;
+    if(!bySender.size)remoteChatActivities.delete(chatId);
+    renderRemoteChatActivity(chatId);
+  }
+  function subscribeChatActivity(userId){
+    if(!db||!userId)return;
+    if(activityChannel&&activityUserId===String(userId))return;
+    if(activityChannel)void db.removeChannel(activityChannel);
+    for(const bySender of remoteChatActivities.values())for(const item of bySender.values())if(item.timer)clearTimeout(item.timer);
+    remoteChatActivities.clear();
+    activityUserId=String(userId);activityReady=false;
+    const channel=db.channel("whatsapp-chat-activity-v1",{config:{broadcast:{self:false}}});
+    activityChannel=channel;
+    channel.on("broadcast",{event:"chat-activity"},receiveChatActivity).subscribe(status=>{
+      if(activityChannel!==channel)return;
+      activityReady=status==="SUBSCRIBED";
+      if(status==="CHANNEL_ERROR"||status==="TIMED_OUT")console.warn("Chat activity updates are temporarily unavailable:",status);
+    });
   }
   function refreshPresenceUI(){
     const s=appState();
@@ -253,11 +375,10 @@
       const next=onlineIds.has(String(chat.id));
       if(!!chat.online!==next){chat.online=next;changed=true;}
     }
-    if(changed){
-      bridge.renderSidebar();
-      const selected=(s.chats||[]).find(chat=>String(chat.id)===String(bridge.getSelectedChatId?.()));
-      if(selected&&selected.type==="person")bridge.renderMain();
-    }
+    if(changed)bridge.renderSidebar();
+    const selected=(s.chats||[]).find(chat=>String(chat.id)===String(bridge.getSelectedChatId?.()));
+    if(selected&&selected.type==="person"&&bridge.updateConversationPresence)bridge.updateConversationPresence(selected);
+    if(window.WhatsAppCalls&&typeof window.WhatsAppCalls.onPeerPresenceChanged==="function")window.WhatsAppCalls.onPeerPresenceChanged();
   }
   function subscribePresence(userId){
     if(!db||!userId)return;
@@ -463,6 +584,7 @@
       void markReadForChat(bridge.getCurrentChat());
       subscribe(me.id);
       subscribePresence(me.id);
+      subscribeChatActivity(me.id);
       refreshPresenceUI();
       if(window.WhatsAppCalls&&typeof window.WhatsAppCalls.subscribe==="function"){
         if(window.WhatsAppCalls.hasPendingNotificationAction&&window.WhatsAppCalls.hasPendingNotificationAction()){
@@ -555,6 +677,7 @@
     const me=getUser(),chat=bridge.getCurrentChat(),body=String(value||"").trim();
     if(!me||!me.isSupabase){say("Sign in with a Supabase account to send real messages.");return;}
     if(!chat||!body)return;if(body.length>2000)return say("Messages are limited to 2,000 characters.");
+    setChatActivity("typing",false,chat);
     const quote=replyToMessageId?chat.messages.find(m=>String(m.id)===String(replyToMessageId)):null;
     if(replyToMessageId&&!quote)return say("That message is no longer in this conversation. Select it again to reply.");
     const button=$(".send-button");if(button)button.disabled=true;
@@ -826,14 +949,15 @@
       recorder.ondataavailable=event=>{if(event.data&&event.data.size)recorderChunks.push(event.data);};
       recorder.onerror=()=>{recorderStopReason="error";try{if(recorder&&recorder.state!=="inactive")recorder.stop();}catch(_){};};
       recorder.onstop=()=>{
-        const activeRecorder=recorder,stopReason=recorderStopReason;
+        const activeRecorder=recorder,stopReason=recorderStopReason,stoppedChatId=recorderChatId;
         const blobType=(activeRecorder&&activeRecorder.mimeType)||mimeType||"audio/webm";
         const duration=Math.max(1,Math.min(120000,Date.now()-recorderStartedAt));
         const blob=new Blob(recorderChunks,{type:blobType});
         const ext=blobType.includes("mp4")?"m4a":blobType.includes("ogg")?"ogg":"webm";
         const stillSameChat=currentSelectedChat()&&String(currentSelectedChat().id)===String(recorderChatId);
         if(recorderStream)recorderStream.getTracks().forEach(t=>t.stop());
-        recorderStream=null;recorder=null;recorderChunks=[];
+        recorderStream=null;recorder=null;recorderChunks=[];recorderChatId=null;
+        setChatActivity("recording",false,getChatById(stoppedChatId)||chat);
         resetRecordingUI();recorderStopReason="";
         if(stopReason==="cancel"){say("Voice message discarded.");return;}
         if(stopReason==="error"){say("Voice recording failed.");return;}
@@ -842,6 +966,7 @@
         void uploadStoredAttachment(blob,{type:"voice",name:"voice-note."+ext,mime:blobType,durationMs:duration});
       };
       recorder.start(250);
+      setChatActivity("recording",true,chat);
       const button=$(".send-button"),input=$("#message-input");
       showRecordingBar();
       if(button){button.classList.add("recording");button.hidden=true;}
@@ -858,13 +983,15 @@
   function stopVoiceRecording(reason){
     if(reason&&!recorderStopReason)recorderStopReason=reason;
     else if(!recorderStopReason)recorderStopReason="send";
+    if(recorderChatId)setChatActivity("recording",false,getChatById(recorderChatId));
     if(window.waVoiceLimit){clearTimeout(window.waVoiceLimit);window.waVoiceLimit=null;}
     if(recorder&&recorder.state!=="inactive"){try{recorder.stop();}catch(_){cleanupRecorder();}}
   }
   function cleanupRecorder(){
+    if(recorderChatId)setChatActivity("recording",false,getChatById(recorderChatId));
     if(window.waVoiceLimit){clearTimeout(window.waVoiceLimit);window.waVoiceLimit=null;}
     if(recorderStream)recorderStream.getTracks().forEach(t=>t.stop());
-    recorderStream=null;recorder=null;recorderChunks=[];recorderStopReason="";
+    recorderStream=null;recorder=null;recorderChunks=[];recorderStopReason="";recorderChatId=null;
     resetRecordingUI();
   }
   async function deleteOrHideMessage(){
@@ -1505,7 +1632,10 @@
     if(deviceHeartbeatTimer!==null)clearInterval(deviceHeartbeatTimer);deviceHeartbeatTimer=null;deviceSyncIdentity="";
     if(liveChannel&&db)try{await db.removeChannel(liveChannel);}catch(_){}
     if(presenceChannel&&db)try{await db.removeChannel(presenceChannel);}catch(_){}
-    presenceChannel=null;presenceUserId="";
+    if(activityChannel&&db)try{await db.removeChannel(activityChannel);}catch(_){}
+    for(const entry of localChatActivities.values()){publishChatActivity(entry.chat,entry.activity,false);clearActivityEntry(entry);}
+    localChatActivities.clear();
+    presenceChannel=null;presenceUserId="";activityChannel=null;activityUserId="";activityReady=false;
     liveChannel=null;liveUserId="";if(window.WhatsAppCalls)window.WhatsAppCalls.cleanup();
     const nativeToken=String(window.__waNativeFCMToken||"").trim();
     if(nativeToken)try{await unregisterNativeAndroidPushToken(nativeToken);}catch(error){console.warn("Could not unregister native Android push token:",error&&error.message||error);}
@@ -1515,6 +1645,8 @@
     location.reload();
   };
   bridge.supabase=db;bridge.isBackendReady=()=>!!db;bridge.loadBackendData=()=>loadData(false);
+  bridge.isBackendUserOnline=isBackendUserOnline;
+  bridge.setBackendChatActivity=(activity,active,chatId)=>setChatActivity(activity,active,chatId?getChatById(chatId):currentSelectedChat());
   bridge.sendBackendMessage=sendMessage;bridge.searchBackendPeople=searchPeople;bridge.requestBackend=sendRequest;bridge.markAllBackendRead=markAllRead;
   bridge.hideBackendMessage=hideMessageForMe;bridge.deleteBackendMessage=deleteMessageForEveryone;bridge.editBackendMessage=editMessage;bridge.forwardBackendMessage=forwardMessage;bridge.reactBackendMessage=toggleMessageReaction;
   bridge.uploadBackendAttachment=uploadStoredAttachment;bridge.sendBackendPoll=sendPoll;bridge.voteBackendPoll=votePoll;bridge.sendBackendEvent=sendEvent;bridge.respondBackendEvent=respondToEvent;
