@@ -289,7 +289,8 @@ check("online/offline presence is tracked and reflected in direct chats", () => 
 check("call setup has bounded permission/relay/signaling waits", () => {
   includes(files.calls, "async function userMediaWithTimeout(video,ms=20000)");
   includes(files.calls, "function withCallTimeout(promise,ms,message)");
-  includes(files.calls, "Preparing the secure relay…");
+  includes(files.calls, 'renderCallOverlay("Calling…")');
+  includes(files.calls, 'withCallTimeout(relayServers(newId),12000');
   includes(files.calls, "callSetupTimer=setTimeout(");
 });
 check("direct ICE fallback recovers a pending relay offer and retries several STUN routes", () => {
@@ -500,7 +501,8 @@ check("incoming realtime messages append without replacing the active composer o
   const end=files.backend.indexOf("function isBackendUserOnline",start);
   const source=files.backend.slice(start,end);
   includes(source,"bridge.appendBackendMessage(msg,chat)");
-  excludes(source,"bridge.renderMain()");
+  excludes(source,"bridge.renderMain();requestAnimationFrame");
+  includes(source,"if(!appended)bridge.renderMain();");
   includes(files.app,"draftSnapshot");
   includes(files.app,"appendBackendMessage: (message,chat)");
 });
