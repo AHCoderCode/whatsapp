@@ -269,7 +269,7 @@
     if(!activityReady||!activityChannel||!me||!chat)return;
     const recipients=chatActivityRecipients(chat,me.id);
     if(!recipients.length)return;
-    const payload={chat_id:String(chat.id),sender_id:String(me.id),sender_name:String(me.name||me.username||"Contact"),recipient_ids:recipients,activity,active:!!active,sent_at:Date.now()};
+    const payload={chat_id:chat.type==="group"?String(chat.id):String(me.id),sender_id:String(me.id),sender_name:String(me.name||me.username||"Contact"),recipient_ids:recipients,activity,active:!!active,sent_at:Date.now()};
     void Promise.resolve(activityChannel.send({type:"broadcast",event:"chat-activity",payload}))
       .catch(error=>console.warn("Could not publish chat activity:",error&&error.message||error));
   }
