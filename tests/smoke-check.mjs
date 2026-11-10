@@ -19,6 +19,8 @@ const files = {
   updater: read("updater.js"),
   buildWorkflow: read(".github/workflows/build-native-android.yml"),
   nativeManifest: read("android-native/app/src/main/AndroidManifest.xml"),
+  directManifest: read("android-native/app/src/direct/AndroidManifest.xml"),
+  nativeGradle: read("android-native/app/build.gradle"),
   calls: read("calls.js"),
   sw: read("sw.js"),
   html: read("index.html"),
@@ -77,10 +79,10 @@ check("media, privacy, subgroup and synced-list handlers are present", () => {
   includes(files.app, "WhatsAppFeatureGaps.onBackendData");
 });
 check("feature-gap module is in the app shell cache", () => {
-  includes(files.html, "/feature-gaps.js?v=whatsapp-fix-20261101b");
-  includes(files.sw, "/feature-gaps.js?v=whatsapp-fix-20261101b");
-  includes(files.html, "/group-calls.js?v=whatsapp-fix-20261101b");
-  includes(files.sw, "/group-calls.js?v=whatsapp-fix-20261101b");
+  includes(files.html, "/feature-gaps.js?v=whatsapp-secure-release-20261110a");
+  includes(files.sw, "/feature-gaps.js?v=whatsapp-secure-release-20261110a");
+  includes(files.html, "/group-calls.js?v=whatsapp-secure-release-20261110a");
+  includes(files.sw, "/group-calls.js?v=whatsapp-secure-release-20261110a");
 });
 check("inline HTML scripts parse", () => {
   const scripts = [...files.html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
@@ -91,10 +93,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-fix-20261101b");
-  includes(files.sw, "whatsapp-fix-20261101b");
-  includes(files.manifest, "whatsapp-fix-20261101b");
-  includes(files.sw, "whatsapp-final-shell-v68");
+  includes(files.html, "whatsapp-secure-release-20261110a");
+  includes(files.sw, "whatsapp-secure-release-20261110a");
+  includes(files.manifest, "whatsapp-secure-release-20261110a");
+  includes(files.sw, "whatsapp-final-shell-v69");
 });
 check("mobile settings use a full-width account detail pane", () => {
   includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
@@ -896,6 +898,25 @@ check("Channels opens on Your channels with separate Discover and Create actions
   includes(files.app, "wa-create-channel-cta");
   includes(files.app, 'settingRow("channels","Channels","Create a channel or discover channels to follow","nav-channels")');
   includes(files.backend, "async function createChannel()");
+});
+check("Play Store and direct-install variants have separate update permissions", () => {
+  includes(files.nativeGradle, "targetSdk 36");
+  includes(files.nativeGradle, 'buildConfigField "boolean", "PLAY_STORE_BUILD", "true"');
+  includes(files.nativeGradle, 'buildConfigField "boolean", "PLAY_STORE_BUILD", "false"');
+  excludes(files.nativeManifest, "REQUEST_INSTALL_PACKAGES");
+  includes(files.directManifest, "android.permission.REQUEST_INSTALL_PACKAGES");
+  includes(files.nativeActivity, "isPlayStoreBuild()");
+  includes(files.nativeActivity, "if (!BuildConfig.PLAY_STORE_BUILD) MainActivity.this.checkForUpdates()");
+  includes(files.updater, "waNativePlayStoreBuild = true");
+  includes(files.updater, "Google Play owns updates");
+  includes(files.buildWorkflow, "bundlePlayRelease");
+  includes(files.buildWorkflow, "whatsapp-play-store-aab");
+});
+check("push notifications never expose message text or attachment names", () => {
+  includes(files.push, 'let notificationBody = "New message";');
+  includes(files.push, 'notificationBody = "New group message";');
+  excludes(files.push, "clean(message.body");
+  excludes(files.push, "message.attachment_name");
 });
 console.log("\n" + passed + " passed, " + failed + " failed.");
 if (failed) process.exitCode = 1;
