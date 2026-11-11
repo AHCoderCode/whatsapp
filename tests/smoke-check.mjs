@@ -669,7 +669,7 @@ check("outgoing call status advances from Calling to Ringing on peer presence an
   includes(files.calls,'setPhase("connecting","Connecting…")');
   includes(files.backend,"isBackendUserOnline=isBackendUserOnline");
 });
-check("read receipt setting prevents database reads when disabled", () => includes(files.backend, "if(settings.readReceipts===false)return;"));
+check("read receipt setting prevents database reads when disabled", () => includes(files.backend, "if(!stillVisible()||settings.readReceipts===false)return;"));
 check("read ticks have distinct grey and blue states", () => {
   includes(files.css, ".message-read-status.is-read");
   includes(files.css, ".message-read-status:not(.is-read)");
