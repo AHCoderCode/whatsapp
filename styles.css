@@ -939,3 +939,130 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:
   background:#fff!important;
   color:#17252a!important;
 }
+
+
+/* Neutral charcoal call screen with a white selected state for speaker/microphone only. */
+.wa-call-backdrop,.wa-call-fullscreen{
+  background:#202124!important;
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+}
+.wa-call-window,.wa-call-window.audio-call,.wa-call-window.video-call{
+  background:#202124!important;
+  color:#f1f3f4!important;
+  border:0!important;
+}
+.wa-call-header{
+  background:#202124!important;
+}
+.wa-call-header.audio-call-header{
+  min-height:72px;
+  flex:0 0 72px;
+  justify-content:flex-end;
+  padding:14px 18px;
+}
+.wa-call-header.audio-call-header .wa-call-close{
+  position:relative;
+  inset:auto;
+  margin-left:auto;
+  background:#36383b;
+  color:#f1f3f4;
+}
+.wa-call-audio-stage{
+  gap:18px;
+  padding:24px 18px 30px;
+  background:#202124;
+}
+.wa-call-audio-stage h2{
+  order:0;
+  margin:0 0 2px;
+  color:#f1f3f4;
+  font-size:25px;
+  font-weight:600;
+  text-align:center;
+}
+.wa-call-audio-stage .wa-call-avatar{
+  order:1;
+  width:clamp(144px,25vw,184px);
+  height:clamp(144px,25vw,184px);
+  flex-basis:clamp(144px,25vw,184px);
+  overflow:hidden;
+  background:#36383b;
+  color:#f1f3f4;
+  font-size:48px;
+  border:1px solid #ffffff18;
+  box-shadow:0 14px 42px #0005;
+}
+.wa-call-avatar img{
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  border-radius:inherit;
+}
+.wa-call-audio-stage p{
+  order:2;
+  margin:0;
+  color:#c4c7c9;
+  font-size:14px;
+  text-align:center;
+}
+.wa-call-security{
+  background:#292a2d;
+  color:#aeb3b8;
+}
+.wa-call-controls,.wa-call-footnote{
+  background:#292a2d!important;
+}
+.wa-call-control:not(.accept):not(.decline){
+  background:#36383b!important;
+  color:#f1f3f4!important;
+}
+.wa-call-control[data-wa-call="mute"]:not(.active),
+.wa-call-control[data-wa-call="speaker"]:not(.active),
+.video-call .wa-call-control[data-wa-call="mute"]:not(.active),
+.video-call .wa-call-control[data-wa-call="speaker"]:not(.active){
+  background:#36383b!important;
+  color:#f1f3f4!important;
+  border:1px solid #484a4d;
+  box-shadow:none;
+}
+.wa-call-control[data-wa-call="mute"].active,
+.wa-call-control[data-wa-call="speaker"].active,
+.video-call .wa-call-control[data-wa-call="mute"].active,
+.video-call .wa-call-control[data-wa-call="speaker"].active{
+  background:#fff!important;
+  color:#202124!important;
+  border:1px solid #fff;
+  box-shadow:0 2px 12px #0004;
+}
+.wa-call-control[data-wa-call="mute"].active svg,
+.wa-call-control[data-wa-call="mute"].active span,
+.wa-call-control[data-wa-call="speaker"].active svg,
+.wa-call-control[data-wa-call="speaker"].active span,
+.video-call .wa-call-control[data-wa-call="mute"].active svg,
+.video-call .wa-call-control[data-wa-call="mute"].active span,
+.video-call .wa-call-control[data-wa-call="speaker"].active svg,
+.video-call .wa-call-control[data-wa-call="speaker"].active span{
+  color:#202124!important;
+}
+.wa-call-control.active:not([data-wa-call="mute"]):not([data-wa-call="speaker"]){
+  background:#36383b!important;
+  color:#f1f3f4!important;
+  border:1px solid #484a4d;
+  box-shadow:none;
+}
+.video-call .wa-call-control{
+  background:#36383b!important;
+  color:#f1f3f4!important;
+}
+.video-call .wa-call-control.accept{background:#00a884!important;color:#fff!important}
+.video-call .wa-call-control.decline{background:#e5394d!important;color:#fff!important}
+.wa-call-control.accept{background:#00a884!important;color:#fff!important}
+.wa-call-control.decline{background:#e5394d!important;color:#fff!important}
+@media(max-width:700px){
+  .wa-call-header.audio-call-header{min-height:64px;flex-basis:64px;padding:12px 16px}
+  .wa-call-audio-stage{gap:15px;padding:18px 16px 24px}
+  .wa-call-audio-stage h2{font-size:23px}
+  .wa-call-audio-stage .wa-call-avatar{width:clamp(132px,39vw,164px);height:clamp(132px,39vw,164px);flex-basis:clamp(132px,39vw,164px)}
+}
