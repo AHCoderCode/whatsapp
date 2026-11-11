@@ -419,6 +419,15 @@ check("message selection uses querySelectorAll for a list of message rows", () =
 check("incoming read receipts update visible blue ticks immediately", () => {
   includes(files.backend, 'table:"aeroshell_message_reads"},event=>{');
   includes(files.backend, 'if(message)message.status="read"');
+  includes(files.app, 'outgoingIsRead?" is-read":""');
+  includes(files.css, ".preview-check.is-read{color:#53bdeb}");
+  includes(files.css, ".preview-check{width:17px;height:17px;flex:0 0 17px;color:#8696a0}");
+});
+check("read receipts require a visible focused conversation and re-check before writing", () => {
+  includes(files.app, 'document.visibilityState!=="visible"||!document.hasFocus()');
+  includes(files.app, "return isOnScreen(main)&&isOnScreen($("#message-scroll",main));");
+  includes(files.backend, "const stillVisible=()=>typeof bridge.isConversationVisible");
+  includes(files.backend, "await new Promise(resolve=>requestAnimationFrame");
 });
 check("read receipts require the matching conversation to be visible", () => {
   includes(files.app, "isConversationVisible:");

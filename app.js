@@ -372,7 +372,9 @@
         if(chat.pinned) meta.push("<span class='meta-icon' title='Pinned'>" + icon("pin") + "</span>");
         if(chat.muted) meta.push("<span class='meta-icon' title='Muted'>" + icon("mute") + "</span>");
         if(chat.unread>0) meta.push("<span class='unread-badge'>" + chat.unread + "</span>");
-        const checks = chat.lastOutgoing ? "<span class='preview-check'>" + icon("checks") + "</span>" : "";
+        const lastOutgoingMessage=(chat.messages||[]).slice().reverse().find(message=>message&&message.from==="me");
+        const outgoingIsRead=!!lastOutgoingMessage&&lastOutgoingMessage.status==="read";
+        const checks = chat.lastOutgoing ? "<span class='preview-check"+(outgoingIsRead?" is-read":"")+"' title='"+(outgoingIsRead?"Read by recipient":"Sent")+"' aria-label='"+(outgoingIsRead?"Read by recipient":"Sent")+"'>" + icon("checks") + "</span>" : "";
         const preview = chat.lastMessageType==="attachment" ? "📎 " + chat.preview : chat.preview;
         return "<div class='chat-row" + (selectedChatId===chat.id&&view==="chats"?" selected":"") + "' data-chat-id='" + esc(chat.id) + "' role='listitem' tabindex='0' aria-label='Open " + esc(chat.name) + "'>" +
           avatarHTML(chat) + "<div class='chat-copy'><div class='chat-line'><span class='chat-name'>" + esc(chat.name) + "</span><span class='chat-time" + (chat.unread>0?" unread":"") + "'>" + esc(chat.time || "") + "</span></div>" +
@@ -1449,7 +1451,7 @@
       const duration = String(Math.floor(durationSeconds/60)).padStart(2,"0")+":"+String(durationSeconds%60).padStart(2,"0");
       const statusLabel = missed ? "Missed call" : durationSeconds ? "Duration "+duration : row.outcome === "pending" ? "Calling…" : "Received";
       const statusClass = missed ? " missed" : (!missed && !outgoing ? " completed" : (durationSeconds ? " completed" : " outgoing"));
-      const callIcon = missed ? "phone-missed" : outgoing ? "phone" : "phone-incoming";
+      const callIcon = outgoing ? "forward" : (missed ? "x" : "reply");
       return "<button type='button' class='wa-call-history-row"+(missed?" is-missed":"")+"' data-action='call-entry' data-call-name='" +
         esc(name) + "' data-chat-id='" + esc(row.contactId || "") + "' data-media-type='" + esc(video ? "video" : "audio") + "'>" +
         "<div class='wa-call-history-avatar'>" + avatarHTML({name,avatar:row.avatar || index+1}) + "</div>" +
@@ -2884,7 +2886,15 @@ function openSharedItemsDialog(chat,kind) {
     getReplyToMessageId: () => { const chat=currentChat(); return replyingTo&&chat&&String(replyingTo.chatId)===String(chat.id)?replyingTo.id:null; },
     clearReplyToMessage: (id) => { if(replyingTo&&(!id||String(replyingTo.id)===String(id))){replyingTo=null;updateReplyPreview();} },
     getSelectedChatId: () => selectedChatId,
-    isConversationVisible: (chatId) => view === "chats" && selectedChatId !== null && String(selectedChatId) === String(chatId) && !!$("#message-scroll",main) && document.visibilityState === "visible",
+    isConversationVisible: (chatId) => {
+      if(view!=="chats"||selectedChatId===null||String(selectedChatId)!==String(chatId)||document.visibilityState!=="visible"||!document.hasFocus())return false;
+      const isOnScreen=element=>{
+        if(!element)return false;
+        const style=window.getComputedStyle(element),rect=element.getBoundingClientRect();
+        return style.display!=="none"&&style.visibility!=="hidden"&&rect.width>0&&rect.height>0&&rect.right>0&&rect.bottom>0&&rect.left<window.innerWidth&&rect.top<window.innerHeight;
+      };
+      return isOnScreen(main)&&isOnScreen($("#message-scroll",main));
+    },
     appendBackendMessage: (message,chat) => appendBackendMessageToConversation(message,chat),
     setConversationActivity: (chatId,kind,sender) => updateConversationActivity(chatId,kind,sender),
     updateConversationPresence: (chat) => updateConversationPresence(chat),

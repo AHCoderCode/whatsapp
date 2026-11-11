@@ -574,7 +574,15 @@
       chats.sort((a,b)=>(Date.parse(b.messages.at(-1)?.createdAt||0)-Date.parse(a.messages.at(-1)?.createdAt||0))||String(a.name).localeCompare(String(b.name)));
       const received=relations.filter(r=>r.status==="pending"&&r.recipient_id===me.id).map(r=>Object.assign({},profileById.get(r.requester_id)||{id:r.requester_id,username:"user",name:"User",phone:"",avatar:"U",avatarColor:1},{id:r.id,requestUserId:r.requester_id,recipientId:r.recipient_id,status:"received",note:"Would like to connect",time:new Date(r.created_at).toLocaleString()}));
       const sent=relations.filter(r=>r.status==="pending"&&r.requester_id===me.id).map(r=>Object.assign({},profileById.get(r.recipient_id)||{id:r.recipient_id,username:"user",name:"User",phone:"",avatar:"U",avatarColor:1},{id:r.id,requestUserId:r.recipient_id,recipientId:r.recipient_id,status:"sent",time:new Date(r.created_at).toLocaleString()}));
-      const calls=(callResult.data||[]).map(r=>{const peer=profileById.get(r.caller_id===me.id?r.callee_id:r.caller_id);return{id:r.id,contactId:peer?peer.id:"",name:peer?peer.name:"Contact",username:peer?peer.username:"",time:new Date(r.created_at).toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit",hour12:true}),type:r.caller_id===me.id?"outgoing":"incoming",avatar:peer?peer.avatar:1,mediaType:r.media_type,status:r.status};});
+      const calls=(callResult.data||[]).map(r=>{
+        const peer=profileById.get(r.caller_id===me.id?r.callee_id:r.caller_id);
+        const eventRow=directMessageRows.find(message=>String(message.id)===String(r.id)&&typeof message.body==="string"&&message.body.startsWith("wa-call-event:v1:"));
+        let event=null;
+        if(eventRow){try{event=JSON.parse(eventRow.body.slice("wa-call-event:v1:".length));}catch(_){}}
+        const status=String(r.status||"").toLowerCase();
+        const outcome=event&&["missed","completed"].includes(event.outcome)?event.outcome:(["ringing","calling","connecting","accepted","active"].includes(status)?"pending":(["missed","declined","rejected","no_answer"].includes(status)?"missed":"completed"));
+        return{id:r.id,contactId:peer?peer.id:"",name:peer?peer.name:"Contact",username:peer?peer.username:"",time:new Date(r.created_at).toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit",hour12:true}),type:r.caller_id===me.id?"outgoing":"incoming",avatar:peer?peer.avatar:1,mediaType:r.media_type,status:r.status,outcome,durationSeconds:Math.max(0,Math.min(86400,Number(event&&event.durationSeconds)||0))};
+      });
       const statuses=(statusResult.data||[]).map(row=>{const author=profileById.get(row.user_id)||self;return{id:row.id,userId:row.user_id,username:author.username,name:author.name,text:row.text,createdAt:row.created_at,expiresAt:row.expires_at,avatar:author.avatar,avatarColor:author.avatarColor,avatarData:author.avatarData||""};});
       const followed=new Set((followResult.data||[]).map(row=>row.channel_id));
       const channels=(channelResult.data||[]).map(row=>{const owner=profileById.get(row.created_by);return{id:row.id,name:row.name,description:row.description||"",createdBy:row.created_by,ownerName:owner?owner.name:"WhatsApp member",ownerUsername:owner?owner.username:"",following:followed.has(row.id),createdAt:row.created_at};});
@@ -865,12 +873,15 @@
   async function markReadForChat(chat) {
     const me=getUser(),settings=appState()?.settings||{};
     if(!me||!me.isSupabase||!chat||!Array.isArray(chat.messages))return;
-    if(typeof bridge.isConversationVisible!=="function"||!bridge.isConversationVisible(chat.id))return;
-    if(settings.readReceipts===false)return;
+    const stillVisible=()=>typeof bridge.isConversationVisible==="function"&&bridge.isConversationVisible(chat.id);
+    if(!stillVisible()||settings.readReceipts===false)return;
     const pending=chat.messages.filter(m=>m.from==="them"&&!m.read&&m.id&&/^[0-9a-f-]{36}$/i.test(String(m.id)));
     if(!pending.length)return;
     try{
+      await new Promise(resolve=>requestAnimationFrame(()=>resolve()));
+      if(!stillVisible()||(appState()?.settings||{}).readReceipts===false)return;
       const rows=pending.map(m=>({message_id:m.id,user_id:me.id}));
+      if(!stillVisible())return;
       const {error}=await db.from("aeroshell_message_reads").upsert(rows,{onConflict:"message_id,user_id",ignoreDuplicates:true});
       if(error)return;
       pending.forEach(m=>{m.read=true;});
