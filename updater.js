@@ -196,11 +196,10 @@
   window.waOnNativeUpdateCheck = function (info) {
     checking = false;
     if (!info) {
-      if (installAfterFreshCheck) {
-        installAfterFreshCheck = false;
-        lastCheckMessage = "The latest release could not be verified. Try checking again.";
-        if (installButton) { installButton.disabled = false; installButton.textContent = "Check again"; }
-      }
+      installAfterFreshCheck = false;
+      repeatFreshCheckAfterCurrent = false;
+      lastCheckMessage = "The latest release could not be verified. Try checking again.";
+      if (installButton) { installButton.disabled = false; installButton.textContent = "Check again"; }
       notifyUpdateState();
       return;
     }
@@ -296,7 +295,14 @@
     } catch (error) {
       checking = false;
       lastCheckFailed = true;
-      lastCheckMessage = error && error.message || "The update check could not start.";
+      if (installAfterFreshCheck) {
+        installAfterFreshCheck = false;
+        repeatFreshCheckAfterCurrent = false;
+        lastCheckMessage = "Could not verify the newest release. Nothing was installed. " + (error && error.message || "Try checking again.");
+        if (installButton) { installButton.disabled = false; installButton.textContent = "Check again"; }
+      } else {
+        lastCheckMessage = error && error.message || "The update check could not start.";
+      }
       console.warn("[updater] Update check could not start:", error);
       notifyUpdateState();
     }
