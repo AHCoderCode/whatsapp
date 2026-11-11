@@ -910,3 +910,13 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:
 @keyframes wa-ring-pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.78);opacity:.65}}
 .theme-dark .wa-chat-activity{color:#43cfa2}
 @media(prefers-reduced-motion:reduce){.wa-activity-dots i,.wa-activity-wave i,.wa-call-status-dot.is-ringing,.wa-call-status-dot.is-connecting{animation:none}}
+
+/* WhatsApp-style active call controls: white only while speaker or mute is enabled. */
+.wa-call-control.active,.video-call .wa-call-control.active{
+  background:#fff!important;
+  color:#075e54!important;
+  border:1px solid #d7e9e3;
+  box-shadow:0 2px 10px #00000018;
+}
+.wa-call-control.active svg,.wa-call-control.active span,
+.video-call .wa-call-control.active svg,.video-call .wa-call-control.active span{color:#075e54!important}

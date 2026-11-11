@@ -79,10 +79,10 @@ check("media, privacy, subgroup and synced-list handlers are present", () => {
   includes(files.app, "WhatsAppFeatureGaps.onBackendData");
 });
 check("feature-gap module is in the app shell cache", () => {
-  includes(files.html, "/feature-gaps.js?v=whatsapp-secure-release-20261110b");
-  includes(files.sw, "/feature-gaps.js?v=whatsapp-secure-release-20261110b");
-  includes(files.html, "/group-calls.js?v=whatsapp-secure-release-20261110b");
-  includes(files.sw, "/group-calls.js?v=whatsapp-secure-release-20261110b");
+  includes(files.html, "/feature-gaps.js?v=whatsapp-secure-release-20261111a");
+  includes(files.sw, "/feature-gaps.js?v=whatsapp-secure-release-20261111a");
+  includes(files.html, "/group-calls.js?v=whatsapp-secure-release-20261111a");
+  includes(files.sw, "/group-calls.js?v=whatsapp-secure-release-20261111a");
 });
 check("inline HTML scripts parse", () => {
   const scripts = [...files.html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
@@ -93,10 +93,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-secure-release-20261110b");
-  includes(files.sw, "whatsapp-secure-release-20261110b");
-  includes(files.manifest, "whatsapp-secure-release-20261110b");
-  includes(files.sw, "whatsapp-final-shell-v70");
+  includes(files.html, "whatsapp-secure-release-20261111a");
+  includes(files.sw, "whatsapp-secure-release-20261111a");
+  includes(files.manifest, "whatsapp-secure-release-20261111a");
+  includes(files.sw, "whatsapp-final-shell-v71");
 });
 check("mobile settings use a full-width account detail pane", () => {
   includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
@@ -425,6 +425,21 @@ check("poll and event workflows have local fallbacks as well as backend persiste
   includes(files.app, "function respondLocalEvent(");
   includes(files.backend, "async function sendPoll()");
   includes(files.backend, "async function sendEvent()");
+});
+check("call speaker and mute controls show white only while enabled", () => {
+  includes(files.calls,"button.classList.toggle(\"active\",muted)");
+  includes(files.calls,"button.classList.toggle(\"active\",speakerOn)");
+  includes(files.css,".wa-call-control.active,.video-call .wa-call-control.active");
+  includes(files.css,"background:#fff!important");
+  includes(files.css,"color:#075e54!important");
+});
+check("attachment menu dispatches polls, events and contact sharing to working dialogs", () => {
+  includes(files.app,'"share-contact","create-poll","create-event","find-friends"].includes(action)');
+  includes(files.app,'if(action==="create-poll"){openDialog("Create poll"');
+  includes(files.app,'if(action==="create-event"){openDialog("Create event"');
+  includes(files.app,'if(action==="share-contact"){showShareContactDialog();return;}');
+  includes(files.app,'if(action==="send-poll"){');
+  includes(files.app,'if(action==="send-event"){');
 });
 check("contact removal displays a warning and does not delete the person's account", () => {
   includes(files.app, "This hides the contact and removes the conversation from this device only.");

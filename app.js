@@ -1942,7 +1942,7 @@ function openSharedItemsDialog(chat,kind) {
       return;
     }
     closePopup();
-    if(["linked-devices","mark-all-read","install-app","broadcast-list","go-archived","go-channels","go-calls","new-voice-call","new-video-call"].includes(action)){
+    if(["linked-devices","mark-all-read","install-app","broadcast-list","go-archived","go-channels","go-calls","new-voice-call","new-video-call","share-contact","create-poll","create-event","find-friends"].includes(action)){
       handleAction(action,{dataset:{}});
       return;
     }
