@@ -450,7 +450,7 @@
     const active=!!(selectedMessages.length&&chat&&String(selectedMessages[0].chatId)===String(chat.id));
     if(bar)bar.hidden=!active;if(header)header.hidden=active;
     const ids=new Set(active?selectedMessages.map(item=>String(item.id)):[]);
-    $(".message-row",main).forEach(row=>row.classList.toggle("message-selected",ids.has(String(row.dataset.messageId))));
+    $$(".message-row",main).forEach(row=>row.classList.toggle("message-selected",ids.has(String(row.dataset.messageId))));
     const count=$("#message-selection-count",main);if(count)count.textContent=active?String(selectedMessages.length):"";
     const picker=$("#message-reaction-picker",main);if(picker)picker.hidden=!active||!messageReactionPickerOpen;
   }
