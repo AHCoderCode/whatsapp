@@ -29,6 +29,8 @@
   let demoDirectory = [];
   let replyingTo = null;
   let selectedMessage = null;
+  let selectedMessages = [];
+  let pendingIncomingShare = null;
   let messageHoldTimer = null;
   let messageHoldRow = null;
   let messageHoldStart = null;
@@ -440,33 +442,32 @@
     return "<div class='message-row " + (visualOutgoing?"outgoing":"incoming") + (callEvent?" call-event-message":"") + selected + "' data-message-id='" + esc(message.id) + "' tabindex='0' aria-label='" + esc(messageLabel) + "'><div class='message-bubble'>" + bubbleContent + "<span class='message-meta'>" + edited + time + checks + "</span>" + reactions + "</div></div>";
   }
   function syncMessageSelectionUI() {
-    const bar = $("#message-selection-toolbar", main);
-    const header = $(".conversation-header", main);
-    const chat = currentChat();
-    const active = !!(selectedMessage && chat && String(selectedMessage.chatId) === String(chat.id));
-    if (bar) bar.hidden = !active;
-    if (header) header.hidden = active;
-    $$(".message-row", main).forEach(row => row.classList.toggle("message-selected", active && String(row.dataset.messageId) === String(selectedMessage.id)));
-    const count = $("#message-selection-count", main);
-    if (count) count.textContent = active ? "1" : "";
-    const picker = $("#message-reaction-picker", main);
-    if (picker) picker.hidden = !active || !messageReactionPickerOpen;
+    const bar=$("#message-selection-toolbar",main),header=$(".conversation-header",main),chat=currentChat();
+    const active=!!(selectedMessages.length&&chat&&String(selectedMessages[0].chatId)===String(chat.id));
+    if(bar)bar.hidden=!active;if(header)header.hidden=active;
+    const ids=new Set(active?selectedMessages.map(item=>String(item.id)):[]);
+    $(".message-row",main).forEach(row=>row.classList.toggle("message-selected",ids.has(String(row.dataset.messageId))));
+    const count=$("#message-selection-count",main);if(count)count.textContent=active?String(selectedMessages.length):"";
+    const picker=$("#message-reaction-picker",main);if(picker)picker.hidden=!active||!messageReactionPickerOpen;
+  }
+  function selectedMessageData(message,chat) {
+    return {id:message.id,chatId:chat.id,text:String(message.text||""),from:message.from,time:message.time||"",sender:message.sender||(message.from==="me"?"You":chat.name),attachmentName:message.attachmentName||"",attachmentPath:message.attachmentPath||"",attachmentType:message.attachmentType||"",messageType:message.messageType||"text",editedAt:message.editedAt||"",poll:message.poll||null,event:message.event||null,replyTo:message.replyTo||null};
   }
   function selectMessageForActions(row) {
-    messageReactionPickerOpen = false;
-    const chat = currentChat();
-    if (!chat || !row) return;
-    const message = chat.messages.find(m => String(m.id) === String(row.dataset.messageId));
-    if (!message) return;
-    selectedMessage = { id:message.id, chatId:chat.id, text:String(message.text || ""), from:message.from, time:message.time || "", sender:message.sender || (message.from === "me" ? "You" : chat.name), attachmentName:message.attachmentName || "", attachmentPath:message.attachmentPath || "", attachmentType:message.attachmentType || "", messageType:message.messageType || "text", editedAt:message.editedAt || "", poll:message.poll || null, event:message.event || null, replyTo:message.replyTo || null };
-    state.lastContextMessage = Object.assign({}, selectedMessage, { chatName:chat.name, avatar:chat.avatar });
-    closePopup();
-    syncMessageSelectionUI();
+    messageReactionPickerOpen=false;const chat=currentChat();if(!chat||!row)return;
+    const message=chat.messages.find(m=>String(m.id)===String(row.dataset.messageId));if(!message)return;
+    if(selectedMessages.length&&String(selectedMessages[0].chatId)===String(chat.id)){
+      const index=selectedMessages.findIndex(item=>String(item.id)===String(message.id));
+      if(index>=0)selectedMessages.splice(index,1);else selectedMessages.push(selectedMessageData(message,chat));
+    }else selectedMessages=[selectedMessageData(message,chat)];
+    selectedMessage=selectedMessages.length?selectedMessages[selectedMessages.length-1]:null;
+    if(!selectedMessage){if(state){state.lastContextMessage=null;state.lastContextMessages=[];}messageReactionPickerOpen=false;}
+    else if(state){state.lastContextMessage=Object.assign({},selectedMessage,{chatName:chat.name,avatar:chat.avatar});state.lastContextMessages=selectedMessages.map(item=>Object.assign({},item,{chatName:chat.name,avatar:chat.avatar}));}
+    closePopup();syncMessageSelectionUI();
   }
   function dismissMessageSelection(keepContext) {
-    selectedMessage = null;
-    messageReactionPickerOpen = false;
-    if (!keepContext && state) state.lastContextMessage = null;
+    selectedMessage=null;selectedMessages=[];messageReactionPickerOpen=false;
+    if(!keepContext&&state){state.lastContextMessage=null;state.lastContextMessages=[];}
     syncMessageSelectionUI();
   }
   function updateReplyPreview() {
@@ -482,14 +483,15 @@
     box.innerHTML = "<div class='reply-preview-accent'></div><div class='reply-preview-copy'><strong>Replying to " + esc(replyingTo.sender || "message") + "</strong><span>" + esc(replyingTo.text || "Attachment") + "</span></div><button type='button' class='reply-preview-cancel' data-action='cancel-reply' aria-label='Cancel reply'>" + icon("x") + "</button>";
   }
   function showForwardMessageDialog() {
-    const ref = state && state.lastContextMessage;
-    if (!ref) { toast("Select a message first."); return; }
-    forwardDraft = Object.assign({}, ref);
-    dismissMessageSelection(true);
-    const targets = (state.chats || []).filter(c => !c.archived && (c.type === "person" || c.type === "group"));
-    const body = "<p class='screen-description'>Choose a contact or group to forward this message to.</p><div class='forward-message-preview'><span>" + icon("forward") + "</span><div><strong>Forwarded message</strong><p>" + esc(ref.text || ref.attachmentName || "Attachment") + "</p></div></div>" +
-      (targets.length ? "<div class='forward-target-list'>" + targets.map(c => "<button type='button' class='forward-target' data-action='forward-message-to-chat' data-target-chat-id='" + esc(c.id) + "'>" + avatarHTML(c) + "<span><strong>" + esc(c.name || c.username || "Contact") + "</strong><small>" + (c.type === "group" ? "Group" : "@" + esc(c.username || "")) + "</small></span>" + icon("chevron") + "</button>").join("") + "</div>" : "<div class='empty-state'>You need an accepted contact or group before forwarding messages.</div>");
-    openDialog("Forward message", body, "<button class='secondary-button' data-action='close-dialog'>Cancel</button>");
+    const chosen=state&&(Array.isArray(state.lastContextMessages)?state.lastContextMessages:state.lastContextMessage?[state.lastContextMessage]:[]);
+    if(!chosen||!chosen.length){toast("Select a message first.");return;}
+    const textMessages=chosen.filter(ref=>ref&&ref.text&&!ref.attachmentPath&&(ref.messageType||"text")==="text");
+    if(!textMessages.length){toast("Multiple-file forwarding is not supported yet. Use Share to send files to contacts.");return;}
+    forwardDraft=textMessages.map(ref=>Object.assign({},ref));dismissMessageSelection(true);
+    const targets=(state.chats||[]).filter(c=>!c.archived&&(c.type==="person"||c.type==="group"));
+    const body="<p class='screen-description'>Choose a contact or group. "+textMessages.length+" text message"+(textMessages.length===1?"":"s")+" will be forwarded in order.</p><div class='forward-message-preview'><span>"+icon("forward")+"</span><div><strong>Forwarded messages</strong><p>"+esc(textMessages[0].text)+(textMessages.length>1?" · and "+(textMessages.length-1)+" more":"")+"</p></div></div>"+
+      (targets.length?"<div class='forward-target-list'>"+targets.map(c=>"<button type='button' class='forward-target' data-action='forward-message-to-chat' data-target-chat-id='"+esc(c.id)+"'>"+avatarHTML(c)+"<span><strong>"+esc(c.name||c.username||"Contact")+"</strong><small>"+(c.type==="group"?"Group":"@"+esc(c.username||""))+"</small></span>"+icon("chevron")+"</button>").join("")+"</div>":"<div class='empty-state'>You need an accepted contact or group before forwarding messages.</div>");
+    openDialog("Forward messages",body,"<button class='secondary-button' data-action='close-dialog'>Cancel</button>");
   }
   function showShareContactDialog(){
     const chat=currentChat();
@@ -1333,8 +1335,8 @@
       optionRow("star",favoriteTitle,favoriteSubtitle,"toggle-favorite")+
       optionRow("mute",muteTitle,muteSubtitle,"toggle-mute")+
       optionRow("clock","Disappearing messages","Choose a timer for new messages","disappearing")+
-      optionRow("flag","Report "+(chat.type==="group"?"group":"contact"),"Report this conversation","report-chat")+
-      optionRow("slash","Block "+chat.name,"Prevent this contact from reaching you on this device","block-chat")+
+      (chat.type==="person"?optionRow("flag","Report contact","Send a report to the moderation queue","report-chat"):"")+
+      (chat.type==="person"?optionRow(chat.blockedByMe?"user-check":"slash",chat.blockedByMe?"Unblock "+chat.name:"Block "+chat.name,chat.blockedByMe?"Allow this contact to message you again":"Prevent this contact from messaging you","block-chat","danger-setting-row"):"")+
       optionRow("trash","Clear chat","Clear messages from your view","clear-chat")+
       (chat.type==="person"?optionRow("user-minus","Remove contact","Remove this conversation from this device","remove-contact","danger-setting-row"):"")+
       "</div></div>";
@@ -2572,7 +2574,7 @@ function openSharedItemsDialog(chat,kind) {
     if(!selectedMessage)return;
     if(event.target.closest("#message-selection-toolbar,#message-reaction-picker,#popup-menu,#dialog-backdrop"))return;
     const row=event.target.closest(".message-row");
-    if(row&&String(row.dataset.messageId)===String(selectedMessage.id)&&String(selectedMessage.chatId)===String(currentChat()?.id))return;
+    if(row&&selectedMessages.some(item=>String(item.id)===String(row.dataset.messageId))&&String(selectedMessages[0].chatId)===String(currentChat()?.id))return;
     dismissMessageSelection(false);
   });
   main.addEventListener("pointerdown",event=>{
@@ -2641,6 +2643,8 @@ function openSharedItemsDialog(chat,kind) {
     } catch(error) { toast("Could not react: "+String(error&&error.message||"Unknown error")); }
   }
   main.addEventListener("click",event=>{
+    const row=event.target.closest(".message-row");
+    if(row&&selectedMessages.length&&!event.target.closest("button,a,input,textarea,select")){event.preventDefault();event.stopPropagation();selectMessageForActions(row);return;}
     const reactionButton=event.target.closest("[data-message-reaction-emoji]");
     if(reactionButton){
       event.preventDefault();event.stopPropagation();
@@ -2670,6 +2674,16 @@ function openSharedItemsDialog(chat,kind) {
 
   const originalHandleAction=handleAction;
   handleAction=function(action,el){
+    if(action==="block-chat"||action==="confirm-block-chat"){
+      const chat=findChat(el.dataset.chatId)||currentChat();if(!chat||chat.type!=="person"){toast("Blocking is available for direct contacts.");return;}
+      if(action==="block-chat"){openDialog(chat.blockedByMe?"Unblock contact?":"Block contact?","<p class='screen-description'>"+(chat.blockedByMe?"This allows this contact to message you again.":"This stops direct messages between both accounts. Shared groups are not affected. The person is not notified.")+"</p>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='danger-button' data-action='confirm-block-chat' data-chat-id='"+esc(chat.id)+"'>"+(chat.blockedByMe?"Unblock":"Block contact")+"</button>");return;}
+      void (async()=>{try{if(!window.waAppBridge?.blockBackendUser)throw new Error("Block service is not ready. Refresh and retry.");await window.waAppBridge.blockBackendUser(chat.id,!chat.blockedByMe);closeDialog();toast(chat.blockedByMe?"Contact unblocked.":"Contact blocked.");renderMain();}catch(error){toast("Could not update block: "+String(error&&error.message||"Unknown error"));}})();return;
+    }
+    if(action==="report-chat"||action==="submit-contact-report"){
+      const chat=findChat(el.dataset.chatId)||currentChat();if(!chat||chat.type!=="person"){toast("Reports are currently available for direct contacts.");return;}
+      if(action==="report-chat"){openDialog("Report contact","<p class='screen-description'>Choose a reason. Avoid including message contents unless necessary.</p><div class='dialog-field'><label for='wa-report-reason'>Reason</label><select id='wa-report-reason'><option value='spam'>Spam</option><option value='harassment'>Harassment or bullying</option><option value='impersonation'>Impersonation</option><option value='inappropriate_content'>Inappropriate content</option><option value='other'>Other</option></select></div><div class='dialog-field'><label for='wa-report-details'>Details (optional)</label><textarea id='wa-report-details' rows='3' maxlength='1000'></textarea></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='danger-button' data-action='submit-contact-report' data-chat-id='"+esc(chat.id)+"'>Submit report</button>",true);return;}
+      void (async()=>{try{if(!window.waAppBridge?.reportBackendUser)throw new Error("Report service is not ready. Refresh and retry.");await window.waAppBridge.reportBackendUser(chat.id,chat.id,$("#wa-report-reason")?.value||"other",$("#wa-report-details")?.value||"");closeDialog();toast("Report submitted.");}catch(error){toast("Could not submit report: "+String(error&&error.message||"Unknown error"));}})();return;
+    }
     if(action==="cancel-message-selection"){dismissMessageSelection(false);return;}
     if(action==="cancel-reply"){replyingTo=null;updateReplyPreview();const input=$("#message-input");if(input)input.focus();return;}
     if(action==="jump-to-reply"){
@@ -2704,23 +2718,14 @@ function openSharedItemsDialog(chat,kind) {
       void run();return;
     }
     if(action==="forward-message-to-chat"){
-      const targetId=el.dataset.targetChatId,draft=forwardDraft;
-      if(!draft){toast("Select a message to forward.");closeDialog();return;}
-      const target=findChat(targetId);
-      if(!target){toast("That conversation is no longer available.");return;}
-      const run=async()=>{
-        try{
-          if(currentUser&&currentUser.isSupabase){
-            if(!window.waAppBridge?.forwardBackendMessage)throw new Error("Message sync is unavailable. Reload the app and retry.");
-            await window.waAppBridge.forwardBackendMessage(targetId,draft.id,draft.text||draft.attachmentName||"Attachment");
-          }else{
-            target.messages.push({id:uid("msg"),from:"me",text:draft.text||draft.attachmentName||"Attachment",time:nowTime(),date:dayLabel(),status:"sent",forwarded:true,forwardedFromId:draft.id});
-            target.preview=draft.text||"Forwarded message";target.time="Now";saveState();renderSidebar();
-          }
-          forwardDraft=null;closeDialog();dismissMessageSelection(false);toast("Message forwarded.");
-        }catch(error){toast("Could not forward message: "+String(error&&error.message||"Unknown error"));}
-      };
-      void run();return;
+      const targetId=el.dataset.targetChatId,draft=forwardDraft,drafts=Array.isArray(draft)?draft:draft?[draft]:[];
+      if(!drafts.length){toast("Select a message to forward.");closeDialog();return;}
+      const target=findChat(targetId);if(!target){toast("That conversation is no longer available.");return;}
+      void (async()=>{try{
+        if(currentUser&&currentUser.isSupabase){if(!window.waAppBridge?.forwardBackendMessage)throw new Error("Message sync is unavailable. Reload the app and retry.");for(const item of drafts)await window.waAppBridge.forwardBackendMessage(targetId,item.id,item.text);}
+        else{for(const item of drafts)target.messages.push({id:uid("msg"),from:"me",text:item.text,time:nowTime(),date:dayLabel(),status:"sent",forwarded:true,forwardedFromId:item.id});target.preview=drafts[drafts.length-1].text;target.time="Now";saveState();renderSidebar();}
+        forwardDraft=null;closeDialog();dismissMessageSelection(false);toast(drafts.length+" message"+(drafts.length===1?"":"s")+" forwarded.");
+      }catch(error){toast("Could not forward all messages: "+String(error&&error.message||"Unknown error"));}})();return;
     }
     if(action==="send-contact-request"){
       const contact=lookupDirectory(el.dataset.contactUsername);
@@ -2740,6 +2745,7 @@ function openSharedItemsDialog(chat,kind) {
   };
   const originalUseAction=useAction;
   useAction=function(action,chat){
+    if(action==="block-chat"||action==="report-chat"){handleAction(action,{dataset:{chatId:chat&&chat.id||""}});return;}
     if(action==="edit-group"||action==="edit-group-description"){if(chat){editGroupDialog(chat);return;}}
     if(action==="copy-phone"){copyText(state.profile.phone);return;}
     originalUseAction(action,chat);
@@ -2788,6 +2794,7 @@ function openSharedItemsDialog(chat,kind) {
     getReplyToMessageId: () => { const chat=currentChat(); return replyingTo&&chat&&String(replyingTo.chatId)===String(chat.id)?replyingTo.id:null; },
     clearReplyToMessage: (id) => { if(replyingTo&&(!id||String(replyingTo.id)===String(id))){replyingTo=null;updateReplyPreview();} },
     getSelectedChatId: () => selectedChatId,
+    isConversationVisible: (chatId) => view === "chats" && selectedChatId !== null && String(selectedChatId) === String(chatId) && !!$("#message-scroll",main) && document.visibilityState === "visible",
     appendBackendMessage: (message,chat) => appendBackendMessageToConversation(message,chat),
     setConversationActivity: (chatId,kind,sender) => updateConversationActivity(chatId,kind,sender),
     updateConversationPresence: (chat) => updateConversationPresence(chat),

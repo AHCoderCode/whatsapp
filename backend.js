@@ -238,7 +238,7 @@
     chat.lastOutgoing=msg.from==="me";chat.lastMessageType=row.message_type||"text";
     if(msg.from==="them"&&String(bridge.getSelectedChatId?bridge.getSelectedChatId():"")!==String(chat.id))chat.unread=(chat.unread||0)+1;
     bridge.renderSidebar();
-    if(String(bridge.getSelectedChatId?bridge.getSelectedChatId():"")===String(chat.id)){
+    if(typeof bridge.isConversationVisible==="function"&&bridge.isConversationVisible(chat.id)){
       const appended=typeof bridge.appendBackendMessage==="function"&&bridge.appendBackendMessage(msg,chat);
       if(!appended)bridge.renderMain();
       if(msg.from==="them")void markReadForChat(chat);
@@ -450,6 +450,9 @@
         db.from("whatsapp_communities").select("id,name,description,created_by,created_at").order("created_at",{ascending:false}).limit(100),
         db.from("whatsapp_community_members").select("community_id,user_id,role").eq("user_id",me.id)
       ]);
+      let blockRows=[];
+      try{const blockResult=await db.from("whatsapp_user_blocks").select("blocker_id,blocked_id").or("blocker_id.eq."+me.id+",blocked_id.eq."+me.id);if(blockResult.error)throw blockResult.error;blockRows=blockResult.data||[];}
+      catch(blockError){console.warn("Block relationships could not be loaded:",blockError&&blockError.message||blockError);}
       if(profileResult.error)throw profileResult.error;
       if(!profileResult.data)throw new Error("Your profile is missing. Sign out and create a new account after applying the Supabase profile migration.");
       // Failures in optional feeds should not hide the user's direct-message list.
@@ -494,6 +497,10 @@
         return p
           ? Object.assign({},p,{id:p.id,backendId:p.id,type:"person",messages:[],attachments:[],unread:0,time:"",preview:"",lastMessageType:"text",archived:false,locked:false,participants:[]})
           : {id,backendId:id,type:"person",name:"Contact",username:"",phone:"",about:"Available",avatar:"C",avatarColor:colorFor(id),avatarData:"",messages:[],attachments:[],unread:0,time:"",preview:"",lastMessageType:"text",archived:false,locked:false,participants:[]};
+      });
+      chats.forEach(chat=>{
+        chat.blockedByMe=blockRows.some(row=>String(row.blocker_id)===String(me.id)&&String(row.blocked_id)===String(chat.id));
+        chat.blockedMe=blockRows.some(row=>String(row.blocked_id)===String(me.id)&&String(row.blocker_id)===String(chat.id));
       });
       const roleByGroup=new Map(memberships.map(x=>[x.group_id,x.role])),counts=new Map();
       roster.forEach(r=>counts.set(r.group_id,(counts.get(r.group_id)||0)+1));
@@ -580,8 +587,9 @@
       const joined=new Map((communityMembershipResult.data||[]).map(row=>[row.community_id,row.role]));
       const communities=(communityResult.data||[]).map(row=>({id:row.id,name:row.name,description:row.description||"",createdBy:row.created_by,createdAt:row.created_at,joined:joined.has(row.id),role:joined.get(row.id)||"",groups:[]}));
       bridge.setBackendData({profile:{username:self.username,name:self.name,phone:self.phone,about:self.about,avatar:self.avatar,avatarColor:self.avatarColor,avatarData:self.avatarData},chats,requests:received,sentRequests:sent,calls,statuses,channels,channelPosts,communities});
-      // Mark incoming messages read only after the new messages have been placed in the UI state.
-      void markReadForChat(bridge.getCurrentChat());
+      // Only mark read when the matching conversation is actually visible.
+      const visibleChat=bridge.getCurrentChat();
+      if(visibleChat&&typeof bridge.isConversationVisible==="function"&&bridge.isConversationVisible(visibleChat.id))void markReadForChat(visibleChat);
       subscribe(me.id);
       subscribePresence(me.id);
       subscribeChatActivity(me.id);
@@ -758,6 +766,21 @@
     return data;
   }
 
+  async function blockUser(userId,shouldBlock=true) {
+    const me=getUser();if(!me||!me.isSupabase)throw new Error("Sign in to manage blocked contacts.");
+    if(!/^[0-9a-f-]{36}$/i.test(String(userId||""))||String(userId)===String(me.id))throw new Error("That contact cannot be blocked.");
+    if(shouldBlock){const {error}=await db.from("whatsapp_user_blocks").upsert({blocker_id:me.id,blocked_id:userId},{onConflict:"blocker_id,blocked_id",ignoreDuplicates:true});if(error)throw error;}
+    else{const {error}=await db.from("whatsapp_user_blocks").delete().eq("blocker_id",me.id).eq("blocked_id",userId);if(error)throw error;}
+    await loadData(true);return true;
+  }
+  async function reportUser(userId,chatId,reason,details) {
+    const me=getUser(),allowed=["spam","harassment","impersonation","inappropriate_content","other"];
+    if(!me||!me.isSupabase)throw new Error("Sign in to report a contact.");
+    if(!/^[0-9a-f-]{36}$/i.test(String(userId||""))||String(userId)===String(me.id))throw new Error("That contact cannot be reported.");
+    if(!allowed.includes(String(reason)))throw new Error("Choose a valid report reason.");
+    const {error}=await db.from("whatsapp_user_reports").insert({reporter_id:me.id,reported_user_id:userId,chat_id:/^[0-9a-f-]{36}$/i.test(String(chatId||""))?chatId:null,reason,details:String(details||"").slice(0,1000)});
+    if(error)throw error;return true;
+  }
   const ATTACHMENT_BUCKET = "master-chat-attachments";
   let recorder = null, recorderStream = null, recorderChunks = [], recorderStartedAt = 0, recorderChatId = null, recorderStopReason = "";
   let recorderAudioContext=null,recorderAnalyser=null,recorderAnimationFrame=0,recorderUiTimer=null;
@@ -842,6 +865,7 @@
   async function markReadForChat(chat) {
     const me=getUser(),settings=appState()?.settings||{};
     if(!me||!me.isSupabase||!chat||!Array.isArray(chat.messages))return;
+    if(typeof bridge.isConversationVisible!=="function"||!bridge.isConversationVisible(chat.id))return;
     if(settings.readReceipts===false)return;
     const pending=chat.messages.filter(m=>m.from==="them"&&!m.read&&m.id&&/^[0-9a-f-]{36}$/i.test(String(m.id)));
     if(!pending.length)return;
@@ -1649,7 +1673,7 @@
   bridge.setBackendChatActivity=(activity,active,chatId)=>setChatActivity(activity,active,chatId?getChatById(chatId):currentSelectedChat());
   bridge.sendBackendMessage=sendMessage;bridge.searchBackendPeople=searchPeople;bridge.requestBackend=sendRequest;bridge.markAllBackendRead=markAllRead;
   bridge.hideBackendMessage=hideMessageForMe;bridge.deleteBackendMessage=deleteMessageForEveryone;bridge.editBackendMessage=editMessage;bridge.forwardBackendMessage=forwardMessage;bridge.reactBackendMessage=toggleMessageReaction;
-  bridge.uploadBackendAttachment=uploadStoredAttachment;bridge.sendBackendPoll=sendPoll;bridge.voteBackendPoll=votePoll;bridge.sendBackendEvent=sendEvent;bridge.respondBackendEvent=respondToEvent;
+  bridge.uploadBackendAttachment=uploadStoredAttachment;bridge.blockBackendUser=blockUser;bridge.reportBackendUser=reportUser;bridge.sendBackendPoll=sendPoll;bridge.voteBackendPoll=votePoll;bridge.sendBackendEvent=sendEvent;bridge.respondBackendEvent=respondToEvent;
   window.waBackendEnablePush=enableDevicePush;
   window.waBackendUpdatePushPreferences=updateDevicePushPreferences;
   window.waBackendTestCallPush=testCallPush;

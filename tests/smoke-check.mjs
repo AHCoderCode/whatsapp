@@ -415,6 +415,22 @@ check("incoming read receipts update visible blue ticks immediately", () => {
   includes(files.backend, 'table:"aeroshell_message_reads"},event=>{');
   includes(files.backend, 'if(message)message.status="read"');
 });
+check("read receipts require the matching conversation to be visible", () => {
+  includes(files.app, "isConversationVisible:");
+  includes(files.backend, "bridge.isConversationVisible(chat.id)");
+  includes(files.backend, "Only mark read when the matching conversation is actually visible");
+});
+check("multiple messages can be selected and forwarded together", () => {
+  includes(files.app, "let selectedMessages = [];");
+  includes(files.app, "selectedMessages.push(selectedMessageData(message,chat))");
+  includes(files.app, "Forward messages");
+});
+check("block and report actions use Supabase safety records", () => {
+  includes(files.backend, 'from("whatsapp_user_blocks")');
+  includes(files.backend, 'from("whatsapp_user_reports")');
+  includes(files.app, "submit-contact-report");
+  includes(files.app, "confirm-block-chat");
+});
 check("settings startup uses querySelectorAll for its forEach loop", () => {
   const line = files.app.split(String.fromCharCode(10)).find(line => line.includes("#app-screen input,#app-screen textarea,[contenteditable='true']"));
   assert.ok(line, "applySettings field selector is present");
