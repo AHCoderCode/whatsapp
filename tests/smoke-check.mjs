@@ -220,6 +220,38 @@ check("speaker and mute use a slightly lighter charcoal inactive state and white
   includes(files.css, 'background:#fff!important');
   includes(files.css, '.wa-call-control.active:not([data-wa-call="mute"]):not([data-wa-call="speaker"])');
 });
+
+check("optional four-digit app lock is stored locally with a salted PBKDF2 verifier", () => {
+  includes(files.app, "const APP_PIN_ITERATIONS=210000");
+  includes(files.app, 'name:"PBKDF2"');
+  includes(files.app, 'hash:"SHA-256"');
+  includes(files.app, "window.crypto.subtle.deriveBits");
+  includes(files.app, "window.crypto.getRandomValues(saltBytes)");
+  includes(files.app, "wa_device_app_pin_v1_");
+  includes(files.app, "localStorage.setItem(appPinStorageKey(),JSON.stringify(config))");
+  includes(files.app, "verifyAppPinCode(current,config)");
+  excludes(files.app, 'fetch("https://');
+});
+check("app PIN lock blocks app UI on launch and when the app returns from background", () => {
+  includes(files.app, "function showAppPinLock()");
+  includes(files.app, "function lockAppForBackground()");
+  includes(files.app, 'document.addEventListener("visibilitychange"');
+  includes(files.app, 'window.addEventListener("pagehide",lockAppForBackground)');
+  includes(files.app, "if(hasAppPinConfigured(currentUser.username))showAppPinLock()");
+  includes(files.app, "element.inert=!!locked");
+  includes(files.app, "failures>=5?Date.now()+30000:0");
+});
+check("App lock settings allow PIN setup, change and removal with a four-digit check", () => {
+  includes(files.app, 'if(title==="App lock"){openAppLockDialog();return;}');
+  includes(files.app, 'data-dialog-action=\'enable-app-pin\'');
+  includes(files.app, 'data-dialog-action=\'change-app-pin\'');
+  includes(files.app, 'data-dialog-action=\'disable-app-pin\'');
+  includes(files.app, "Enter exactly four digits for the PIN.");
+  includes(files.app, "The current PIN is incorrect.");
+  includes(files.app, "Require a four-digit PIN when WhatsApp opens or returns to the foreground.");
+  includes(files.css, ".wa-app-pin-lock{");
+  includes(files.css, ".wa-app-pin-submit{");
+});
 check("missed and connected call events are synced as WhatsApp-style chat cards", () => {
   includes(files.calls, "CALL_MESSAGE_PREFIX+JSON.stringify(event)");
   includes(files.calls, 'const outcome=connected?"completed":"missed";');
