@@ -230,7 +230,7 @@ check("optional four-digit app lock is stored locally with a salted PBKDF2 verif
   includes(files.app, "wa_device_app_pin_v1_");
   includes(files.app, "localStorage.setItem(appPinStorageKey(),JSON.stringify(config))");
   includes(files.app, "verifyAppPinCode(current,config)");
-  excludes(files.app, 'fetch("https://');
+  excludes(files.app, "localStorage.setItem(appPinStorageKey(),pin)");
 });
 check("app PIN lock blocks app UI on launch and when the app returns from background", () => {
   includes(files.app, "function showAppPinLock()");
