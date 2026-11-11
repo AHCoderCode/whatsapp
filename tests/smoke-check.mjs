@@ -165,6 +165,25 @@ check("web/PWA clients receive an actionable update banner while Android checks 
   includes(files.updater, "notifyUpdateState");
   includes(files.updater, "if (installing) {\n      installing = false;");
 });
+
+check("every Android Update tap refreshes and installs only the newest published APK", () => {
+  includes(files.updater, 'const APP_BUILD = "whatsapp-secure-release-20261111e"');
+  includes(files.updater, "installAfterFreshCheck = true");
+  includes(files.updater, "repeatFreshCheckAfterCurrent = true");
+  includes(files.updater, "check(true)");
+  includes(files.updater, "beginInstallOfLatestRelease()");
+  includes(files.updater, "Could not verify the newest release. Nothing was installed.");
+  includes(files.nativeActivity, '/releases?per_page=100');
+  includes(files.nativeActivity, "newestPublishedRelease(releases)");
+  includes(files.nativeActivity, "if (versionCode > newestVersionCode)");
+  includes(files.nativeActivity, "No older release was installed.");
+});
+check("PWA app shell and service worker share the current update build", () => {
+  includes(files.html, "whatsapp-secure-release-20261111e");
+  includes(files.sw, "whatsapp-secure-release-20261111e");
+  includes(files.manifest, "whatsapp-secure-release-20261111e");
+  includes(files.sw, "whatsapp-final-shell-v75");
+});
 check("Android update remains available from Settings after dismissing the banner", () => {
   includes(files.app, '["updates","download","App updates"]');
   includes(files.app, "waNativeUpdateGetState");
