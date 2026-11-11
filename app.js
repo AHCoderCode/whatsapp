@@ -496,6 +496,14 @@
     const contacts=(state.chats||[]).filter(c=>c.type==="person");
     const body=contacts.length?("<p class='screen-description'>Choose an accepted contact to share in this conversation.</p><div class='forward-target-list'>"+contacts.map(c=>"<button type='button' class='forward-target' data-action='share-contact-to-chat' data-contact-id='"+esc(c.id)+"'>"+avatarHTML(c)+"<span><strong>"+esc(c.name||"Contact")+"</strong><small>@"+esc(c.username||"")+"</small></span>"+icon("chevron")+"</button>").join("")+"</div>"):"<div class='empty-state'>Add a contact first, then you can share their contact card here.</div>";
     openDialog("Share contact",body,"<button class='secondary-button' data-action='close-dialog'>Cancel</button>");
+    const backdrop=$("#dialog-backdrop");
+    if(backdrop)backdrop.addEventListener("click",event=>{
+      const button=event.target.closest("[data-action='share-contact-to-chat']");
+      if(!button||!backdrop.contains(button))return;
+      event.preventDefault();
+      event.stopPropagation();
+      handleAction("share-contact-to-chat",button);
+    },true);
   }
   function renderWelcome() {
     main.innerHTML = "<div class='welcome-pane'><div class='welcome-content'><svg class='welcome-art' viewBox='0 0 320 250' aria-hidden='true'><ellipse cx='161' cy='220' rx='112' ry='9' fill='#e0e6e8'/><path d='M61 142c-1-40 39-70 89-70 45 0 79 25 83 60 4 36-31 66-78 69l-30 24 4-26c-40-8-67-29-68-57Z' fill='#d9fdd3'/><path d='M76 139c0-30 31-54 71-54 40 0 72 24 72 54s-32 54-72 54c-10 0-20-1-29-4l-22 14 4-22c-15-10-24-24-24-42Z' fill='#25d366'/><path d='M128 114c-3-5-5-5-8-5s-7 3-8 7c-2 5 2 15 7 23 8 11 18 19 30 25 7 3 13 5 17 4 5-1 8-6 8-10 0-2-1-3-4-5l-10-5c-2-1-3 0-5 2l-4 5c-1 1-2 2-4 1-6-2-12-7-17-12-4-4-7-9-8-12 0-1 0-2 1-3l4-4c1-2 1-3 1-4l-4-7Z' fill='#fff'/></svg><h2>Messaging Web</h2><p>Send and receive messages with ease, right from your computer.</p><div class='welcome-divider'></div>"+((state&&Array.isArray(state.chats)&&state.chats.length===0)?"<div class='wa-empty-actions'><button class='primary-button' data-action='new-chat'>Find people</button><button class='secondary-button' data-action='new-group'>Create group</button></div>":"")+"<div class='welcome-caption'>" + icon("lock") + "<span>Your messages sync through the connected account backend</span></div></div><div class='welcome-footer'>" + icon("lock") + "<span>WhatsApp is an independent messaging app and is not connected to other messaging accounts</span></div></div>";
@@ -1299,6 +1307,13 @@
     closePopup();closeDialog();
     const menu=document.createElement("div");menu.className="popup-menu";menu.id="popup-menu";
     menu.innerHTML=items.map(it=>it.sep?"<div class='popup-separator'></div>":"<button type='button' class='"+(it.danger?"danger":"")+"' data-menu-action='"+esc(it.action)+"'>"+icon(it.icon||"info")+"<span>"+esc(it.label)+"</span></button>").join("");
+    menu.addEventListener("click",event=>{
+      const button=event.target.closest("[data-menu-action]");
+      if(!button||!menu.contains(button))return;
+      event.preventDefault();
+      event.stopPropagation();
+      runMenuAction(button.dataset.menuAction,findChat(menuChatId)||currentChat());
+    });
     overlayRoot.appendChild(menu);
     const rect=anchor.getBoundingClientRect();const width=Math.min(300,Math.max(220,menu.offsetWidth));
     const left=Math.max(8,Math.min(window.innerWidth-width-8,rect.right-width));
@@ -1813,6 +1828,29 @@ function openSharedItemsDialog(chat,kind) {
     const rows=lists.map(item=>"<div class='custom-list-manage-row'><span class='custom-list-manage-icon'>"+icon("chat")+"</span><span class='custom-list-manage-copy'><strong>"+esc(item.name)+"</strong><small>"+(item.chatIds||[]).length+" chats</small></span><button type='button' class='secondary-button' data-action='edit-list' data-list-id='"+esc(item.id)+"'>Edit</button><button type='button' class='danger-button' data-action='remove-list' data-list-id='"+esc(item.id)+"' aria-label='Remove "+esc(item.name)+"'>Remove</button></div>").join("");
     openDialog("Manage lists",rows||"<div class='empty-state'>No custom lists yet. Create one to organise your conversations.</div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");
   }
+  function bindComposerDialogAction(action){
+    const backdrop=$("#dialog-backdrop");
+    if(!backdrop)return;
+    backdrop.addEventListener("click",event=>{
+      const button=event.target.closest("[data-dialog-action='"+action+"']");
+      if(!button||!backdrop.contains(button))return;
+      event.preventDefault();
+      event.stopPropagation();
+      if(action==="send-poll"){
+        if(currentUser&&currentUser.isSupabase){
+          const send=window.waAppBridge&&window.waAppBridge.sendBackendPoll;
+          if(typeof send==="function")void Promise.resolve(send()).catch(error=>toast("Could not send the poll: "+String(error&&error.message||"Unknown error")));
+          else toast("Secure poll service is still loading. Refresh and try again.");
+        }else sendLocalPoll();
+      }else if(action==="send-event"){
+        if(currentUser&&currentUser.isSupabase){
+          const send=window.waAppBridge&&window.waAppBridge.sendBackendEvent;
+          if(typeof send==="function")void Promise.resolve(send()).catch(error=>toast("Could not send the event: "+String(error&&error.message||"Unknown error")));
+          else toast("Secure event service is still loading. Refresh and try again.");
+        }else sendLocalEvent();
+      }
+    },true);
+  }
   function handleAction(action,el) {
     const chat=findChat(el.dataset.chatId)||currentChat();
     if(action==="rename-contact" && chat && chat.type==="person"){
@@ -1900,8 +1938,16 @@ function openSharedItemsDialog(chat,kind) {
     if(action==="pick-file"){openAttachmentPicker("file");return;}
     if(action==="pick-image"){openAttachmentPicker("image");return;}
     if(action==="pick-audio"){openAttachmentPicker("audio");return;}
-    if(action==="create-poll"){openDialog("Create poll","<div class='dialog-field'><label for='poll-question'>Question</label><input id='poll-question' maxlength='240' placeholder='Ask a question'></div><div class='dialog-field'><label for='poll-options'>Options (one per line)</label><textarea id='poll-options' rows='4' placeholder='Option 1&#10;Option 2'></textarea><small class='field-hint'>Add 2–10 different options.</small></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='send-poll'>Add poll</button>");return;}
-    if(action==="create-event"){openDialog("Create event","<div class='dialog-field'><label for='event-name'>Event name</label><input id='event-name' maxlength='120' placeholder='Event name'></div><div class='dialog-field'><label for='event-date'>Date</label><input id='event-date' type='date'></div><div class='dialog-field'><label for='event-time'>Time</label><input id='event-time' type='time'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='send-event'>Add event</button>");return;}
+    if(action==="create-poll"){
+      openDialog("Create poll","<div class='dialog-field'><label for='poll-question'>Question</label><input id='poll-question' maxlength='240' placeholder='Ask a question'></div><div class='dialog-field'><label for='poll-options'>Options (one per line)</label><textarea id='poll-options' rows='4' placeholder='Option 1&#10;Option 2'></textarea><small class='field-hint'>Add 2–10 different options.</small></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' type='button' data-dialog-action='send-poll'>Add poll</button>");
+      bindComposerDialogAction("send-poll");
+      return;
+    }
+    if(action==="create-event"){
+      openDialog("Create event","<div class='dialog-field'><label for='event-name'>Event name</label><input id='event-name' maxlength='120' placeholder='Event name'></div><div class='dialog-field'><label for='event-date'>Date</label><input id='event-date' type='date'></div><div class='dialog-field'><label for='event-time'>Time</label><input id='event-time' type='time'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' type='button' data-dialog-action='send-event'>Add event</button>");
+      bindComposerDialogAction("send-event");
+      return;
+    }
     if(action==="edit-profile"){editProfileDialog();return;}
     if(action==="edit-about"){editAboutDialog();return;}
     if(action==="wallpaper"){chooseWallpaperDialog();return;}
