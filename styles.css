@@ -1066,3 +1066,117 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:
   .wa-call-audio-stage h2{font-size:23px}
   .wa-call-audio-stage .wa-call-avatar{width:clamp(132px,39vw,164px);height:clamp(132px,39vw,164px);flex-basis:clamp(132px,39vw,164px)}
 }
+
+
+/* Four-digit, on-device WhatsApp app lock. */
+.wa-app-pin-lock{
+  position:fixed;
+  inset:0;
+  z-index:2147483000;
+  display:grid;
+  place-items:center;
+  overflow:auto;
+  padding:24px;
+  background:radial-gradient(ellipse at 50% 24%,#263b40 0%,#18272d 42%,#10191e 100%);
+  color:#f1f5f6;
+}
+.wa-app-pin-lock[hidden]{display:none!important}
+.wa-app-pin-card{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  width:min(390px,100%);
+  padding:32px 26px 26px;
+  border:1px solid #ffffff18;
+  border-radius:24px;
+  background:#202c33;
+  box-shadow:0 24px 70px #0006;
+  text-align:center;
+}
+.wa-app-pin-icon{
+  display:grid;
+  place-items:center;
+  width:62px;
+  height:62px;
+  margin:0 0 19px;
+  border-radius:20px;
+  background:#164e42;
+  color:#d9fdd3;
+}
+.wa-app-pin-icon svg{width:29px;height:29px;stroke:currentColor;fill:none;stroke-width:1.8}
+.wa-app-pin-kicker{
+  color:#75d8b4;
+  font-size:10px;
+  font-weight:750;
+  letter-spacing:1.7px;
+}
+.wa-app-pin-card h1{
+  margin:10px 0 7px;
+  color:#f1f5f6;
+  font-size:26px;
+  font-weight:650;
+}
+.wa-app-pin-card>p{
+  margin:0 0 25px;
+  color:#bdc9ce;
+  font-size:13px;
+}
+.wa-app-pin-card form{display:grid;width:100%;gap:10px}
+.wa-app-pin-label{
+  color:#d5dfe2;
+  font-size:12px;
+  font-weight:600;
+  text-align:left;
+}
+.wa-app-pin-card input{
+  width:100%;
+  height:58px;
+  border:1px solid #465960;
+  border-radius:13px;
+  outline:none;
+  background:#152228;
+  color:#fff;
+  font-size:26px;
+  font-weight:650;
+  letter-spacing:.8em;
+  text-align:center;
+}
+.wa-app-pin-card input:focus{border-color:#39b994;box-shadow:0 0 0 3px #39b99425}
+.wa-app-pin-submit{
+  min-height:48px;
+  margin-top:7px;
+  border:0;
+  border-radius:13px;
+  background:#00a884;
+  color:#fff;
+  font-size:14px;
+  font-weight:700;
+  cursor:pointer;
+}
+.wa-app-pin-submit:disabled{opacity:.65;cursor:wait}
+.wa-app-pin-error{
+  min-height:18px;
+  margin:0;
+  color:#ff9898;
+  font-size:12px;
+  line-height:1.45;
+  text-align:left;
+}
+.wa-app-pin-device-note{
+  margin-top:22px;
+  color:#a9b8bd;
+  font-size:11px;
+  line-height:1.55;
+  text-align:center;
+}
+.wa-app-pin-privacy-note{
+  margin:5px 0 0;
+  color:#72828a;
+  font-size:11px;
+  line-height:1.55;
+}
+.theme-dark .wa-app-pin-privacy-note{color:#aab8bd}
+@media(max-width:480px){
+  .wa-app-pin-lock{padding:18px}
+  .wa-app-pin-card{padding:28px 20px 22px;border-radius:20px}
+}
