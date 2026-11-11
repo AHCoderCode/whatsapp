@@ -1228,3 +1228,34 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:
 .wa-blocked-contact-copy small{color:#667781;font-size:11px}
 .theme-dark .wa-incoming-share-file,.theme-dark .wa-blocked-contact-row{border-color:#28363d}
 .theme-dark .wa-incoming-share-target:active{background:#1b3029}
+
+
+/* Minimized call stays visible while the signed-in chat app remains usable. */
+.wa-call-header-actions{display:flex;align-items:center;gap:10px}
+.wa-call-minimize{width:42px;height:42px;display:grid;place-items:center;border:1px solid #ffffff35;border-radius:50%;background:#303438;color:#f7fbfc;font-size:27px;line-height:1;cursor:pointer}
+.wa-call-minimize:active{background:#fff;color:#202124}
+.wa-call-persistent-audio{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important;left:-10000px!important;top:auto!important}
+.wa-call-mini{
+  position:fixed;z-index:10020;left:12px;right:12px;bottom:calc(82px + env(safe-area-inset-bottom));
+  display:flex;align-items:center;gap:9px;max-width:520px;min-height:68px;margin:0 auto;padding:9px 10px;
+  border:1px solid #41464b;border-radius:16px;background:#202124;color:#f7fbfc;
+  box-shadow:0 8px 32px #0007;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)
+}
+.wa-call-mini-person{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+.wa-call-mini-avatar{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;overflow:hidden;border-radius:50%;background:#075e54;color:#fff;font-size:13px;font-weight:700}
+.wa-call-mini-avatar img{width:100%;height:100%;object-fit:cover}
+.wa-call-mini-copy{display:flex;flex-direction:column;gap:3px;min-width:0}
+.wa-call-mini-copy strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:650}
+.wa-call-mini-copy small{color:#b6c2c7;font-size:11px;font-variant-numeric:tabular-nums}
+.wa-call-mini-restore,.wa-call-mini-end{min-height:40px;padding:0 12px;border:0;border-radius:10px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+.wa-call-mini-restore{background:#fff;color:#202124}
+.wa-call-mini-end{background:#df3e52;color:#fff}
+.wa-call-mini button:focus-visible,.wa-call-minimize:focus-visible{outline:3px solid #75b9ff;outline-offset:3px}
+@media(min-width:701px){
+  .wa-call-mini{left:auto;right:22px;bottom:22px;width:min(460px,calc(100vw - 44px));margin:0}
+}
+@media(max-width:380px){
+  .wa-call-mini{gap:6px;padding:8px}
+  .wa-call-mini-restore,.wa-call-mini-end{min-height:38px;padding:0 9px;font-size:11px}
+  .wa-call-mini-avatar{width:36px;height:36px;flex-basis:36px}
+}

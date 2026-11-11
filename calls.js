@@ -25,7 +25,7 @@
   let pendingRecoveryPromise=null;
   let incomingOffer=null, callChannel=null, channelUser="", pendingSignals=new Map(), seenSignals=new Set();
   let incomingPollTimer=null,incomingPollBusy=false,incomingPollUser="",incomingPollVisibilityHandler=null,incomingPollLastErrorAt=0;
-  let callTimer=null, ringTimer=null, callSetupTimer=null, callPushReminderTimer=null, callStart=0, callConnectedAt="", callConnectedId="", callConnectedPromise=null, elapsed=0, muted=false, cameraOff=false, speakerOn=false, busy=false;
+  let callTimer=null, ringTimer=null, callSetupTimer=null, callPushReminderTimer=null, callStart=0, callConnectedAt="", callConnectedId="", callConnectedPromise=null, elapsed=0, muted=false, cameraOff=false, speakerOn=false, callMinimized=false, busy=false;
   const PENDING_CALL_ACTION_KEY="wa_pending_native_call_action_v1";
   const DIRECT_FALLBACK_ICE_SERVERS=[{urls:"stun:stun.relay.metered.ca:80"},{urls:"stun:stun.cloudflare.com:3478"},{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun1.l.google.com:19302"}];
   function configureDirectFallback(connection){
@@ -376,7 +376,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     localStream=null;
     if(remoteStream)remoteStream.getTracks().forEach(t=>{try{t.stop();}catch(_){}});
     remoteStream=null;
-    activeCall=null;incomingOffer=null;phase="idle";busy=false;muted=false;cameraOff=false;speakerOn=false;elapsed=0;callStart=0;callConnectedAt="";callConnectedId="";callConnectedPromise=null;
+    activeCall=null;incomingOffer=null;phase="idle";busy=false;muted=false;cameraOff=false;speakerOn=false;callMinimized=false;elapsed=0;callStart=0;callConnectedAt="";callConnectedId="";callConnectedPromise=null;
     pendingSignals.clear();seenSignals.clear();
     directFallbackAttempted=false;directFallbackLocalStarted=false;directFallbackBusy=false;directFallbackRequested=false;directFallbackRequestSent=false;directFallbackRemoteReady=false;pendingDirectCandidates=[];
     root().innerHTML="";
@@ -387,9 +387,20 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     try{if(callOutputSource)callOutputSource.disconnect();if(callOutputGain)callOutputGain.disconnect();if(callOutputCompressor)callOutputCompressor.disconnect();}catch(_){}
     callOutputSource=null;callOutputGain=null;callOutputCompressor=null;callOutputStream=null;
   }
+  function updateCallOutputGain(){
+    const level=speakerOn?2.2:0.82;
+    if(callOutputGain){
+      try{
+        const now=callOutputAudioContext&&callOutputAudioContext.currentTime||0;
+        callOutputGain.gain.setTargetAtTime(level,now,0.045);
+      }catch(_){callOutputGain.gain.value=level;}
+    }
+    const audio=$("#wa-call-remote-audio");
+    if(audio&&!callOutputGain)audio.volume=speakerOn?1:0.42;
+  }
   async function attachRemoteCallAudio(element,stream){
     if(!element||!stream)return;
-    element.srcObject=stream;element.volume=1;element.muted=false;
+    element.srcObject=stream;element.volume=speakerOn?1:0.42;element.muted=false;
     const AudioContextClass=window.AudioContext||window.webkitAudioContext;
     if(!AudioContextClass){void element.play().catch(()=>{});return;}
     try{
@@ -399,7 +410,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
         const source=callOutputAudioContext.createMediaStreamSource(stream);
         const gain=callOutputAudioContext.createGain();
         const compressor=callOutputAudioContext.createDynamicsCompressor();
-        gain.gain.value=2.2;
+        gain.gain.value=speakerOn?2.2:0.82;
         compressor.threshold.value=-9;compressor.knee.value=6;compressor.ratio.value=12;
         compressor.attack.value=0.003;compressor.release.value=0.2;
         source.connect(gain);gain.connect(compressor);compressor.connect(callOutputAudioContext.destination);
@@ -420,6 +431,12 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     const waitingForOffer=phase==="incoming"&&acceptRequested;
     const incoming=phase==="incoming"&&!acceptRequested, video=activeCall.media_type==="video";
     const status=notice||(waitingForOffer?"Connecting…":incoming?"Incoming "+(video?"video":"voice")+" call":(activeCall.direction==="outgoing"&&(phase==="outgoing"||phase==="preparing"))?(activeCall.peerRinging?"Ringing…":"Calling…"):phase==="connecting"?"Connecting…":phase==="connected"?formatTime(elapsed):"Preparing call…");
+    if(callMinimized&&!incoming){
+      host.innerHTML="<section class='wa-call-mini' aria-label='Ongoing call'><div class='wa-call-mini-person'>"+callAvatarMarkup(peer,"wa-call-mini-avatar")+"<span class='wa-call-mini-copy'><strong>"+esc(peer.name||peer.username||"Contact")+"</strong><small class='wa-call-mini-time'>"+esc(phase==="connected"?formatTime(elapsed):status)+"</small></span></div><button class='wa-call-mini-restore' type='button' data-wa-call='restore' aria-label='Return to call'>Open call</button><button class='wa-call-mini-end' type='button' data-wa-call='end' aria-label='End call'>End</button><audio id='wa-call-remote-audio' class='wa-call-persistent-audio' autoplay playsinline></audio></section>";
+      const minimizedAudio=$("#wa-call-remote-audio");
+      if(remoteStream&&minimizedAudio)void attachRemoteCallAudio(minimizedAudio,remoteStream);
+      return;
+    }
     if(incoming){
       const waiting=!incomingOffer;
       if(!activeCall.notificationShown){activeCall.notificationShown=true;void notifyIncomingCall(activeCall,peer);}
@@ -427,9 +444,10 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       return;
     }
     host.innerHTML="<div class='wa-call-backdrop wa-call-fullscreen'><section class='wa-call-window "+(video?"video-call":"audio-call")+"' role='dialog' aria-modal='true' aria-label='"+(video?"Video call":"Voice call")+"'>"+
-      "<header class='wa-call-header "+(video?"video-call-header":"audio-call-header")+"'>"+(video?"<div class='wa-call-title'><span class='wa-call-status-dot "+(activeCall.direction==="outgoing"?(activeCall.peerRinging?"is-ringing":"is-calling"):phase==="connecting"?"is-connecting":"")+"'></span><div><strong>"+esc(peer.name||peer.username||"Contact")+"</strong><small>"+esc(status)+"</small></div></div>":"")+"<button class='wa-call-close' type='button' data-wa-call='end' aria-label='End call'>" + bridge.icon("x") + "</button></header>"+
-      (video?"<div class='wa-call-stage'><video class='wa-call-remote-video' id='wa-call-remote-video' autoplay playsinline></video><div class='wa-call-video-placeholder' id='wa-call-video-placeholder'>"+callAvatarMarkup(peer)+"<strong>"+esc(peer.name||peer.username||"Contact")+"</strong><span>"+esc(phase==="incoming"?"Incoming video call":phase==="connected"?"Waiting for video…":"Waiting for video…")+"</span></div><video class='wa-call-local-video' id='wa-call-local-video' autoplay muted playsinline></video></div>":
-      "<div class='wa-call-audio-stage'><h2>"+esc(peer.name||peer.username||"Contact")+"</h2>"+callAvatarMarkup(peer)+"<p>"+esc(status)+"</p><audio id='wa-call-remote-audio' autoplay playsinline></audio></div>")+
+      "<header class='wa-call-header "+(video?"video-call-header":"audio-call-header")+"'>"+(video?"<div class='wa-call-title'><span class='wa-call-status-dot "+(activeCall.direction==="outgoing"?(activeCall.peerRinging?"is-ringing":"is-calling"):phase==="connecting"?"is-connecting":"")+"'></span><div><strong>"+esc(peer.name||peer.username||"Contact")+"</strong><small>"+esc(status)+"</small></div></div>":"")+"<div class='wa-call-header-actions'><button class='wa-call-minimize' type='button' data-wa-call='minimize' aria-label='Minimize call' title='Minimize call'>−</button><button class='wa-call-close' type='button' data-wa-call='end' aria-label='End call'>" + bridge.icon("x") + "</button></div></header>"+
+      (video?"<div class='wa-call-stage'><video class='wa-call-remote-video' id='wa-call-remote-video' autoplay muted playsinline></video><div class='wa-call-video-placeholder' id='wa-call-video-placeholder'>"+callAvatarMarkup(peer)+"<strong>"+esc(peer.name||peer.username||"Contact")+"</strong><span>"+esc(phase==="incoming"?"Incoming video call":phase==="connected"?"Waiting for video…":"Waiting for video…")+"</span></div><video class='wa-call-local-video' id='wa-call-local-video' autoplay muted playsinline></video></div>":
+      "<div class='wa-call-audio-stage'><h2>"+esc(peer.name||peer.username||"Contact")+"</h2>"+callAvatarMarkup(peer)+"<p>"+esc(status)+"</p></div>")+
+      "<audio id='wa-call-remote-audio' class='wa-call-persistent-audio' autoplay playsinline></audio>"+
       "<div class='wa-call-security'><span>" + bridge.icon("lock") + "</span> "+(directFallbackAttempted?"WebRTC media · Encrypted direct fallback (network address may be visible)":"WebRTC media · TURN relay connection")+"</div>"+
       "<div class='wa-call-controls'>"+
       (waitingForOffer?"<button class='wa-call-control decline' type='button' data-wa-call='decline' aria-label='Cancel call acceptance'>" + bridge.icon("phone") + "<span>Cancel</span></button>":
@@ -441,7 +459,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       "</div><p class='wa-call-footnote'>Calls connect only when both people are online and have allowed microphone/camera access.</p></section></div>";
     const remoteVideo=$("#wa-call-remote-video"),localVideo=$("#wa-call-local-video"),remoteAudio=$("#wa-call-remote-audio");
     if(remoteStream){
-      if(remoteVideo)void attachRemoteCallAudio(remoteVideo,remoteStream);
+      if(remoteVideo){remoteVideo.srcObject=remoteStream;remoteVideo.muted=true;void remoteVideo.play().catch(()=>{});}
       if(remoteAudio)void attachRemoteCallAudio(remoteAudio,remoteStream);
     }
     if(localVideo&&localStream){localVideo.srcObject=localStream;void localVideo.play().catch(()=>{});}
@@ -460,6 +478,8 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     if(header&&phase==="connected")header.textContent=text;
     const stage=host.querySelector(".wa-call-audio-stage p");
     if(stage&&phase==="connected")stage.textContent=text;
+    const mini=host.querySelector(".wa-call-mini-time");
+    if(mini&&phase==="connected")mini.textContent=text;
   }
   function updateMuteButton(){
     const button=root().querySelector("[data-wa-call='mute']");
@@ -475,18 +495,29 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     button.classList.toggle("active",cameraOff);
     button.innerHTML=(cameraOff?bridge.icon("camera"):bridge.icon("video"))+"<span>"+(cameraOff?"Camera on":"Camera off")+"</span>";
   }
+  function updateSpeakerButton(){
+    const button=root().querySelector("[data-wa-call='speaker']");
+    if(!button)return;
+    button.classList.toggle("active",speakerOn);
+    button.setAttribute("aria-pressed",speakerOn?"true":"false");
+    button.setAttribute("aria-label",speakerOn?"Turn speaker off":"Turn speaker on");
+    button.innerHTML=bridge.icon("volume")+"<span>Speaker</span>";
+  }
   function toggleSpeaker(){
     speakerOn=!speakerOn;
     setNativeCallSpeaker(speakerOn);
-    const audio=$("#wa-call-remote-audio");
-    if(audio)audio.volume=1;
-    const button=root().querySelector("[data-wa-call='speaker']");
-    if(button){
-      button.classList.toggle("active",speakerOn);
-      button.setAttribute("aria-pressed",speakerOn?"true":"false");
-      button.setAttribute("aria-label",speakerOn?"Turn speaker off":"Turn speaker on");
-      button.innerHTML=bridge.icon("volume")+"<span>"+(speakerOn?"Speaker on":"Speaker")+"</span>";
-    }
+    updateCallOutputGain();
+    updateSpeakerButton();
+  }
+  function minimizeCall(){
+    if(!activeCall||phase==="incoming")return;
+    callMinimized=true;
+    renderCallOverlay();
+  }
+  function restoreCall(){
+    if(!activeCall)return;
+    callMinimized=false;
+    renderCallOverlay();
   }
   async function relayServers(callId){
     const client=db();if(!client)throw new Error("Supabase is not connected.");
@@ -1039,8 +1070,16 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     if(message)say(message);
     if(transitionError)say("The call ended on this phone, but the server could not confirm it. Check the internet connection.");
   }
+  function applyMuteState(){
+    const tracks=new Set();
+    if(localStream)localStream.getAudioTracks().forEach(track=>tracks.add(track));
+    if(pc)pc.getSenders().forEach(sender=>{if(sender.track&&sender.track.kind==="audio")tracks.add(sender.track);});
+    tracks.forEach(track=>{track.enabled=!muted;});
+  }
   function toggleMute(){
-    muted=!muted;if(localStream)localStream.getAudioTracks().forEach(t=>t.enabled=!muted);updateMuteButton();
+    muted=!muted;
+    applyMuteState();
+    updateMuteButton();
   }
   function toggleCamera(){
     cameraOff=!cameraOff;if(localStream)localStream.getVideoTracks().forEach(t=>t.enabled=!cameraOff);updateCameraButton();
@@ -1301,6 +1340,8 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       else if(callAction==="mute")toggleMute();
       else if(callAction==="camera")toggleCamera();
       else if(callAction==="speaker")toggleSpeaker();
+      else if(callAction==="minimize")minimizeCall();
+      else if(callAction==="restore")restoreCall();
     }
   },true);
   window.WhatsAppCalls={

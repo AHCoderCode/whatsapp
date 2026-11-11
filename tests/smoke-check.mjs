@@ -216,14 +216,37 @@ check("WebView attachment inputs remain clickable and native calls set audio mod
   includes(files.nativeActivity, "TYPE_BUILTIN_EARPIECE");
   excludes(files.nativeActivity, "TYPE_BUILTIN_SPEAKER) && manager.setCommunicationDevice(device)");
 });
-check("call speaker begins on the earpiece and has a compressed remote-audio boost", () => {
+check("call speaker starts in earpiece mode and uses separate speaker/earpiece output levels", () => {
   includes(files.calls, "speakerOn=false");
-  includes(files.calls, "gain.gain.value=2.2");
+  includes(files.calls, "gain.gain.value=speakerOn?2.2:0.82");
   includes(files.calls, "compressor.threshold.value=-9");
-  excludes(files.nativeActivity, "setStreamVolume(AudioManager.STREAM_VOICE_CALL");
   includes(files.calls, "createDynamicsCompressor()");
-  includes(files.calls, "element.volume=1");
-  excludes(files.calls, "audio.volume=speakerOn?1:.45");
+  includes(files.nativeActivity, "TYPE_BUILTIN_EARPIECE");
+  excludes(files.nativeActivity, "setStreamVolume(AudioManager.STREAM_VOICE_CALL");
+});
+check("minimized calls stay connected while chats remain accessible", () => {
+  includes(files.calls, "let callMinimized=false");
+  includes(files.calls, "data-wa-call='minimize'");
+  includes(files.calls, "data-wa-call='restore'");
+  includes(files.calls, "class='wa-call-mini'");
+  includes(files.calls, "class='wa-call-persistent-audio'");
+  includes(files.calls, "if(callMinimized&&!incoming)");
+  includes(files.css, ".wa-call-mini{");
+  includes(files.calls, "else if(callAction===\"minimize\")minimizeCall()");
+  includes(files.calls, "else if(callAction===\"restore\")restoreCall()");
+});
+check("speaker route changes both Android output route and call output gain", () => {
+  includes(files.calls, "setNativeCallSpeaker(speakerOn)");
+  includes(files.calls, "gain.gain.value=speakerOn?2.2:0.82");
+  includes(files.calls, "function updateCallOutputGain()");
+  includes(files.calls, 'button.innerHTML=bridge.icon("volume")+"<span>Speaker</span>"');
+  includes(files.nativeActivity, "TYPE_BUILTIN_EARPIECE");
+  includes(files.nativeActivity, "MODE_IN_COMMUNICATION");
+});
+check("mute disables every active local WebRTC microphone sender", () => {
+  includes(files.calls, "function applyMuteState()");
+  includes(files.calls, 'sender.track.kind==="audio"');
+  includes(files.calls, "tracks.forEach(track=>{track.enabled=!muted;})");
 });
 
 check("audio call screen centers the contact name, profile photo and live status", () => {
