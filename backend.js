@@ -1674,7 +1674,13 @@
       if (auth) auth.classList.add("hidden");
       if (root) root.classList.remove("hidden");
     }
-    if (boot) boot.hidden = true;
+    if (boot && !boot.hidden) {
+      boot.classList.add("is-leaving");
+      window.setTimeout(()=>{
+        boot.hidden=true;
+        boot.classList.remove("is-leaving");
+      },460);
+    }
     if (document.body) document.body.classList.remove("wa-booting");
     try { window.dispatchEvent(new Event("wa-startup-finished")); } catch (_) {}
   }

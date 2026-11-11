@@ -16,33 +16,58 @@
   <meta property="og:title" content="WhatsApp">
   <meta property="og:description" content="An installable messaging web app with account-based chats, contact requests, and voice/video calls.">
   <meta property="og:url" content="https://whatsapp-for.vercel.app/">
-  <meta property="og:image" content="https://whatsapp-for.vercel.app/icon.svg?v=whatsapp-secure-release-20261111a">
+  <meta property="og:image" content="https://whatsapp-for.vercel.app/icon.svg?v=whatsapp-secure-release-20261111b">
   <meta property="og:image:alt" content="WhatsApp app icon">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="WhatsApp Web">
   <meta name="twitter:description" content="An installable messaging web app with account-based chats and voice/video calls.">
   <meta name="twitter:image" content="https://whatsapp-for.vercel.app/icon-512.svg">
   <title>WhatsApp</title>
-  <link rel="icon" href="/icon.svg?v=whatsapp-secure-release-20261111a" type="image/svg+xml" sizes="any">
-  <link rel="shortcut icon" href="/icon.svg?v=whatsapp-secure-release-20261111a" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="/icon.svg?v=whatsapp-secure-release-20261111a">
-  <link rel="manifest" href="/manifest.webmanifest?v=whatsapp-secure-release-20261111a">
-  <link rel="stylesheet" href="/styles.css?v=whatsapp-secure-release-20261111a">
+  <link rel="icon" href="/icon.svg?v=whatsapp-secure-release-20261111b" type="image/svg+xml" sizes="any">
+  <link rel="shortcut icon" href="/icon.svg?v=whatsapp-secure-release-20261111b" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon.svg?v=whatsapp-secure-release-20261111b">
+  <link rel="manifest" href="/manifest.webmanifest?v=whatsapp-secure-release-20261111b">
+  <link rel="stylesheet" href="/styles.css?v=whatsapp-secure-release-20261111b">
   <style>
     body.wa-booting > :not(#boot-screen) { visibility: hidden !important; }
-    .boot-screen { position: fixed; inset: 0; z-index: 999999; display: grid; place-items: center; background: #f7fcf9; color: #111b21; font-family: "Segoe UI", Arial, sans-serif; }
-    .boot-screen[hidden] { display: none !important; }
-    .boot-card { display: flex; align-items: center; flex-direction: column; gap: 12px; padding: 28px; }
-    .boot-recovery-message { max-width: 320px; margin: 0; color: #54656d; font-size: 13px; line-height: 1.5; text-align: center; }
-    .boot-retry { border: 0; border-radius: 24px; padding: 11px 22px; background: #00a884; color: #fff; font: 600 14px "Segoe UI", Arial, sans-serif; cursor: pointer; }
-    .boot-retry:disabled { opacity: .7; cursor: wait; }
-
-    .boot-card img { display: block; width: 64px; height: 64px; }
-    .boot-card strong { font-size: 23px; font-weight: 600; letter-spacing: -0.4px; }
-    .boot-card span:not(.boot-spinner) { color: #667781; font-size: 13px; }
-    .boot-spinner { width: 24px; height: 24px; margin-top: 6px; border: 3px solid #d8eee3; border-top-color: #25d366; border-radius: 50%; animation: wa-boot-spin .8s linear infinite; }
-    @keyframes wa-boot-spin { to { transform: rotate(360deg); } }
-    @media (prefers-reduced-motion: reduce) { .boot-spinner { animation-duration: 2.4s; } }
+    .boot-screen{position:fixed;inset:0;z-index:999999;display:grid;place-items:center;overflow:hidden;padding:22px;background:radial-gradient(ellipse at 50% 42%,#123c31 0%,#0a2922 39%,#061b17 76%,#04130f 100%);color:#f4fff9;font-family:"Segoe UI",Arial,sans-serif;opacity:1;transition:opacity .46s ease,visibility .46s ease}
+    .boot-screen[hidden]{display:none!important}
+    .boot-screen:before{content:"";position:absolute;width:min(88vw,760px);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,#19c77c22 0%,#0ca67812 40%,transparent 70%);filter:blur(3px);animation:boot-ambient 5s ease-in-out infinite alternate}
+    .boot-screen:after{content:"";position:absolute;inset:0;pointer-events:none;opacity:.18;background-image:linear-gradient(#bfffe30b 1px,transparent 1px),linear-gradient(90deg,#bfffe30b 1px,transparent 1px);background-size:42px 42px;mask-image:radial-gradient(ellipse at center,#000 12%,transparent 78%)}
+    .boot-screen.is-leaving{opacity:0;visibility:hidden;pointer-events:none}
+    .boot-card{position:relative;z-index:1;display:flex;align-items:center;flex-direction:column;gap:0;width:min(430px,100%);padding:24px 12px;text-align:center;animation:boot-card-enter .8s cubic-bezier(.18,.8,.2,1) both}
+    .boot-visual{position:relative;width:206px;height:206px;margin:0 auto 13px;display:grid;place-items:center}
+    .boot-orbit-ring{position:absolute;inset:11px;border:1px solid #9df5cf35;border-radius:50%;animation:boot-orbit 13s linear infinite}
+    .boot-orbit-ring:before,.boot-orbit-ring:after{content:"";position:absolute;width:7px;height:7px;border-radius:50%;background:#4fe5a2;box-shadow:0 0 16px #4fe5a2}
+    .boot-orbit-ring:before{top:25px;left:28px}.boot-orbit-ring:after{right:18px;bottom:39px;width:5px;height:5px;background:#b8ffe0}
+    .boot-orbit-ring.ring-two{inset:28px;border-style:dashed;border-color:#b6f8d52b;animation:boot-orbit 19s linear infinite reverse}
+    .boot-logo-glow{position:absolute;width:150px;height:150px;border-radius:50%;background:#18c77a24;filter:blur(23px);animation:boot-glow 2.8s ease-in-out infinite}
+    .boot-logo-shell{position:relative;z-index:2;width:106px;height:106px;display:grid;place-items:center;border-radius:34px;border:1px solid #d2ffe44a;background:linear-gradient(145deg,#f8fff9 0%,#e4fff0 100%);box-shadow:0 0 0 10px #8af0bd0d,0 18px 65px #0006,0 0 45px #25d36645;animation:boot-logo-float 3.2s ease-in-out infinite}
+    .boot-logo-shell img{display:block;width:72px;height:72px;object-fit:contain;filter:drop-shadow(0 4px 12px #0b8d5b25)}
+    .boot-float-chip{position:absolute;z-index:3;display:grid;place-items:center;width:39px;height:39px;border:1px solid #c8fce434;border-radius:14px;background:#143f34cc;box-shadow:0 8px 25px #0004;color:#d9ffec;font-size:18px;backdrop-filter:blur(10px);animation:boot-chip-float 3.6s ease-in-out infinite}
+    .boot-float-chip.one{top:18px;right:15px}.boot-float-chip.two{bottom:24px;left:12px;animation-delay:-1.1s}.boot-float-chip.three{right:4px;bottom:31px;animation-delay:-2s}
+    .boot-kicker{margin:0 0 9px;color:#74e6ad;font-size:10px;font-weight:800;letter-spacing:3.5px;text-transform:uppercase}
+    .boot-card strong{font-size:clamp(34px,7vw,43px);font-weight:750;letter-spacing:-1.7px;line-height:1.06;background:linear-gradient(110deg,#fff 10%,#c8ffe1 48%,#fff 84%);background-clip:text;-webkit-background-clip:text;color:transparent}
+    .boot-tagline{margin:10px 0 26px;color:#b7d8ca;font-size:13px;letter-spacing:.2px}
+    .boot-status-row{display:flex;align-items:center;justify-content:center;gap:9px;min-height:20px;color:#e4f7ed;font-size:12px}
+    .boot-live-dot{width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:#42e69a;box-shadow:0 0 12px #42e69a;animation:boot-live 1.6s ease-in-out infinite}
+    #boot-status{color:#e4f7ed!important;font-size:12px!important}
+    .boot-progress{position:relative;overflow:hidden;width:min(220px,70vw);height:3px;margin:14px 0 0;border-radius:9px;background:#a7dcc21c}
+    .boot-progress i{position:absolute;inset:0 auto 0 -45%;width:44%;border-radius:9px;background:linear-gradient(90deg,transparent,#46e6a0,#c9ffe3,transparent);box-shadow:0 0 13px #46e6a077;animation:boot-progress 1.55s ease-in-out infinite}
+    .boot-recovery-message{max-width:320px;margin:18px 0 0;color:#c4ded2;font-size:12px;line-height:1.55;text-align:center}
+    .boot-retry{margin-top:14px;border:1px solid #aff6d047;border-radius:24px;padding:11px 22px;background:#13a66d;color:#fff;font:650 13px "Segoe UI",Arial,sans-serif;cursor:pointer;box-shadow:0 7px 22px #00a76a33}
+    .boot-retry:disabled{opacity:.7;cursor:wait}
+    .boot-spinner{display:none}
+    @keyframes boot-card-enter{from{opacity:0;transform:translateY(18px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+    @keyframes boot-orbit{to{transform:rotate(360deg)}}
+    @keyframes boot-glow{from{transform:scale(.88);opacity:.55}to{transform:scale(1.13);opacity:1}}
+    @keyframes boot-logo-float{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-7px) rotate(2deg)}}
+    @keyframes boot-chip-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+    @keyframes boot-live{0%,100%{opacity:.55;transform:scale(.85)}50%{opacity:1;transform:scale(1.12)}}
+    @keyframes boot-progress{0%{left:-45%}100%{left:110%}}
+    @keyframes boot-ambient{from{transform:scale(.88);opacity:.55}to{transform:scale(1.12);opacity:1}}
+    @media(prefers-reduced-motion:reduce){.boot-screen:before,.boot-card,.boot-orbit-ring,.boot-logo-shell,.boot-logo-glow,.boot-float-chip,.boot-live-dot,.boot-progress i{animation:none!important}.boot-screen,.boot-screen.is-leaving{transition:none!important}}
+    @media(max-width:420px){.boot-visual{width:180px;height:180px}.boot-logo-shell{width:96px;height:96px;border-radius:30px}.boot-logo-shell img{width:65px;height:65px}.boot-tagline{margin-bottom:22px}}
   </style>
   <script>
     /* Compatibility aliases for older cached handlers that referenced ESC/Escape. */
@@ -54,9 +79,17 @@
 <body class="wa-booting">
 <div id="boot-screen" class="boot-screen" role="status" aria-live="polite">
   <div class="boot-card">
-    <img src="/icon.svg?v=whatsapp-secure-release-20261111a" alt="" width="64" height="64">
+    <div class="boot-visual" aria-hidden="true">
+      <span class="boot-orbit-ring"></span><span class="boot-orbit-ring ring-two"></span>
+      <span class="boot-logo-glow"></span>
+      <span class="boot-float-chip one">✦</span><span class="boot-float-chip two">💬</span><span class="boot-float-chip three">✓</span>
+      <span class="boot-logo-shell"><img src="/icon.svg?v=whatsapp-secure-release-20261111b" alt="" width="72" height="72"></span>
+    </div>
+    <div class="boot-kicker">MESSAGING · REIMAGINED</div>
     <strong>WhatsApp</strong>
-    <span id="boot-status">Checking your session…</span>
+    <p class="boot-tagline">Your conversations. Your people. All connected.</p>
+    <div class="boot-status-row"><span class="boot-live-dot" aria-hidden="true"></span><span id="boot-status">Checking your session…</span></div>
+    <div class="boot-progress" aria-hidden="true"><i></i></div>
     <p id="boot-recovery-message" class="boot-recovery-message" hidden></p>
     <button id="boot-retry" class="boot-retry" type="button" hidden>Retry connection</button>
     <span id="boot-spinner" class="boot-spinner" aria-hidden="true"></span>
@@ -133,7 +166,7 @@
   <div class="auth-top-band"></div>
   <div class="auth-layout">
     <section class="auth-intro">
-      <img src="/icon.svg?v=whatsapp-secure-release-20261111a" alt="" class="auth-logo">
+      <img src="/icon.svg?v=whatsapp-secure-release-20261111b" alt="" class="auth-logo">
       <div class="auth-brand">WhatsApp</div>
       <h1>Message privately.<br>Stay connected.</h1>
       <p>A familiar messaging experience with account-based chats, contact requests and secure voice or video calls.</p>
@@ -160,7 +193,7 @@
   <div class="app-workspace">
     <aside class="app-rail" aria-label="Main navigation">
       <nav class="rail-group">
-        <div class="rail-brand" title="WhatsApp" aria-label="WhatsApp"><img src="/icon.svg?v=whatsapp-secure-release-20261111a" alt="WhatsApp"></div>
+        <div class="rail-brand" title="WhatsApp" aria-label="WhatsApp"><img src="/icon.svg?v=whatsapp-secure-release-20261111b" alt="WhatsApp"></div>
         <button class="rail-button active" data-view="chats" title="Chats" aria-label="Chats"><svg><use href="#i-chat"/></svg><span class="nav-count" id="rail-chat-count"></span></button>
         <button class="rail-button" data-view="updates" title="Updates" aria-label="Updates"><svg><use href="#i-status"/></svg></button>
         <button class="rail-button" data-view="communities" title="Communities" aria-label="Communities"><svg><use href="#i-communities"/></svg></button>
@@ -179,7 +212,7 @@
     </aside>
     <section class="chat-sidebar" id="chat-sidebar" aria-label="Chats sidebar">
       <header class="sidebar-header">
-        <div class="mobile-brand" aria-label="WhatsApp"><img class="mobile-brand-icon" src="/icon.svg?v=whatsapp-secure-release-20261111a" alt=""><span>WhatsApp</span></div>
+        <div class="mobile-brand" aria-label="WhatsApp"><img class="mobile-brand-icon" src="/icon.svg?v=whatsapp-secure-release-20261111b" alt=""><span>WhatsApp</span></div>
         <h1 id="sidebar-title">Chats</h1>
         <div class="sidebar-actions desktop-only">
           <button class="icon-button" data-action="install-app" title="Install app" aria-label="Install app"><svg><use href="#i-download"/></svg></button>
@@ -209,7 +242,7 @@
         <button class="archived-row" data-view="archived"><svg><use href="#i-archive"/></svg><span>Archived</span><span class="archived-number" id="archived-count">0</span></button>
         <div id="chat-list" role="list" aria-label="Conversations"></div>
       </div>
-      <div class="desktop-download"><img src="/icon.svg?v=whatsapp-secure-release-20261111a" alt=""><div><strong>Get WhatsApp for desktop</strong><span>Make calls, share your screen and get more done</span></div></div>
+      <div class="desktop-download"><img src="/icon.svg?v=whatsapp-secure-release-20261111b" alt=""><div><strong>Get WhatsApp for desktop</strong><span>Make calls, share your screen and get more done</span></div></div>
     </section>
     <main class="main-pane" id="main-pane" aria-label="Selected conversation or section">
       <div class="welcome-pane">
@@ -231,13 +264,13 @@
 </div>
 <div id="overlay-root"></div>
 <div id="toast-root" aria-live="polite"></div>
-<script src="/app.js?v=whatsapp-secure-release-20261111a" defer></script>
- <script src="/feature-gaps.js?v=whatsapp-secure-release-20261111a" defer></script>
+<script src="/app.js?v=whatsapp-secure-release-20261111b" defer></script>
+ <script src="/feature-gaps.js?v=whatsapp-secure-release-20261111b" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-<script src="/backend.js?v=whatsapp-secure-release-20261111a" defer></script>
-<script src="/calls.js?v=whatsapp-secure-release-20261111a" defer></script>
- <script src="/group-calls.js?v=whatsapp-secure-release-20261111a" defer></script>
-<script src="/updater.js?v=whatsapp-secure-release-20261111a" defer></script>
+<script src="/backend.js?v=whatsapp-secure-release-20261111b" defer></script>
+<script src="/calls.js?v=whatsapp-secure-release-20261111b" defer></script>
+ <script src="/group-calls.js?v=whatsapp-secure-release-20261111b" defer></script>
+<script src="/updater.js?v=whatsapp-secure-release-20261111b" defer></script>
 <script>
 (function(){
   window.waShowStartupRecovery = function(message){
@@ -269,7 +302,7 @@ if("serviceWorker" in navigator){
   // Do not reload an authenticated page when the service worker takes control.
   // Cold-start notification actions are persisted and restored by the auth bootstrap.
   window.addEventListener("load",()=>{
-    navigator.serviceWorker.register("/sw.js?v=whatsapp-secure-release-20261111a",{updateViaCache:"none"})
+    navigator.serviceWorker.register("/sw.js?v=whatsapp-secure-release-20261111b",{updateViaCache:"none"})
       .then(registration=>registration.update().catch(()=>{}))
       .catch(()=>{});
   });

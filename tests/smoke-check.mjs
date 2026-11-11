@@ -79,10 +79,10 @@ check("media, privacy, subgroup and synced-list handlers are present", () => {
   includes(files.app, "WhatsAppFeatureGaps.onBackendData");
 });
 check("feature-gap module is in the app shell cache", () => {
-  includes(files.html, "/feature-gaps.js?v=whatsapp-secure-release-20261111a");
-  includes(files.sw, "/feature-gaps.js?v=whatsapp-secure-release-20261111a");
-  includes(files.html, "/group-calls.js?v=whatsapp-secure-release-20261111a");
-  includes(files.sw, "/group-calls.js?v=whatsapp-secure-release-20261111a");
+  includes(files.html, "/feature-gaps.js?v=whatsapp-secure-release-20261111b");
+  includes(files.sw, "/feature-gaps.js?v=whatsapp-secure-release-20261111b");
+  includes(files.html, "/group-calls.js?v=whatsapp-secure-release-20261111b");
+  includes(files.sw, "/group-calls.js?v=whatsapp-secure-release-20261111b");
 });
 check("inline HTML scripts parse", () => {
   const scripts = [...files.html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
@@ -93,10 +93,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-secure-release-20261111a");
-  includes(files.sw, "whatsapp-secure-release-20261111a");
-  includes(files.manifest, "whatsapp-secure-release-20261111a");
-  includes(files.sw, "whatsapp-final-shell-v71");
+  includes(files.html, "whatsapp-secure-release-20261111b");
+  includes(files.sw, "whatsapp-secure-release-20261111b");
+  includes(files.manifest, "whatsapp-secure-release-20261111b");
+  includes(files.sw, "whatsapp-final-shell-v72");
 });
 check("mobile settings use a full-width account detail pane", () => {
   includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
@@ -657,6 +657,29 @@ check("background call alerts always show, retry transient push errors, and can 
   includes(files.push, "setTimeout(resolve, delaySeconds * 1000)");
   includes(files.push, "[whatsapp-push] Incoming-call delivery result");
   includes(files.push, "[whatsapp-push] Background call-test result");
+});
+check("animated WhatsApp startup intro retains the existing session recovery and exits only after startup", () => {
+  includes(files.html, 'class="boot-visual"');
+  includes(files.html, 'class="boot-orbit-ring ring-two"');
+  includes(files.html, 'class="boot-progress"');
+  includes(files.html, 'id="boot-recovery-message"');
+  includes(files.html, 'class="boot-screen is-leaving"') === false;
+  includes(files.html, "boot-progress 1.55s ease-in-out infinite");
+  includes(files.backend, 'boot.classList.add("is-leaving")');
+  includes(files.backend, 'window.dispatchEvent(new Event("wa-startup-finished"))');
+});
+check("Add contact opens account-directory search from the attachment popup", () => {
+  includes(files.app, '{icon:"user-plus",label:"Add contact",action:"find-friends"}');
+  includes(files.app, 'if(action==="find-friends"){createNewChatDialog();return;}');
+  includes(files.app, 'function createNewChatDialog()');
+  includes(files.app, 'id="friend-search-submit"');
+});
+check("speaker and microphone selected states remain white only while active", () => {
+  includes(files.calls, 'button.classList.toggle("active",muted)');
+  includes(files.calls, 'button.classList.toggle("active",speakerOn)');
+  includes(files.css, '.wa-call-control[data-wa-call="mute"].active');
+  includes(files.css, '.wa-call-control[data-wa-call="speaker"].active');
+  includes(files.css, 'background:#fff!important');
 });
 check("audio-call Speaker and Mute buttons expose enabled state and white selection styling", () => {
   includes(files.calls, "aria-pressed=");
