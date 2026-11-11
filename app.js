@@ -1114,7 +1114,7 @@
     if(title==="Test call alert"){void testCallAlert();return;}
     if(title==="Ringtone"){openRingtoneDialog();return;}
     if(title==="Theme"){state.settings.dark=!state.settings.dark;saveState();applySettings();renderSettings();toast("Theme updated.");return;}
-    const settingByTitle={"Read receipts":"readReceipts","Keep chats archived":"keepArchived","Enter is send":"enterToSend","Media visibility":"mediaVisibility","App lock":"appLock","Reduce motion":"reduceMotion","Keyboard navigation":"keyboardNav","High contrast":"highContrast","Spell check":"spellcheck","Reaction notifications":"reactionNotifications","Security notifications":"securityNotifications","Messages":"messageNotifications","Groups":"groupNotifications","Calls":"callNotifications"};
+    const settingByTitle={"Read receipts":"readReceipts","Keep chats archived":"keepArchived","Enter is send":"enterToSend","Media visibility":"mediaVisibility","Reduce motion":"reduceMotion","Keyboard navigation":"keyboardNav","High contrast":"highContrast","Spell check":"spellcheck","Reaction notifications":"reactionNotifications","Security notifications":"securityNotifications","Messages":"messageNotifications","Groups":"groupNotifications","Calls":"callNotifications"};
     if(settingByTitle[title]){
       const key=settingByTitle[title];
       state.settings[key]=!state.settings[key];
