@@ -58,7 +58,7 @@
       ["status","Status","Manage status privacy.","My contacts"],
       ["checks","Read receipts","Show read receipts in one-to-one chats.","toggle"],
       ["users","Groups","Choose who can add you to groups.","My contacts"],
-      ["lock","App lock","Require a lock to open the app.","toggle"],
+      ["lock","App lock","Require a four-digit PIN when WhatsApp opens or returns to the foreground.","button"],
       ["clock","Disappearing messages","Set a default message timer.","Off"]
     ],
     chats:[
@@ -295,6 +295,7 @@
   }
   function logout() {
     try { localStorage.removeItem(SESSION_KEY); } catch (_) {}
+    releaseAppPinLock();
     currentUser = null; state = null; selectedChatId = null; view = "chats";
     app.classList.add("hidden"); auth.classList.remove("hidden"); renderAuth("login");
   }
@@ -912,7 +913,204 @@
   }
   function openRingtoneDialog(){const api=window.WhatsAppCalls,info=api&&api.getRingtoneInfo?api.getRingtoneInfo():{name:"Built-in loud ringtone",volume:300},volume=Math.max(25,Math.min(300,Number(info.volume)||300));const body="<p class='screen-description'>Choose the sound this device plays for incoming calls. MP3 files are saved locally in this browser and are not uploaded to your account.</p>"+"<div class='wa-ringtone-current'><span class='wa-ringtone-current-icon'>"+icon("phone")+"</span><span><small>Current ringtone</small><strong id='wa-ringtone-current-name'>"+esc(info.name||"Built-in loud ringtone")+"</strong></span></div>"+"<div class='dialog-field wa-ringtone-volume-field'><label for='wa-ringtone-volume'>Ringtone volume <strong id='wa-ringtone-volume-label'>"+volume+"%</strong></label><input id='wa-ringtone-volume' type='range' min='25' max='300' step='5' value='"+volume+"'><small>300% boosts the ringtone in the app’s audio chain with compression to reduce clipping. Your phone's media volume still controls final loudness.</small></div>"+"<p class='screen-description'>When WhatsApp is closed, your phone uses its normal notification sound and vibration; browsers cannot force a custom MP3 to play in the background on every device. A powered-off phone cannot receive a web call.</p>"+"<input id='wa-ringtone-file-input' type='file' accept='.mp3,audio/mpeg' hidden>";const footer="<button class='secondary-button' data-action='use-default-ringtone'>Use built-in</button>"+"<button class='secondary-button' data-action='preview-ringtone'>Test ringtone</button>"+"<button class='primary-button' data-action='select-ringtone-file'>Choose MP3</button>"+"<button class='secondary-button' data-action='close-dialog'>Done</button>";openDialog("Incoming call ringtone",body,footer);}
 
+
+  const APP_PIN_ITERATIONS=210000;
+  let appPinOverlay=null,appPinLocked=false,appPinSubmitting=false;
+  function appPinStorageKey(username){
+    const account=normalizeUsername(username||currentUser&&currentUser.username||"");
+    return "wa_device_app_pin_v1_"+(account||"default");
+  }
+  function readAppPinConfig(username){
+    try{
+      const value=JSON.parse(localStorage.getItem(appPinStorageKey(username))||"null");
+      if(!value||value.version!==1||typeof value.salt!=="string"||typeof value.hash!=="string"||!Number.isInteger(value.iterations)||value.iterations<100000||value.iterations>500000)return null;
+      return value;
+    }catch(_){return null;}
+  }
+  function hasAppPinConfigured(username){return !!readAppPinConfig(username);}
+  function bytesToBase64(bytes){
+    let binary="";
+    for(let i=0;i<bytes.length;i++)binary+=String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  }
+  function base64ToBytes(value){
+    const binary=atob(value);
+    const bytes=new Uint8Array(binary.length);
+    for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+    return bytes;
+  }
+  async function deriveAppPinHash(pin,salt,iterations){
+    if(!window.crypto||!window.crypto.subtle||!window.crypto.getRandomValues)throw new Error("This browser does not support secure on-device PIN storage. Update your browser and try again.");
+    const material=await window.crypto.subtle.importKey("raw",new TextEncoder().encode(pin),"PBKDF2",false,["deriveBits"]);
+    const bits=await window.crypto.subtle.deriveBits({name:"PBKDF2",salt:base64ToBytes(salt),iterations,hash:"SHA-256"},material,256);
+    return bytesToBase64(new Uint8Array(bits));
+  }
+  function constantTimePinCompare(left,right){
+    if(typeof left!=="string"||typeof right!=="string"||left.length!==right.length)return false;
+    let difference=0;
+    for(let i=0;i<left.length;i++)difference|=left.charCodeAt(i)^right.charCodeAt(i);
+    return difference===0;
+  }
+  async function createAppPinConfig(pin){
+    const saltBytes=new Uint8Array(16);
+    window.crypto.getRandomValues(saltBytes);
+    const salt=bytesToBase64(saltBytes);
+    const hash=await deriveAppPinHash(pin,salt,APP_PIN_ITERATIONS);
+    return {version:1,salt,hash,iterations:APP_PIN_ITERATIONS,updatedAt:new Date().toISOString()};
+  }
+  async function verifyAppPinCode(pin,config){
+    if(!config||!/^\d{4}$/.test(pin))return false;
+    const actual=await deriveAppPinHash(pin,config.salt,config.iterations);
+    return constantTimePinCompare(actual,config.hash);
+  }
+  function appPinAttemptKey(){return appPinStorageKey()+"_attempts";}
+  function readAppPinAttempts(){
+    try{
+      const saved=JSON.parse(localStorage.getItem(appPinAttemptKey())||"null");
+      if(!saved||!Number.isInteger(saved.failures)||!Number.isFinite(saved.lockedUntil))return {failures:0,lockedUntil:0};
+      return saved;
+    }catch(_){return {failures:0,lockedUntil:0};}
+  }
+  function writeAppPinAttempts(value){try{localStorage.setItem(appPinAttemptKey(),JSON.stringify(value));}catch(_){}}
+  function setAppPinInert(locked){
+    [app,auth,overlayRoot,toastRoot,document.getElementById("call-overlay-root")].forEach(element=>{
+      if(element)element.inert=!!locked;
+    });
+  }
+  function appPinError(message){
+    const error=appPinOverlay&&appPinOverlay.querySelector("#wa-app-pin-error");
+    if(error)error.textContent=message||"";
+  }
+  function showAppPinLock(){
+    if(!hasAppPinConfigured()||!currentUser||!state){releaseAppPinLock();return;}
+    appPinLocked=true;
+    setAppPinInert(true);
+    if(!appPinOverlay){
+      appPinOverlay=document.createElement("section");
+      appPinOverlay.id="wa-app-pin-lock";
+      appPinOverlay.className="wa-app-pin-lock";
+      appPinOverlay.setAttribute("role","dialog");
+      appPinOverlay.setAttribute("aria-modal","true");
+      appPinOverlay.setAttribute("aria-labelledby","wa-app-pin-title");
+      appPinOverlay.innerHTML="<div class='wa-app-pin-card'><span class='wa-app-pin-icon'>"+icon("lock")+"</span><span class='wa-app-pin-kicker'>PRIVATE APP LOCK</span><h1 id='wa-app-pin-title'>Enter your PIN</h1><p>Unlock WhatsApp to continue.</p><form id='wa-app-pin-form' autocomplete='off'><label class='wa-app-pin-label' for='wa-app-pin-input'>Four-digit PIN</label><input id='wa-app-pin-input' type='password' inputmode='numeric' pattern='[0-9]*' maxlength='4' autocomplete='off' autocapitalize='off' spellcheck='false' aria-describedby='wa-app-pin-error' placeholder='••••' required><p id='wa-app-pin-error' class='wa-app-pin-error' role='alert'></p><button class='wa-app-pin-submit' type='submit'>Unlock</button></form><small class='wa-app-pin-device-note'>This PIN is saved on this device only. It is not your account password.</small></div>";
+      document.body.appendChild(appPinOverlay);
+      const form=appPinOverlay.querySelector("#wa-app-pin-form");
+      const input=appPinOverlay.querySelector("#wa-app-pin-input");
+      input.addEventListener("input",()=>{input.value=input.value.replace(/\D/g,"").slice(0,4);});
+      form.addEventListener("submit",event=>{
+        event.preventDefault();
+        void submitAppPin(input.value);
+      });
+    }
+    appPinOverlay.hidden=false;
+    appPinError("");
+    const input=appPinOverlay.querySelector("#wa-app-pin-input");
+    if(document.visibilityState!=="hidden")window.setTimeout(()=>{if(appPinLocked&&appPinOverlay&&!appPinOverlay.hidden)input.focus({preventScroll:true});},30);
+  }
+  function releaseAppPinLock(){
+    appPinLocked=false;appPinSubmitting=false;
+    if(appPinOverlay){appPinOverlay.hidden=true;const input=appPinOverlay.querySelector("#wa-app-pin-input");if(input)input.value="";}
+    setAppPinInert(false);
+  }
+  function lockAppForBackground(){
+    if(currentUser&&state&&hasAppPinConfigured())showAppPinLock();
+  }
+  async function submitAppPin(pin){
+    if(!appPinLocked||appPinSubmitting)return;
+    const input=appPinOverlay&&appPinOverlay.querySelector("#wa-app-pin-input");
+    const button=appPinOverlay&&appPinOverlay.querySelector(".wa-app-pin-submit");
+    if(!/^\d{4}$/.test(pin)){appPinError("Enter all four digits.");if(input)input.focus();return;}
+    const attempt=readAppPinAttempts(),now=Date.now();
+    if(attempt.lockedUntil>now){
+      appPinError("Too many attempts. Try again in "+Math.ceil((attempt.lockedUntil-now)/1000)+" seconds.");
+      return;
+    }
+    appPinSubmitting=true;if(button){button.disabled=true;button.textContent="Checking…";}
+    try{
+      const config=readAppPinConfig();
+      if(!config){releaseAppPinLock();return;}
+      if(await verifyAppPinCode(pin,config)){
+        writeAppPinAttempts({failures:0,lockedUntil:0});
+        releaseAppPinLock();
+        return;
+      }
+      const failures=attempt.failures+1;
+      const lockedUntil=failures>=5?Date.now()+30000:0;
+      writeAppPinAttempts({failures:lockedUntil?0:failures,lockedUntil});
+      appPinError(lockedUntil?"Too many incorrect PINs. Try again in 30 seconds.":"Incorrect PIN. "+(5-failures)+" attempt(s) remaining before a short lockout.");
+      if(input){input.value="";input.focus();}
+    }catch(error){
+      appPinError(String(error&&error.message||"PIN verification failed. Try again."));
+    }finally{
+      appPinSubmitting=false;
+      if(button){button.disabled=false;button.textContent="Unlock";}
+    }
+  }
+  function syncAppPinSetting(){
+    if(!state)return;
+    state.settings.appLock=hasAppPinConfigured();
+    saveState();
+  }
+  function openAppLockDialog(){
+    const enabled=hasAppPinConfigured();
+    const body=enabled
+      ? "<p class='screen-description'>App lock is enabled on this device. Enter your current PIN before changing or removing it.</p><div class='dialog-field'><label for='app-pin-current'>Current four-digit PIN</label><input id='app-pin-current' type='password' inputmode='numeric' pattern='[0-9]*' maxlength='4' autocomplete='off' placeholder='••••'></div><div class='dialog-field'><label for='app-pin-new'>New four-digit PIN</label><input id='app-pin-new' type='password' inputmode='numeric' pattern='[0-9]*' maxlength='4' autocomplete='new-password' placeholder='••••'></div><div class='dialog-field'><label for='app-pin-confirm'>Confirm new PIN</label><input id='app-pin-confirm' type='password' inputmode='numeric' pattern='[0-9]*' maxlength='4' autocomplete='new-password' placeholder='••••'></div>"
+      : "<p class='screen-description'>Create a four-digit PIN. WhatsApp will ask for it whenever this app is opened and when you return after switching to another app.</p><div class='dialog-field'><label for='app-pin-new'>Four-digit PIN</label><input id='app-pin-new' type='password' inputmode='numeric' pattern='[0-9]*' maxlength='4' autocomplete='new-password' placeholder='••••'></div><div class='dialog-field'><label for='app-pin-confirm'>Confirm four-digit PIN</label><input id='app-pin-confirm' type='password' inputmode='numeric' pattern='[0-9]*' maxlength='4' autocomplete='new-password' placeholder='••••'></div>";
+    const footer=enabled
+      ? "<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='danger-button' data-dialog-action='disable-app-pin'>Turn off</button><button class='primary-button' data-dialog-action='change-app-pin'>Change PIN</button>"
+      : "<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='enable-app-pin'>Enable app lock</button>";
+    openDialog("App lock",body+"<p class='wa-app-pin-privacy-note'>Your PIN verifier is stored locally on this device and is never sent to the WhatsApp server. This is an app privacy lock, not account-password or device encryption.</p>",footer);
+    ["app-pin-current","app-pin-new","app-pin-confirm"].forEach(id=>{
+      const input=$("#"+id);
+      if(input)input.addEventListener("input",()=>{input.value=input.value.replace(/\D/g,"").slice(0,4);});
+    });
+  }
+  async function saveAppPinFromDialog(){
+    const pin=String($("#app-pin-new")&&$("#app-pin-new").value||"");
+    const confirm=String($("#app-pin-confirm")&&$("#app-pin-confirm").value||"");
+    if(!/^\d{4}$/.test(pin)){toast("Enter exactly four digits for the PIN.");return;}
+    if(pin!==confirm){toast("The PIN entries do not match.");return;}
+    try{
+      const config=await createAppPinConfig(pin);
+      localStorage.setItem(appPinStorageKey(),JSON.stringify(config));
+      syncAppPinSetting();closeDialog();renderSettings();
+      toast("Four-digit app lock enabled on this device.");
+    }catch(error){toast(String(error&&error.message||"Could not enable app lock."));}
+  }
+  async function changeAppPinFromDialog(){
+    const current=String($("#app-pin-current")&&$("#app-pin-current").value||"");
+    const pin=String($("#app-pin-new")&&$("#app-pin-new").value||"");
+    const confirm=String($("#app-pin-confirm")&&$("#app-pin-confirm").value||"");
+    const config=readAppPinConfig();
+    if(!/^\d{4}$/.test(current)){toast("Enter your current four-digit PIN.");return;}
+    if(!/^\d{4}$/.test(pin)){toast("Enter exactly four digits for the new PIN.");return;}
+    if(pin!==confirm){toast("The new PIN entries do not match.");return;}
+    try{
+      if(!await verifyAppPinCode(current,config)){toast("The current PIN is incorrect.");return;}
+      localStorage.setItem(appPinStorageKey(),JSON.stringify(await createAppPinConfig(pin)));
+      syncAppPinSetting();closeDialog();renderSettings();toast("App lock PIN changed.");
+    }catch(error){toast(String(error&&error.message||"Could not change app lock PIN."));}
+  }
+  async function disableAppPinFromDialog(){
+    const current=String($("#app-pin-current")&&$("#app-pin-current").value||"");
+    const config=readAppPinConfig();
+    if(!/^\d{4}$/.test(current)){toast("Enter your current four-digit PIN to turn off app lock.");return;}
+    try{
+      if(!await verifyAppPinCode(current,config)){toast("The current PIN is incorrect.");return;}
+      localStorage.removeItem(appPinStorageKey());
+      localStorage.removeItem(appPinAttemptKey());
+      syncAppPinSetting();closeDialog();renderSettings();toast("App lock turned off on this device.");
+    }catch(error){toast(String(error&&error.message||"Could not turn off app lock."));}
+  }
+  document.addEventListener("visibilitychange",()=>{
+    if(document.visibilityState==="hidden")lockAppForBackground();
+    else if(appPinLocked)showAppPinLock();
+  });
+  window.addEventListener("pagehide",lockAppForBackground);
+  window.addEventListener("pageshow",()=>{if(appPinLocked)showAppPinLock();});
+
   function handleSettingOption(title) {
+    if(title==="App lock"){openAppLockDialog();return;}
     if(title==="Test call alert"){void testCallAlert();return;}
     if(title==="Ringtone"){openRingtoneDialog();return;}
     if(title==="Theme"){state.settings.dark=!state.settings.dark;saveState();applySettings();renderSettings();toast("Theme updated.");return;}
@@ -1076,8 +1274,9 @@
     }
     content+="<div class='section-card'>"+options.map(opt=>{
       let side="";
-      const settingMap={"Read receipts":"readReceipts","Keep chats archived":"keepArchived","Enter is send":"enterToSend","Media visibility":"mediaVisibility","App lock":"appLock","Reduce motion":"reduceMotion","Keyboard navigation":"keyboardNav","High contrast":"highContrast","Spell check":"spellcheck","Reaction notifications":"reactionNotifications","Security notifications":"securityNotifications","Messages":"messageNotifications","Groups":"groupNotifications","Calls":"callNotifications"};
-      if(opt[3]==="toggle" || settingMap[opt[1]]) {const key=settingMap[opt[1]]||opt[1];const on=!!state.settings[key];side="<button class='toggle "+(on?"on":"")+"' data-setting='"+esc(key)+"' aria-pressed='"+(on?"true":"false")+"' aria-label='Toggle "+esc(opt[1])+"'></button>";}
+      const settingMap={"Read receipts":"readReceipts","Keep chats archived":"keepArchived","Enter is send":"enterToSend","Media visibility":"mediaVisibility","Reduce motion":"reduceMotion","Keyboard navigation":"keyboardNav","High contrast":"highContrast","Spell check":"spellcheck","Reaction notifications":"reactionNotifications","Security notifications":"securityNotifications","Messages":"messageNotifications","Groups":"groupNotifications","Calls":"callNotifications"};
+      if(opt[1]==="App lock")side="<span class='setting-side-label'>"+(hasAppPinConfigured()?"On · Change":"Off · Set up")+"</span>";
+      else if(opt[3]==="toggle" || settingMap[opt[1]]) {const key=settingMap[opt[1]]||opt[1];const on=!!state.settings[key];side="<button class='toggle "+(on?"on":"")+"' data-setting='"+esc(key)+"' aria-pressed='"+(on?"true":"false")+"' aria-label='Toggle "+esc(opt[1])+"'></button>";}
       else if(opt[3]==="toggle-theme")side="<button class='toggle "+(state.settings.dark?"on":"")+"' data-setting='dark' aria-pressed='"+(state.settings.dark?"true":"false")+"' aria-label='Toggle dark mode'></button>";
       else if(opt[3]==="wallpaper")side="<button class='secondary-button' data-action='wallpaper'>Change</button>";
       else if(opt[3]==="button")side="<span class='end-icon'>"+icon("chevron")+"</span>";
@@ -2155,6 +2354,9 @@ function openSharedItemsDialog(chat,kind) {
         const account=db.accounts.find(a=>a.id===currentUser.id);if(account){account.phone=newPhone;saveDb();}
         saveState();closeDialog();renderMain();toast("Custom number updated locally.");return;
       }
+      if(action==="enable-app-pin"){void saveAppPinFromDialog();return;}
+      if(action==="change-app-pin"){void changeAppPinFromDialog();return;}
+      if(action==="disable-app-pin"){void disableAppPinFromDialog();return;}
       if(action==="save-two-step"){
         const pin=$("#two-step-pin").value.trim();if(!/^\d{6}$/.test(pin)){toast("Enter a six-digit PIN.");return;}
         state.settings.twoStepPin=pin;saveState();closeDialog();toast("Demo PIN saved in this browser.");return;
@@ -2162,7 +2364,7 @@ function openSharedItemsDialog(chat,kind) {
       if(action==="delete-local-account"){
         db.accounts=db.accounts.filter(a=>a.id!==currentUser.id);saveDb();
         try{localStorage.removeItem(stateKey(currentUser.username));localStorage.removeItem(SESSION_KEY);}catch(_){}
-        closeDialog();currentUser=null;state=null;selectedChatId=null;app.classList.add("hidden");auth.classList.remove("hidden");renderAuth("signup");toast("Local account deleted.");return;
+        closeDialog();releaseAppPinLock();currentUser=null;state=null;selectedChatId=null;app.classList.add("hidden");auth.classList.remove("hidden");renderAuth("signup");toast("Local account deleted.");return;
       }
       if(action==="save-about"){
         const about=String($("#edit-about-quick")?.value||"").trim().slice(0,140)||"Available";
@@ -2602,12 +2804,14 @@ function openSharedItemsDialog(chat,kind) {
       let saved = null;
       try { saved = JSON.parse(localStorage.getItem(stateKey(currentUser.username)) || "null"); } catch (_) {}
       if (saved && saved.settings) fresh.settings = Object.assign(fresh.settings, saved.settings);
+      fresh.settings.appLock=hasAppPinConfigured(currentUser.username);
       if (saved && saved.customLists) fresh.customLists = saved.customLists;
       fresh.profile = { username: currentUser.username, name: currentUser.name, phone: currentUser.phone,
         about: currentUser.about, avatar: initials(name), avatarColor: 1, avatarData: currentUser.avatarData };
       fresh.chats = []; fresh.requests = []; fresh.sentRequests = []; fresh.contacts = []; fresh.calls = []; fresh.backendStatuses=[]; fresh.backendChannels=[]; fresh.backendChannelPosts=[]; fresh.backendCommunities=[]; fresh.statusUpdates=[]; fresh.channels=[]; fresh.communities=[];
       state = fresh; selectedChatId = null; view = "chats";
       auth.classList.add("hidden"); app.classList.remove("hidden"); applySettings(); renderApp();
+      if(hasAppPinConfigured(currentUser.username))showAppPinLock();else releaseAppPinLock();
     },
     setBackendData: (data) => {
       if (!state || !currentUser || !currentUser.isSupabase) return;
