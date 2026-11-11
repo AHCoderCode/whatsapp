@@ -225,7 +225,7 @@ check("call speaker starts in earpiece mode and uses separate speaker/earpiece o
   excludes(files.nativeActivity, "setStreamVolume(AudioManager.STREAM_VOICE_CALL");
 });
 check("minimized calls stay connected while chats remain accessible", () => {
-  includes(files.calls, "let callMinimized=false");
+  includes(files.calls, "callMinimized=false");
   includes(files.calls, "data-wa-call='minimize'");
   includes(files.calls, "data-wa-call='restore'");
   includes(files.calls, "class='wa-call-mini'");
