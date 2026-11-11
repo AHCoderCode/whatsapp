@@ -240,6 +240,7 @@ check("speaker route changes both Android output route and call output gain", ()
   includes(files.calls, "gain.gain.value=speakerOn?2.2:0.82");
   includes(files.calls, "function updateCallOutputGain()");
   includes(files.calls, 'button.innerHTML=bridge.icon("volume")+"<span>Speaker</span>"');
+  excludes(files.calls, "Speaker on");
   includes(files.nativeActivity, "TYPE_BUILTIN_EARPIECE");
   includes(files.nativeActivity, "MODE_IN_COMMUNICATION");
 });
