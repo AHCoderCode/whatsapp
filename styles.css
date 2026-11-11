@@ -920,3 +920,22 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:
 }
 .wa-call-control.active svg,.wa-call-control.active span,
 .video-call .wa-call-control.active svg,.video-call .wa-call-control.active span{color:#075e54!important}
+
+/* Audio-call controls: white selected state only while Speaker or Mute is enabled. */
+.wa-call-control[data-wa-call="mute"].active,
+.wa-call-control[data-wa-call="speaker"].active{
+  background:#fff!important;
+  color:#17252a!important;
+  border:1px solid #e3eaec;
+  box-shadow:0 2px 9px #07171c20,0 0 0 2px #ffffff40;
+}
+.wa-call-control[data-wa-call="mute"]:not(.active),
+.wa-call-control[data-wa-call="speaker"]:not(.active){
+  background:#e8f0f2;
+  color:#1b3238;
+}
+.video-call .wa-call-control[data-wa-call="mute"].active,
+.video-call .wa-call-control[data-wa-call="speaker"].active{
+  background:#fff!important;
+  color:#17252a!important;
+}
