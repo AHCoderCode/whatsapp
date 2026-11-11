@@ -46,6 +46,7 @@ import androidx.core.content.FileProvider;
 import androidx.core.app.NotificationManagerCompat;
 import com.google.firebase.messaging.FirebaseMessaging;
 import org.json.JSONObject;
+import org.json.JSONArray;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -449,7 +450,7 @@ public final class MainActivity extends Activity {
     }
 
 
-    private static final String UPDATE_API_URL = "https://api.github.com/repos/AHCoderCode/whatsapp/releases/latest";
+    private static final String UPDATE_API_URL = "https://api.github.com/repos/AHCoderCode/whatsapp/releases?per_page=100";
     private static final String RELEASE_APK_PREFIX = "https://github.com/AHCoderCode/whatsapp/releases/download/";
 
     private void notifyUpdateJavascript(String functionName, String jsonArgument) {
@@ -481,6 +482,37 @@ public final class MainActivity extends Activity {
         return "";
     }
 
+  private static JSONObject newestPublishedRelease(JSONArray releases) throws IOException {
+        JSONObject newest = null;
+        int newestVersionCode = -1;
+        if (releases == null) return null;
+        for (int i = 0; i < releases.length(); i++) {
+            JSONObject release = releases.optJSONObject(i);
+            if (release == null || release.optBoolean("draft", false) || release.optBoolean("prerelease", false)) continue;
+            String versionCodeText = releaseLine(release.optString("body", ""), "Version code:");
+            int versionCode;
+            try { versionCode = Integer.parseInt(versionCodeText); }
+            catch (NumberFormatException ignored) { continue; }
+            if (versionCode > newestVersionCode) {
+                newestVersionCode = versionCode;
+                newest = release;
+            }
+        }
+        return newest;
+    }
+
+    private static String releaseApkUrl(JSONObject release) throws IOException {
+        org.json.JSONArray assets = release == null ? null : release.optJSONArray("assets");
+        if (assets != null) for (int i = 0; i < assets.length(); i++) {
+            JSONObject asset = assets.optJSONObject(i);
+            if (asset != null && "whatsapp.apk".equals(asset.optString("name"))) {
+                String url = asset.optString("browser_download_url", "");
+                if (url.startsWith(RELEASE_APK_PREFIX)) return url;
+            }
+        }
+        throw new IOException("The newest published Android release does not contain a trusted WhatsApp APK asset. No older release was installed.");
+    }
+
     private void checkForUpdates() {
         new Thread(() -> {
             JSONObject result = new JSONObject();
@@ -489,36 +521,37 @@ public final class MainActivity extends Activity {
                 connection = (HttpURLConnection) new URL(UPDATE_API_URL).openConnection();
                 connection.setRequestMethod("GET");
                 connection.setConnectTimeout(8000);
-                connection.setReadTimeout(10000);
+                connection.setReadTimeout(12000);
                 connection.setRequestProperty("Accept", "application/vnd.github+json");
                 connection.setRequestProperty("User-Agent", "WhatsApp-Android-Updater");
                 int status = connection.getResponseCode();
                 if (status == 404) {
                     result.put("updateAvailable", false);
                     result.put("noReleasePublished", true);
+                    result.put("installedVersionCode", BuildConfig.VERSION_CODE);
+                    result.put("installedVersionName", BuildConfig.VERSION_NAME);
                     notifyUpdateJavascript("waOnNativeUpdateCheck", result.toString());
                     return;
                 }
                 if (status != HttpURLConnection.HTTP_OK) throw new IOException("GitHub returned HTTP " + status + ".");
-                JSONObject release = new JSONObject(readLimited(connection.getInputStream(), 2 * 1024 * 1024));
+                JSONArray releases = new JSONArray(readLimited(connection.getInputStream(), 8 * 1024 * 1024));
+                JSONObject release = newestPublishedRelease(releases);
+                if (release == null) {
+                    result.put("updateAvailable", false);
+                    result.put("noReleasePublished", true);
+                    result.put("installedVersionCode", BuildConfig.VERSION_CODE);
+                    result.put("installedVersionName", BuildConfig.VERSION_NAME);
+                    return;
+                }
                 String body = release.optString("body", "");
                 String versionCodeText = releaseLine(body, "Version code:");
                 String versionName = releaseLine(body, "Version:");
                 String checksum = releaseLine(body, "APK SHA-256:").toLowerCase(Locale.ROOT);
                 int versionCode;
                 try { versionCode = Integer.parseInt(versionCodeText); }
-                catch (NumberFormatException error) { throw new IOException("The latest release has no valid Android version code."); }
-                if (!checksum.matches("[a-f0-9]{64}")) throw new IOException("The release checksum is missing or invalid.");
-                String apkUrl = "";
-                org.json.JSONArray assets = release.optJSONArray("assets");
-                if (assets != null) for (int i = 0; i < assets.length(); i++) {
-                    JSONObject asset = assets.optJSONObject(i);
-                    if (asset != null && "whatsapp.apk".equals(asset.optString("name"))) {
-                        apkUrl = asset.optString("browser_download_url", "");
-                        break;
-                    }
-                }
-                if (!apkUrl.startsWith(RELEASE_APK_PREFIX)) throw new IOException("The latest release does not contain a trusted WhatsApp APK asset.");
+                catch (NumberFormatException error) { throw new IOException("The newest published release has no valid Android version code."); }
+                if (!checksum.matches("[a-f0-9]{64}")) throw new IOException("The newest published release checksum is missing or invalid. No older release was installed.");
+                String apkUrl = releaseApkUrl(release);
                 result.put("updateAvailable", versionCode > BuildConfig.VERSION_CODE);
                 result.put("versionCode", versionCode);
                 result.put("versionName", versionName.isEmpty() ? release.optString("tag_name", "latest") : versionName);
