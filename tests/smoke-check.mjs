@@ -656,6 +656,30 @@ check("background call alerts always show, retry transient push errors, and can 
   includes(files.push, "[whatsapp-push] Incoming-call delivery result");
   includes(files.push, "[whatsapp-push] Background call-test result");
 });
+check("audio-call Speaker and Mute buttons expose enabled state and white selection styling", () => {
+  includes(files.calls, "aria-pressed=");
+  includes(files.calls, 'button.setAttribute("aria-pressed",muted?"true":"false")');
+  includes(files.calls, 'button.setAttribute("aria-pressed",speakerOn?"true":"false")');
+  includes(files.css, '.wa-call-control[data-wa-call="mute"].active');
+  includes(files.css, '.wa-call-control[data-wa-call="speaker"].active');
+  includes(files.css, "background:#fff!important");
+});
+check("attachment popup Poll, Event and Contact actions have a direct click handler", () => {
+  includes(files.app, 'menu.addEventListener("click",event=>');
+  includes(files.app, 'runMenuAction(button.dataset.menuAction,findChat(menuChatId)||currentChat())');
+  includes(files.app, 'bindComposerDialogAction("send-poll")');
+  includes(files.app, 'bindComposerDialogAction("send-event")');
+  includes(files.app, 'backdrop.addEventListener("click",event=>');
+  includes(files.app, 'handleAction("share-contact-to-chat",button)');
+});
+check("polls and events retain their Supabase create, vote and RSVP workflows", () => {
+  includes(files.app, "sendBackendPoll");
+  includes(files.app, "sendBackendEvent");
+  includes(files.backend, "async function sendPoll()");
+  includes(files.backend, "async function votePoll(");
+  includes(files.backend, "async function sendEvent()");
+  includes(files.backend, "async function respondToEvent(");
+});
 check("audio calls provide speaker-volume, mute and end controls", () => {
   includes(files.calls, "data-wa-call='speaker'");
   includes(files.calls, "data-wa-call='mute'");
