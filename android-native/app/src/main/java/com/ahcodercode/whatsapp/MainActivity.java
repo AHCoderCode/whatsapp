@@ -10,6 +10,10 @@ import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.ContentResolver;
+import android.database.Cursor;
+import android.provider.OpenableColumns;
+import android.util.Base64;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageInfo;
 import android.content.pm.Signature;
@@ -67,6 +71,9 @@ public final class MainActivity extends Activity {
     private final AudioManager.OnAudioFocusChangeListener callAudioFocusListener = focusChange -> {};
     private PermissionRequest pendingWebPermissionRequest;
     private String pendingUrl = HOME_URL, fcmToken = "";
+    private final ArrayList<Uri> incomingShareUris = new ArrayList<>();
+    private String incomingShareText = "", incomingShareJson = "";
+    private boolean incomingShareDispatched;
     private String pendingNativeCallId = "", pendingNativeCallAction = "";
     private int pendingNativeCallDispatchAttempts;
     private boolean pendingNativeCallDispatching;
@@ -113,6 +120,7 @@ public final class MainActivity extends Activity {
                 if (isTrustedAppUrl(Uri.parse(url))) {
                     pageLoaded = true;
                     publishFcmToken();
+                    dispatchIncomingShare();
                     if (!pendingNativeCallId.isEmpty()) webView.postDelayed(MainActivity.this::dispatchPendingNativeCallAction, 250);
                 }
             }
@@ -217,9 +225,15 @@ public final class MainActivity extends Activity {
         if (incomingCall) getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         else getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
+    private boolean isIncomingShareIntent(Intent intent) {
+        if(intent==null)return false;
+        String action=intent.getAction();
+        return Intent.ACTION_SEND.equals(action)||Intent.ACTION_SEND_MULTIPLE.equals(action);
+    }
     private void handleLaunchIntent(Intent intent) {
         if (intent == null) return;
         applyIncomingCallWindowFlags(intent);
+        if(isIncomingShareIntent(intent))captureIncomingShare(intent);
         String url = intent.getStringExtra("waNativeLaunchUrl");
         rememberPendingNativeCallAction(intent, url);
         int notificationId = intent.getIntExtra("waNotificationId", -1);
@@ -231,6 +245,11 @@ public final class MainActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         applyIncomingCallWindowFlags(intent);
+        if(isIncomingShareIntent(intent)){
+            captureIncomingShare(intent);
+            if(pageLoaded&&webView!=null)webView.post(MainActivity.this::dispatchIncomingShare);
+            return;
+        }
         String url = intent.getStringExtra("waNativeLaunchUrl");
         rememberPendingNativeCallAction(intent, url);
         int notificationId = intent.getIntExtra("waNotificationId", -1);
@@ -247,6 +266,118 @@ public final class MainActivity extends Activity {
                 }
             }
         }
+    }
+
+    private void captureIncomingShare(Intent intent) {
+        incomingShareUris.clear();
+        incomingShareText="";
+        incomingShareJson="";
+        incomingShareDispatched=false;
+        try{
+            CharSequence sharedText=intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
+            if(sharedText!=null)incomingShareText=sharedText.toString();
+        }catch(Exception ignored){}
+        ClipData clip=intent.getClipData();
+        if(clip!=null){
+            for(int i=0;i<clip.getItemCount()&&incomingShareUris.size()<10;i++){
+                ClipData.Item item=clip.getItemAt(i);
+                if(item==null)continue;
+                Uri uri=item.getUri();
+                if(uri!=null&&!incomingShareUris.contains(uri))incomingShareUris.add(uri);
+                if(incomingShareText.isEmpty()&&item.getText()!=null)incomingShareText=item.getText().toString();
+            }
+        }
+        try{
+            if(Intent.ACTION_SEND.equals(intent.getAction())){
+                Object value=intent.getParcelableExtra(Intent.EXTRA_STREAM);
+                if(value instanceof Uri&&!incomingShareUris.contains(value)&&incomingShareUris.size()<10)incomingShareUris.add((Uri)value);
+            }else if(Intent.ACTION_SEND_MULTIPLE.equals(intent.getAction())){
+                ArrayList<?> values=intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+                if(values!=null)for(Object value:values){
+                    if(value instanceof Uri&&!incomingShareUris.contains(value)&&incomingShareUris.size()<10)incomingShareUris.add((Uri)value);
+                }
+            }
+        }catch(Exception error){android.util.Log.w("WhatsApp","Could not read all incoming shared URIs.",error);}
+        try{
+            JSONObject payload=new JSONObject();
+            payload.put("text",incomingShareText);
+            JSONArray items=new JSONArray();
+            for(int i=0;i<incomingShareUris.size();i++){
+                Uri uri=incomingShareUris.get(i);
+                JSONObject item=new JSONObject();
+                item.put("index",i);
+                item.put("name",sharedDisplayName(uri,i));
+                String mime=getContentResolver().getType(uri);
+                item.put("mime",mime==null?"application/octet-stream":mime);
+                item.put("size",sharedSize(uri));
+                items.put(item);
+            }
+            payload.put("items",items);
+            incomingShareJson=payload.toString();
+        }catch(Exception error){
+            android.util.Log.e("WhatsApp","Could not prepare incoming share metadata.",error);
+            incomingShareUris.clear();
+            incomingShareJson="";
+        }
+    }
+    private String sharedDisplayName(Uri uri,int index){
+        String name=null;
+        Cursor cursor=null;
+        try{
+            cursor=getContentResolver().query(uri,new String[]{OpenableColumns.DISPLAY_NAME},null,null,null);
+            if(cursor!=null&&cursor.moveToFirst()){
+                int column=cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                if(column>=0)name=cursor.getString(column);
+            }
+        }catch(Exception ignored){}finally{if(cursor!=null)cursor.close();}
+        if(name==null||name.trim().isEmpty())name="shared-file-"+(index+1);
+        StringBuilder clean=new StringBuilder();
+        for(char ch:name.toCharArray()){
+            int code=(int)ch;
+            boolean invalid=ch=='/'||code==92||ch==':'||ch=='*'||ch=='?'||ch=='"'||ch=='<'||ch=='>'||ch=='|'||code<32;
+            clean.append(invalid?'_':ch);
+        }
+        return clean.toString();
+    }
+    private long sharedSize(Uri uri){
+        Cursor cursor=null;
+        try{
+            cursor=getContentResolver().query(uri,new String[]{OpenableColumns.SIZE},null,null,null);
+            if(cursor!=null&&cursor.moveToFirst()){
+                int column=cursor.getColumnIndex(OpenableColumns.SIZE);
+                if(column>=0)return cursor.getLong(column);
+            }
+        }catch(Exception ignored){}finally{if(cursor!=null)cursor.close();}
+        return -1L;
+    }
+    private void dispatchIncomingShare(){
+        if(!pageLoaded||webView==null||incomingShareJson.isEmpty()||incomingShareDispatched)return;
+        String script="(function(){if(typeof window.onWhatsAppNativeShare!=='function')return false;return window.onWhatsAppNativeShare(JSON.parse("
+            +JSONObject.quote(incomingShareJson)+"));})()";
+        webView.evaluateJavascript(script,value->{if("true".equals(value))incomingShareDispatched=true;});
+    }
+    private String readIncomingShareFileBase64(int index){
+        if(index<0||index>=incomingShareUris.size())return null;
+        Uri uri=incomingShareUris.get(index);
+        ContentResolver resolver=getContentResolver();
+        try(InputStream input=resolver.openInputStream(uri);ByteArrayOutputStream output=new ByteArrayOutputStream()){
+            if(input==null)return null;
+            byte[] buffer=new byte[8192];
+            int read;
+            long total=0;
+            while((read=input.read(buffer))!=-1){
+                total+=read;
+                if(total>15L*1024L*1024L)throw new IOException("Each shared file must be 15 MB or smaller.");
+                output.write(buffer,0,read);
+            }
+            return Base64.encodeToString(output.toByteArray(),Base64.NO_WRAP);
+        }catch(Exception error){android.util.Log.w("WhatsApp","Could not read shared file "+index,error);return null;}
+    }
+    private void clearIncomingShare(){
+        incomingShareUris.clear();
+        incomingShareText="";
+        incomingShareJson="";
+        incomingShareDispatched=false;
     }
 
     private boolean isCallLaunchIntent(Intent intent, String launchUrl) {
@@ -752,12 +883,15 @@ public final class MainActivity extends Activity {
                         + "if(window.WhatsAppCalls&&window.WhatsAppCalls.resume)window.WhatsAppCalls.resume();", null
                 );
                 dispatchPendingNativeCallAction();
+                dispatchIncomingShare();
             }, 350);
         }
     }
 
     private final class NativeAppBridge {
         @JavascriptInterface public boolean isNativeApp() { return true; }
+        @JavascriptInterface public String getIncomingShareFileBase64(int index) { return readIncomingShareFileBase64(index); }
+        @JavascriptInterface public void clearIncomingShare() { runOnUiThread(MainActivity.this::clearIncomingShare); }
         @JavascriptInterface public boolean isPlayStoreBuild() { return BuildConfig.PLAY_STORE_BUILD; }
         @JavascriptInterface public int getVersionCode() { return BuildConfig.VERSION_CODE; }
         @JavascriptInterface public String getVersionName() { return BuildConfig.VERSION_NAME; }

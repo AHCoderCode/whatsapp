@@ -664,9 +664,11 @@
     if(!number)return showError("signup","Enter exactly nine digits after the +990 app-only ID prefix.");
     if(password.length<8)return showError("signup","Use a password with at least 8 characters.");
     if(password!==confirm)return showError("signup","The passwords do not match.");
+    if(!$("#signup-terms")?.checked)return showError("signup","Accept the Terms of Service and acknowledge the Privacy Policy before creating your account.");
     busy=true;const btn=form.querySelector("button[type=submit]");if(btn){btn.disabled=true;btn.textContent="Creating account…";}
     try{
-      const {data,error}=await db.auth.signUp({email:username+"@aeroshell.invalid",password,options:{data:{aeroshell_chat:"true",username,display_name:name,custom_number:number,about:"Available"}}});
+      const termsAcceptedAt=new Date().toISOString();
+      const {data,error}=await db.auth.signUp({email:username+"@aeroshell.invalid",password,options:{data:{aeroshell_chat:"true",username,display_name:name,custom_number:number,about:"Available",terms_accepted_at:termsAcceptedAt}}});
       if(error)throw error;if(!data||!data.user)throw new Error("Supabase did not return the new account.");
       if(!data.session){showError("signup","Account created, but email confirmation is enabled. Turn OFF Confirm email in Supabase Auth settings, then create a fresh account with another username.");return;}
       await hydrate(data.user);say("Account created. Contact requests and messages now sync with Supabase.");
@@ -936,6 +938,62 @@
       try{await db.storage.from(ATTACHMENT_BUCKET).remove([path]);}catch(_){}
       say(safeError(error,"Attachment upload failed. Check your connection and try again."));
     }
+  }
+  async function shareIncomingContent(targetIds,files,captionOrText) {
+    const me=getUser(),s=appState();
+    const ids=Array.from(new Set((Array.isArray(targetIds)?targetIds:[]).map(value=>String(value||"")).filter(Boolean)));
+    const attachments=Array.isArray(files)?files:[];
+    const body=String(captionOrText||"").trim();
+    if(!me||!me.isSupabase||!s)throw new Error("Sign in to share content from other apps.");
+    if(!ids.length||ids.length>20)throw new Error("Choose between 1 and 20 accepted contacts.");
+    if(attachments.length>10)throw new Error("Share up to 10 files at a time.");
+    if(!attachments.length&&!body)throw new Error("The shared message is empty.");
+    if(body.length>2000)throw new Error("Captions and shared text are limited to 2,000 characters.");
+    let totalBytes=0;
+    for(const file of attachments){
+      if(!file||!Number(file.size)||Number(file.size)>15*1024*1024)throw new Error("Each shared file must be between 1 byte and 15 MB.");
+      totalBytes+=Number(file.size);
+    }
+    if(totalBytes>30*1024*1024)throw new Error("The combined shared files must be 30 MB or smaller.");
+    const targets=ids.map(id=>(s.chats||[]).find(chat=>String(chat.id)===id&&chat.type==="person"&&!chat.archived));
+    if(targets.some(target=>!target))throw new Error("One of the selected contacts is no longer available.");
+    if(targets.some(target=>target.blockedByMe||target.blockedMe))throw new Error("Remove blocked contacts from the selection before sharing.");
+    let delivered=0;
+    for(const target of targets){
+      if(attachments.length){
+        for(let index=0;index<attachments.length;index++){
+          const file=attachments[index],filename=safeFileName(file.name||"shared-file");
+          const mime=String(file.type||"application/octet-stream").split(";")[0].trim().toLowerCase();
+          const path=attachmentPath(me,target,filename);
+          const {error:uploadError}=await db.storage.from(ATTACHMENT_BUCKET).upload(path,file,{contentType:mime,upsert:false,cacheControl:"3600"});
+          if(uploadError)throw uploadError;
+          try{
+            const row={
+              sender_id:me.id,recipient_id:target.id,group_id:null,
+              body:index===0?(body||filename):filename,
+              message_type:"file",attachment_path:path,attachment_name:filename,
+              attachment_mime:mime,attachment_size:Number(file.size)
+            };
+            const {data,error}=await db.from("aeroshell_messages").insert(row)
+              .select("id,sender_id,recipient_id,group_id,body,message_type,created_at,edited_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms,reply_to_message_id,forwarded_from_message_id").single();
+            if(error)throw error;
+            if(data){insertMessageIntoUI(data);void dispatchServerPush("notify-message",{messageId:data.id});}
+          }catch(error){
+            try{await db.storage.from(ATTACHMENT_BUCKET).remove([path]);}catch(_){}
+            throw error;
+          }
+        }
+      }else{
+        const {data,error}=await db.from("aeroshell_messages").insert({
+          sender_id:me.id,recipient_id:target.id,group_id:null,body,
+          message_type:"text",reply_to_message_id:null,forwarded_from_message_id:null
+        }).select("id,sender_id,recipient_id,group_id,body,message_type,created_at,edited_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms,reply_to_message_id,forwarded_from_message_id").single();
+        if(error)throw error;
+        if(data){insertMessageIntoUI(data);void dispatchServerPush("notify-message",{messageId:data.id});}
+      }
+      delivered++;
+    }
+    return delivered;
   }
   async function openAttachment(messageId) {
     const me=getUser(),s=appState();
@@ -1684,7 +1742,7 @@
   bridge.setBackendChatActivity=(activity,active,chatId)=>setChatActivity(activity,active,chatId?getChatById(chatId):currentSelectedChat());
   bridge.sendBackendMessage=sendMessage;bridge.searchBackendPeople=searchPeople;bridge.requestBackend=sendRequest;bridge.markAllBackendRead=markAllRead;
   bridge.hideBackendMessage=hideMessageForMe;bridge.deleteBackendMessage=deleteMessageForEveryone;bridge.editBackendMessage=editMessage;bridge.forwardBackendMessage=forwardMessage;bridge.reactBackendMessage=toggleMessageReaction;
-  bridge.uploadBackendAttachment=uploadStoredAttachment;bridge.blockBackendUser=blockUser;bridge.reportBackendUser=reportUser;bridge.sendBackendPoll=sendPoll;bridge.voteBackendPoll=votePoll;bridge.sendBackendEvent=sendEvent;bridge.respondBackendEvent=respondToEvent;
+  bridge.uploadBackendAttachment=uploadStoredAttachment;bridge.shareIncomingContent=shareIncomingContent;bridge.blockBackendUser=blockUser;bridge.reportBackendUser=reportUser;bridge.sendBackendPoll=sendPoll;bridge.voteBackendPoll=votePoll;bridge.sendBackendEvent=sendEvent;bridge.respondBackendEvent=respondToEvent;
   window.waBackendEnablePush=enableDevicePush;
   window.waBackendUpdatePushPreferences=updateDevicePushPreferences;
   window.waBackendTestCallPush=testCallPush;

@@ -1457,7 +1457,7 @@
         "<div class='wa-call-history-avatar'>" + avatarHTML({name,avatar:row.avatar || index+1}) + "</div>" +
         "<span class='wa-call-history-copy'><strong>" + esc(name) + "</strong>" +
         "<span class='wa-call-history-meta'><span class='wa-call-history-direction"+statusClass+"'>" +
-        icon(outgoing ? "forward" : (missed ? "phone-missed" : "reply")) + (outgoing ? "Sent" : (missed ? "Missed" : "Received")) +
+        icon(outgoing ? "forward" : (missed ? "x" : "reply")) + (outgoing ? "Sent" : (missed ? "Missed" : "Received")) +
         "</span><span class='wa-call-history-separator'>·</span><time>" + esc(row.time || "Recent call") +
         "</time><span class='wa-call-history-kind'>" + icon(video ? "video" : "phone") +
         (video ? "Video call" : "Voice call") + "</span><span class='wa-call-history-duration"+statusClass+"'>"+esc(statusLabel)+"</span></span></span>" +

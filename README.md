@@ -147,3 +147,16 @@ Create custom chat lists such as **Family**, **Work**, or **Wishlist**, choose w
 - The Play Store App Bundle is built as a separate CI artifact. Uploading it to Play Console, completing Data safety and app-access declarations, providing a privacy policy, and passing Play review are still manual release tasks.
 - The Android build targets API 36. Physical-device, two-account, backup/restore, call, notification, and accessibility testing remain required before claiming complete production readiness.
 
+
+
+## November 11, 2026 — sharing, privacy and safety notes
+
+The native Android activity supports sharing content from other apps through Android `ACTION_SEND` and `ACTION_SEND_MULTIPLE`. Incoming content is held locally until the user signs in, then a contact chooser permits selecting one or more accepted direct contacts and entering an optional caption. Each shared file is limited to 15 MB; a share may contain up to 10 files and 30 MB total. Group recipients are not offered in this chooser.
+
+The **Privacy Policy** and **Terms of Service** are available at `/privacy-policy.html` and `/terms-of-service.html`. Signup asks the user to accept the Terms and records a timestamp in Supabase Auth user metadata. `/account-deletion.html` documents that app-specific account deletion is not available yet.
+
+**End-to-end encryption is not implemented.** Message bodies and uploaded attachments remain readable by the service backend. Do not describe this service as E2EE or use it for highly sensitive conversations. A real E2EE implementation requires a reviewed protocol and device key lifecycle across browser and native Android clients; a basic AES wrapper is not sufficient.
+
+Apply `supabase/migrations/20261111195500_prevent_direct_message_insert_across_blocks.sql` to the connected Supabase project to enforce direct-message insert blocking at the database layer. A block does not remove shared-group memberships. Report submissions are stored, but the project does not yet have a staffed moderator dashboard or review/escalation process.
+
+**Google Play release remains blocked** until a safe in-app deletion flow and a public web deletion-request path can delete this app's data without deleting the shared Supabase identity used by Windows 12 Master Chat. A private support channel, an accountable report-review workflow and truthful Play Console declarations are also required. These legal pages and source changes do not by themselves certify Play Store compliance.

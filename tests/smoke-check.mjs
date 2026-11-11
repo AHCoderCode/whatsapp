@@ -12,6 +12,10 @@ const files = {
   cleanup: read("supabase/functions/whatsapp-expiry-cleanup/index.ts"),
   groupCallLimitMigration: read("supabase/migrations/20261031091826_whatsapp_group_call_participant_limit.sql"),
   blockScopeMigration: read("supabase/migrations/20261031092054_whatsapp_block_scope_direct_chats_only.sql"),
+  blockInsertMigration: read("supabase/migrations/20261111195500_prevent_direct_message_insert_across_blocks.sql"),
+  privacyPolicy: read("privacy-policy.html"),
+  termsOfService: read("terms-of-service.html"),
+  accountDeletion: read("account-deletion.html"),
   nativeNotifications: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/NativeCallNotifications.java"),
   nativeReceiver: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/CallNotificationActionReceiver.java"),
   nativeActivity: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/MainActivity.java"),
@@ -425,7 +429,7 @@ check("incoming read receipts update visible blue ticks immediately", () => {
 });
 check("read receipts require a visible focused conversation and re-check before writing", () => {
   includes(files.app, 'document.visibilityState!=="visible"||!document.hasFocus()');
-  includes(files.app, "return isOnScreen(main)&&isOnScreen($("#message-scroll",main));");
+  includes(files.app, 'return isOnScreen(main)&&isOnScreen($("#message-scroll",main));');
   includes(files.backend, "const stillVisible=()=>typeof bridge.isConversationVisible");
   includes(files.backend, "await new Promise(resolve=>requestAnimationFrame");
 });
@@ -438,6 +442,34 @@ check("multiple messages can be selected and forwarded together", () => {
   includes(files.app, "let selectedMessages = [];");
   includes(files.app, "selectedMessages.push(selectedMessageData(message,chat))");
   includes(files.app, "Forward messages");
+});
+check("Android share-in routes shared files into the multi-contact chooser", () => {
+  includes(files.nativeManifest, 'android.intent.action.SEND_MULTIPLE');
+  includes(files.nativeManifest, 'android.intent.action.SEND');
+  includes(files.nativeActivity, "captureIncomingShare(intent)");
+  includes(files.nativeActivity, "getIncomingShareFileBase64");
+  includes(files.nativeActivity, "dispatchIncomingShare()");
+  includes(files.app, "window.onWhatsAppNativeShare=function(payload)");
+  includes(files.app, "data-incoming-share-contact");
+  includes(files.backend, "shareIncomingContent");
+});
+check("signup requires Privacy Policy acknowledgement and Terms acceptance", () => {
+  includes(files.app, "id='signup-terms'");
+  includes(files.backend, 'if(!$("#signup-terms")?.checked)');
+  includes(files.backend, "terms_accepted_at:termsAcceptedAt");
+  includes(files.privacyPolicy, "not currently end-to-end encrypted");
+  includes(files.termsOfService, "Terms of Service");
+  includes(files.accountDeletion, "Account deletion is not available yet");
+});
+check("database rejects new direct messages across block relationships", () => {
+  includes(files.blockInsertMigration, "AS RESTRICTIVE FOR INSERT");
+  includes(files.blockInsertMigration, "whatsapp_user_blocks");
+});
+check("call history exposes received/sent filter and missed-call metadata", () => {
+  includes(files.app, 'data-filter-id=\'received\'');
+  includes(files.app, 'data-filter-id=\'sent\'');
+  includes(files.backend, "durationSeconds:Math.max(0,Math.min(86400,Number(event&&event.durationSeconds)||0))");
+  includes(files.app, 'row.outcome === "missed"');
 });
 check("block and report actions use Supabase safety records", () => {
   includes(files.backend, 'from("whatsapp_user_blocks")');

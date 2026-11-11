@@ -2,6 +2,9 @@ const CACHE_NAME = "whatsapp-final-shell-v75";
 const APP_SHELL = [
   "/",
   "/index.html",
+  "/privacy-policy.html",
+  "/terms-of-service.html",
+  "/account-deletion.html",
   "/app.js?v=whatsapp-secure-release-20261111e",
   "/feature-gaps.js?v=whatsapp-secure-release-20261111e",
   "/group-calls.js?v=whatsapp-secure-release-20261111e",
