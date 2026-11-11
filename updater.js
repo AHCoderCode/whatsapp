@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  const APP_BUILD = "whatsapp-secure-release-20261110a";
+  const APP_BUILD = "whatsapp-secure-release-20261111e";
   const native = window.WhatsAppNativeAndroid;
   const nativeApp = !!(native && typeof native.isNativeApp === "function" && native.isNativeApp());
   const playStoreBuild = !!(nativeApp && typeof native.isPlayStoreBuild === "function" && native.isPlayStoreBuild());
@@ -101,6 +101,7 @@
   }
   let latestUpdate = null, latestCheckInfo = null, lastCheckAt = 0, banner = null, installButton = null, message = null;
   let dismissedVersion = "", checking = false, installing = false, lastCheckFailed = false, lastCheckMessage = "";
+  let installAfterFreshCheck = false, repeatFreshCheckAfterCurrent = false;
   function ensureBanner() {
     if (banner) return banner;
     banner = document.createElement("section");
@@ -164,47 +165,102 @@
     };
   };
   window.waNativeUpdateCheckNow = function () { check(true); };
-  window.waNativeUpdateInstall = function () {
-    if (!latestUpdate || !latestUpdate.apkUrl || !latestUpdate.sha256 || installing) return;
+  function beginInstallOfLatestRelease() {
+    if (!latestUpdate || !latestUpdate.apkUrl || !latestUpdate.sha256 || installing) return false;
     installing = true;
     lastCheckMessage = "";
     notifyUpdateState();
-    try { native.downloadAndInstallUpdate(latestUpdate.apkUrl, latestUpdate.sha256); }
-    catch (error) { window.waNativeUpdateInstallFailed(error && error.message || "Could not start Android's installer."); }
+    try {
+      native.downloadAndInstallUpdate(latestUpdate.apkUrl, latestUpdate.sha256);
+      return true;
+    } catch (error) {
+      window.waNativeUpdateInstallFailed(error && error.message || "Could not start Android's installer.");
+      return false;
+    }
+  }
+  window.waNativeUpdateInstall = function () {
+    if (installing || installAfterFreshCheck) return;
+    // A release may have been published since the previous automatic check.
+    // Always resolve the current latest release immediately before installation.
+    installAfterFreshCheck = true;
+    if (checking) {
+      repeatFreshCheckAfterCurrent = true;
+      lastCheckMessage = "Refreshing the release list before installing…";
+      notifyUpdateState();
+      return;
+    }
+    lastCheckMessage = "Checking for the newest available version…";
+    if (installButton) { installButton.disabled = true; installButton.textContent = "Checking latest…"; }
+    check(true);
   };
   window.waOnNativeUpdateCheck = function (info) {
     checking = false;
-    if (!info) { notifyUpdateState(); return; }
+    if (!info) {
+      if (installAfterFreshCheck) {
+        installAfterFreshCheck = false;
+        lastCheckMessage = "The latest release could not be verified. Try checking again.";
+        if (installButton) { installButton.disabled = false; installButton.textContent = "Check again"; }
+      }
+      notifyUpdateState();
+      return;
+    }
     latestCheckInfo = info;
     lastCheckFailed = !!info.checkFailed;
     lastCheckMessage = info.checkFailed ? String(info.message || "Could not check for updates.") : "";
+    // If an automatic check was already running when the user tapped Update,
+    // run one additional check after it; do not install potentially stale info.
+    if (repeatFreshCheckAfterCurrent) {
+      repeatFreshCheckAfterCurrent = false;
+      lastCheckMessage = "Checking the newest available release…";
+      check(true);
+      return;
+    }
     if (info.checkFailed) {
-      // Keep a previously discovered update available through a temporary network/API failure.
-      if (latestUpdate && dismissedVersion !== String(latestUpdate.versionCode)) {
+      if (installAfterFreshCheck) {
+        installAfterFreshCheck = false;
+        lastCheckMessage = "Could not verify the newest release. Nothing was installed. Check your connection and try again.";
+      } else if (latestUpdate && dismissedVersion !== String(latestUpdate.versionCode)) {
         const el = ensureBanner(); el.hidden = false;
         if (message) {
           message.textContent = "Could not refresh update information. The previously found update is still available; check your connection and try again if needed.";
           message.hidden = false;
         }
-        if (installButton) { installButton.disabled = false; installButton.textContent = "Update now"; }
       }
+      if (installButton) { installButton.disabled = false; installButton.textContent = "Update now"; }
       notifyUpdateState();
       return;
     }
     if (!info.updateAvailable || !info.apkUrl || !info.sha256) {
-      latestUpdate = null; hideBanner(); notifyUpdateState(); return;
+      latestUpdate = null;
+      hideBanner();
+      if (installAfterFreshCheck) {
+        installAfterFreshCheck = false;
+        lastCheckMessage = "You already have the latest available WhatsApp version.";
+      } else {
+        lastCheckMessage = "";
+      }
+      if (installButton) { installButton.disabled = false; installButton.textContent = "Update now"; }
+      notifyUpdateState();
+      return;
     }
     latestUpdate = info;
+    if (installAfterFreshCheck) {
+      installAfterFreshCheck = false;
+      beginInstallOfLatestRelease();
+      return;
+    }
     if (dismissedVersion === String(info.versionCode)) { hideBanner(); notifyUpdateState(); return; }
     const el = ensureBanner(); el.hidden = false;
     const detail = document.getElementById("wa-native-update-detail");
-    if (detail) detail.textContent = "Version " + String(info.versionName || "new version") + " is available. Tap Update now, then approve Android’s installer.";
+    if (detail) detail.textContent = "Version " + String(info.versionName || "new version") + " is available. Tap Update now to check again and install the newest release.";
     if (message) { message.hidden = true; message.textContent = ""; }
     if (installButton) { installButton.disabled = false; installButton.textContent = "Update now"; }
     notifyUpdateState();
   };
   window.waNativeUpdateInstallFailed = function (reason) {
     installing = false;
+    installAfterFreshCheck = false;
+    repeatFreshCheckAfterCurrent = false;
     lastCheckMessage = String(reason || "The update could not be installed.");
     const el = ensureBanner(); el.hidden = false;
     if (message) { message.textContent = lastCheckMessage; message.hidden = false; }
