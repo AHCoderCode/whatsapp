@@ -96,7 +96,7 @@ check("current asset version is shared by HTML and service worker", () => {
   includes(files.html, "whatsapp-secure-release-20261111c");
   includes(files.sw, "whatsapp-secure-release-20261111c");
   includes(files.manifest, "whatsapp-secure-release-20261111c");
-  includes(files.sw, "whatsapp-final-shell-v72");
+  includes(files.sw, "whatsapp-final-shell-v73");
 });
 check("mobile settings use a full-width account detail pane", () => {
   includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
