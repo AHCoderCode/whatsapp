@@ -435,8 +435,10 @@ check("call speaker and mute controls show white only while enabled", () => {
 });
 check("attachment menu dispatches polls, events and contact sharing to working dialogs", () => {
   includes(files.app,'"share-contact","create-poll","create-event","find-friends"].includes(action)');
-  includes(files.app,'if(action==="create-poll"){openDialog("Create poll"');
-  includes(files.app,'if(action==="create-event"){openDialog("Create event"');
+  includes(files.app,'if(action==="create-poll"){');
+  includes(files.app,'bindComposerDialogAction("send-poll")');
+  includes(files.app,'if(action==="create-event"){');
+  includes(files.app,'bindComposerDialogAction("send-event")');
   includes(files.app,'if(action==="share-contact"){showShareContactDialog();return;}');
   includes(files.app,'if(action==="send-poll"){');
   includes(files.app,'if(action==="send-event"){');
