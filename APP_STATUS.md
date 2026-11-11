@@ -1,0 +1,134 @@
+# WhatsApp app status and audit record
+
+**Audit date:** 2026-10-30  
+**Repository:** `AHCoderCode/whatsapp`  
+**Production site:** https://whatsapp-for.vercel.app
+
+## Current maintenance scope
+
+The contact information screen has dedicated responsive components for contact details and its **More options** actions. On narrow screens, the profile fills the available app width, scrolls vertically inside its own content pane, and lays out each action as icon / flexible text / chevron. The entire row is a real button with a single delegated action, rather than separate text fragments.
+
+The shell asset version is advanced whenever client assets are changed so the service worker can retire its previous cache and request the current CSS and JavaScript.
+
+## Automated source audit
+
+The GitHub Actions smoke suite checks JavaScript parsing, inline HTML script parsing, manifest JSON validity, CSS brace balance, and cross-file PWA asset versions. It also includes regression assertions for responsive account settings, responsive Calls history, contact profile action rows, and the relay-first call setup path.
+
+The existing suite additionally covers selected source-level workflows for:
+
+- Supabase account/profile wiring, contact requests, linked-device session revocation, and row-level security migrations.
+- Message editing, deletion/clearing, reactions, read receipts, polls, events, and private attachment handling.
+- Notification registration, push delivery handlers, call alerts, native Android Accept/Decline actions, and cold-start call recovery.
+- WebRTC relay configuration, direct-fallback signaling, microphone acquisition, Android audio routing, call controls, ringtone persistence, and update checking.
+- Responsive navigation, landscape conversation layout, touch interactions, keyboard focus, and mobile Calls history.
+
+A passing source test proves only that the asserted code structure and static conditions are present. It does not prove that every backend configuration, remote network, browser permission, device OEM setting, or real-time service works on every device.
+
+## Device and browser verification status
+
+The automated repository workflow can build and sign an Android APK. This audit does **not** represent physical testing on every Android phone, iPhone, tablet, desktop, browser, network, or OS version.
+
+The following manual matrix remains required for a complete device sign-off:
+
+| Target | Manual checks still required |
+|---|---|
+| Android phone, narrow width (320–380 px) | Contact info scroll, every More options row, tap targets, bottom safe area, keyboard and back navigation |
+| Android phone, standard width (390–480 px) | Contact info, media tiles, Calls tab, incoming/outgoing audio and video calls |
+| Android landscape | Conversation, contact info, call overlay and controls |
+| Android WebView / installed APK | Microphone/camera permission, notification actions, lock-screen calls, update over existing installation |
+| Android Chrome PWA | Install, refresh/cache update, push permissions and background behavior |
+| iPhone Safari / installed web app | Responsive profile, browser permission behavior, call and media compatibility |
+| Tablet and desktop | Sidebar/main-pane layout, contact profile width, keyboard navigation, call-window layout |
+
+## Known product limitations
+
+The project README documents the following known limitations; this UI audit does not remove them:
+
+- The custom `+990` identifier is not a telephone number and cannot receive SMS.
+- Real calls require valid Metered TURN configuration, and WebRTC behavior depends on the network and device.
+- Group calling, channel media posts, photo/video status capture, and community subgroup binding are not implemented.
+- The app is independent of official WhatsApp and does not provide end-to-end encryption.
+- Some report/block and disappearing-message controls are frontend preview/local behavior, not a complete server-enforced moderation or disappearing-message system.
+
+## Sign-off rule
+
+Do not label the app “works on every device” based only on a successful build or source smoke suite. Mark a device/browser as verified only after testing that specific environment with two signed-in accounts and recording the result.
+
+
+## Call reliability and Find People follow-up
+
+The October 30 follow-up hardens the Metered ICE server configuration. The Edge Function no longer overrides the workspace/credential region with a fixed Asia value; it derives the relay hostname returned by Metered and supplies all four documented transport variants (UDP and TCP on port 80, UDP on port 443, and TLS/TCP on port 443). The Android shell now holds a bounded partial CPU wake lock for an active native call and releases it with native call-audio cleanup. This is intended to reduce WebRTC/Realtime interruption while the screen is locked; it cannot override carrier restrictions, OEM background policies, disabled notification channels, or networks that block every TURN route.
+
+Find People result cards now keep their contact action inside a dedicated responsive row with a full-size labelled button. New Group and New Community remain available from the overflow menu and continue to call their existing Supabase create flows.
+
+The automated suite adds source assertions for TURN transport coverage, native wake-lock acquisition/release, responsive contact actions, and the group/community entry points. It does not simulate a TURN allocation or prove a completed call. A real two-account call over separate Wi-Fi/mobile networks, followed by screen-lock and accept/decline tests on physical Android devices, remains required for sign-off.
+
+
+## Messaging actions, Channels, and camera follow-up
+
+The final UI pass makes the chat attachment menu explicit: Document, Photos & videos, Audio, Camera, Share contact, Add contact, Create poll, and Create event. Add contact opens the registered-account search; Share contact selects an existing accepted contact. Poll and event creation keep using the existing persisted Supabase workflows for signed-in accounts and local preview behavior for demo state.
+
+The Communities and Channels screens now have prominent labelled creation buttons with visible plus marks, in addition to the header controls. Channel creation calls the existing Supabase create-and-follow workflow for signed-in accounts and a local preview flow for demo state.
+
+Camera capture is now camera-first. The Android WebView marks the next chooser as an explicit camera request and launches the native image-capture intent; if no camera activity can handle it, the app falls back to an in-app camera preview through getUserMedia. Non-native mobile browsers use the in-app camera preview when mediaDevices is available, with the capture-attribute picker as a compatibility fallback. Camera permission, available hardware, browser support, and OEM policies still vary by device; no source test can prove that every physical camera works.
+
+The source smoke suite includes regression checks for attachment actions, the Add contact route, community/channel plus controls, the existing backend channel create/follow workflow, Android native camera intent, and the in-app camera fallback. These automated checks validate source structure and responsive CSS; they do not replace visual checks on physical Android, iOS, tablet, and desktop devices.
+
+
+## October 30 final navigation and lists update
+
+The final UI pass completes custom chat lists: users can create a named list, choose the conversations included, select the list as a filter, edit its name and membership, and remove it. Examples include Family, Work, and Wishlist. Custom list definitions are stored in the current signed-in browser/device's local preferences; they are not synchronised through Supabase and will not automatically appear on another device.
+
+Contact Requests now has a prominent **Find people** button in its header. Calls → New call presents an alphabetically ordered, searchable list of accepted one-to-one contacts for both voice and video calls. The Channels screen opens on **Your channels**, with separate **Discover channels** and **Create channel** actions. The Updates shortcut is labelled **Channels** and explains both entry points. Channel creation continues to use the existing Supabase create-and-follow operation for signed-in accounts.
+
+The UI/CSS pass adds narrow-screen wrapping and scrolling for custom list chips, list selection, call contact rows, channel actions, and the Find people button. Source smoke checks cover these routes. These are source-level checks only; a manual visual and two-account/two-device pass is still required for device sign-off.
+
+
+## October 31 feature-completion release
+
+**Merged into:** `main` via PR #5  
+**Merge commit:** `955096f87df461e2551486ac395c69ec0cf66b27`  
+**Production:** `https://whatsapp-for.vercel.app`  
+**Vercel deployment:** `whatsapp-m6ppo8wq9-vexel-ai.vercel.app` (READY)
+
+The October 31 production release adds:
+- Image/video status publishing and viewing, using private Storage paths and 24-hour expiry.
+- Image/video channel posts, signed media URLs, and author/owner deletion.
+- Community subgroup linking for groups administered by the community owner, plus member self-join through RLS.
+- Server-backed block/unblock, report submissions, shared disappearing-message settings and message expiry triggers.
+- Five-minute scheduled expiry cleanup using `pg_cron`, Vault-held credentials and a service-only Edge Function that removes actual Storage objects.
+- Account-synced custom chat lists, while contact display-name aliases remain device-local.
+- Relay-only mesh group voice/video calls for up to eight participants, including invitation, accept/decline, mute, camera toggle and leave. The participant limit is enforced by a PostgreSQL trigger, and abandoned sessions are ended after four hours.
+- A dedicated authenticated TURN credential function with per-user request quotas and group-call invitation push delivery.
+
+The database migrations and Supabase Edge Functions for this work are applied/deployed to the connected Supabase project. The web client, service-worker assets, tests and workflow updates are merged to `main` and deployed to the production Vercel alias. Migration filenames are aligned with the versions recorded by Supabase, including the eight-person group-call limit and direct-chat-only block scope.
+
+GitHub Actions source smoke checks passed on the merge and post-merge commits. Vercel's production deployment is READY and the production domain returns HTTP 200. The expiry cleanup Edge Function was invoked from Postgres and returned HTTP 200; the five-minute cron job is active and recorded successful executions. Static source checks do not prove multi-device behavior or call quality. Required sign-off still includes at least three accounts in one group, separate Android devices, browser/PWA, and native APK group calls over separate Wi-Fi/mobile networks. Group calling currently uses a full mesh and is limited to eight participants. Group invite notifications open the app; they do not provide native lock-screen Accept/Decline controls.
+
+Security and product boundaries that remain:
+- No end-to-end encryption or verified per-device identity/key recovery.
+- No real phone-number ownership check, SMS, PSTN calling, or external-platform interoperability.
+- Reports have no staffed moderation dashboard or response workflow.
+- Blocking applies to direct messages; it does not enforce removal from shared groups.
+- Account deletion is disabled in this client because accounts are shared with Windows 12 Master Chat.
+- Expiry cannot erase recipient downloads, screenshots, OS caches, or other copies already outside the server.
+- Multi-account, physical-device, background-call and group-call media tests remain mandatory before production sign-off.
+
+
+**Android release:** GitHub Actions run #105 completed successfully and published the permanently signed **WhatsApp Android 1.4.105** APK. The debug APK artifact and signed release artifact were uploaded successfully.
+
+## November 10 security and Android distribution work
+
+The security-readiness branch adds a separate Play Store Android product flavor and preserves the direct-install flavor:
+- Both Android variants target API 36.
+- The common Android manifest no longer requests `REQUEST_INSTALL_PACKAGES`.
+- The direct-install variant adds that permission only in its own manifest, retaining the existing user-driven signed APK updater.
+- The Play Store variant does not contain that permission and disables the in-app APK updater; Google Play controls updates for that edition.
+- CI builds a signed direct-install APK for the existing GitHub Release updater and a signed Play Store AAB as a separate Actions artifact.
+- Native WebView settings now disallow mixed content, JavaScript pop-ups, and multiple windows, and enable Android Safe Browsing on supported devices.
+- Message text and attachment names are omitted from message push notifications to reduce lock-screen and push-provider disclosure.
+
+**Encryption limitation:** this work does not implement end-to-end encryption or zero-knowledge storage. Supabase-managed encryption at rest and HTTPS transport do not provide those guarantees. A reviewed per-device identity/key system, authenticated key changes, multi-device recovery, group-key rotation, encrypted attachment envelopes and interoperability tests remain a separate engineering project. Do not advertise E2EE until that work has been independently reviewed and verified.
+
+The new Play AAB is an artifact only; it is not submitted to or published on Google Play automatically. Play Console declarations, privacy policy, Data safety, app-access review, content rating, and manual test evidence still need the app owner's completion. Automated source tests and CI build success do not establish physical-device reliability or Play approval.
+
