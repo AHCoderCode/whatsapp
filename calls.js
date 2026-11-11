@@ -325,6 +325,13 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     return Promise.race([Promise.resolve(promise),timeout]).finally(()=>{if(timer!==null)clearTimeout(timer);});
   }
   const callPeer = call => call&&call.peer?call.peer:call;
+  function callAvatarMarkup(peer,className="wa-call-avatar"){
+    const photo=String(peer&&peer.avatarData||"").trim();
+    const safePhoto=/^(?:data:image\/|https:\/\/)/i.test(photo)?photo:"";
+    const displayName=String(peer&&(peer.name||peer.username)||"Contact");
+    const fallback=String(peer&&peer.avatar||displayName.slice(0,2).toUpperCase());
+    return "<div class='"+className+"'>"+(safePhoto?"<img src='"+esc(safePhoto)+"' alt=''>":esc(fallback))+"</div>";
+  }
   function clearTimers(){
     if(ringTimer!==null)clearTimeout(ringTimer);
     if(callTimer!==null)clearInterval(callTimer);
@@ -420,9 +427,9 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       return;
     }
     host.innerHTML="<div class='wa-call-backdrop wa-call-fullscreen'><section class='wa-call-window "+(video?"video-call":"audio-call")+"' role='dialog' aria-modal='true' aria-label='"+(video?"Video call":"Voice call")+"'>"+
-      "<header class='wa-call-header'><div class='wa-call-title'><span class='wa-call-status-dot "+(activeCall.direction==="outgoing"?(activeCall.peerRinging?"is-ringing":"is-calling"):phase==="connecting"?"is-connecting":"")+"'></span><div><strong>"+esc(peer.name||peer.username||"Contact")+"</strong><small>"+esc(status)+"</small></div></div><button class='wa-call-close' type='button' data-wa-call='end' aria-label='End call'>" + bridge.icon("x") + "</button></header>"+
-      (video?"<div class='wa-call-stage'><video class='wa-call-remote-video' id='wa-call-remote-video' autoplay playsinline></video><div class='wa-call-video-placeholder' id='wa-call-video-placeholder'><div class='wa-call-avatar'>"+esc(peer.avatar||String(peer.name||peer.username||"U").slice(0,2).toUpperCase())+"</div><strong>"+esc(peer.name||peer.username||"Contact")+"</strong><span>"+esc(phase==="incoming"?"Incoming video call":phase==="connected"?"Waiting for video…":"Waiting for video…")+"</span></div><video class='wa-call-local-video' id='wa-call-local-video' autoplay muted playsinline></video></div>":
-      "<div class='wa-call-audio-stage'><div class='wa-call-avatar'>"+esc(peer.avatar||String(peer.name||peer.username||"U").slice(0,2).toUpperCase())+"</div><h2>"+esc(peer.name||peer.username||"Contact")+"</h2><p>"+esc(status)+"</p><audio id='wa-call-remote-audio' autoplay playsinline></audio></div>")+
+      "<header class='wa-call-header "+(video?"video-call-header":"audio-call-header")+"'>"+(video?"<div class='wa-call-title'><span class='wa-call-status-dot "+(activeCall.direction==="outgoing"?(activeCall.peerRinging?"is-ringing":"is-calling"):phase==="connecting"?"is-connecting":"")+"'></span><div><strong>"+esc(peer.name||peer.username||"Contact")+"</strong><small>"+esc(status)+"</small></div></div>":"")+"<button class='wa-call-close' type='button' data-wa-call='end' aria-label='End call'>" + bridge.icon("x") + "</button></header>"+
+      (video?"<div class='wa-call-stage'><video class='wa-call-remote-video' id='wa-call-remote-video' autoplay playsinline></video><div class='wa-call-video-placeholder' id='wa-call-video-placeholder'>"+callAvatarMarkup(peer)+"<strong>"+esc(peer.name||peer.username||"Contact")+"</strong><span>"+esc(phase==="incoming"?"Incoming video call":phase==="connected"?"Waiting for video…":"Waiting for video…")+"</span></div><video class='wa-call-local-video' id='wa-call-local-video' autoplay muted playsinline></video></div>":
+      "<div class='wa-call-audio-stage'><h2>"+esc(peer.name||peer.username||"Contact")+"</h2>"+callAvatarMarkup(peer)+"<p>"+esc(status)+"</p><audio id='wa-call-remote-audio' autoplay playsinline></audio></div>")+
       "<div class='wa-call-security'><span>" + bridge.icon("lock") + "</span> "+(directFallbackAttempted?"WebRTC media · Encrypted direct fallback (network address may be visible)":"WebRTC media · TURN relay connection")+"</div>"+
       "<div class='wa-call-controls'>"+
       (waitingForOffer?"<button class='wa-call-control decline' type='button' data-wa-call='decline' aria-label='Cancel call acceptance'>" + bridge.icon("phone") + "<span>Cancel</span></button>":
