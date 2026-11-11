@@ -79,10 +79,10 @@ check("media, privacy, subgroup and synced-list handlers are present", () => {
   includes(files.app, "WhatsAppFeatureGaps.onBackendData");
 });
 check("feature-gap module is in the app shell cache", () => {
-  includes(files.html, "/feature-gaps.js?v=whatsapp-secure-release-20261111c");
-  includes(files.sw, "/feature-gaps.js?v=whatsapp-secure-release-20261111c");
-  includes(files.html, "/group-calls.js?v=whatsapp-secure-release-20261111c");
-  includes(files.sw, "/group-calls.js?v=whatsapp-secure-release-20261111c");
+  includes(files.html, "/feature-gaps.js?v=whatsapp-secure-release-20261111d");
+  includes(files.sw, "/feature-gaps.js?v=whatsapp-secure-release-20261111d");
+  includes(files.html, "/group-calls.js?v=whatsapp-secure-release-20261111d");
+  includes(files.sw, "/group-calls.js?v=whatsapp-secure-release-20261111d");
 });
 check("inline HTML scripts parse", () => {
   const scripts = [...files.html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
@@ -93,10 +93,10 @@ check("inline HTML scripts parse", () => {
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-secure-release-20261111c");
-  includes(files.sw, "whatsapp-secure-release-20261111c");
-  includes(files.manifest, "whatsapp-secure-release-20261111c");
-  includes(files.sw, "whatsapp-final-shell-v73");
+  includes(files.html, "whatsapp-secure-release-20261111d");
+  includes(files.sw, "whatsapp-secure-release-20261111d");
+  includes(files.manifest, "whatsapp-secure-release-20261111d");
+  includes(files.sw, "whatsapp-final-shell-v74");
 });
 check("mobile settings use a full-width account detail pane", () => {
   includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
