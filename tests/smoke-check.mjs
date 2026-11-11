@@ -411,6 +411,10 @@ check("voice recorder exposes explicit discard/send and live audio levels", () =
   includes(files.css, ".wa-recording-bar{");
   includes(files.css, ".wa-recording-waveform i.active");
 });
+check("message selection uses querySelectorAll for a list of message rows", () => {
+  includes(files.app, '$(".message-row",main).forEach(');
+  excludes(files.app, '$(".message-row",main).forEach(');
+});
 check("incoming read receipts update visible blue ticks immediately", () => {
   includes(files.backend, 'table:"aeroshell_message_reads"},event=>{');
   includes(files.backend, 'if(message)message.status="read"');
