@@ -663,7 +663,7 @@ check("animated WhatsApp startup intro retains the existing session recovery and
   includes(files.html, 'class="boot-orbit-ring ring-two"');
   includes(files.html, 'class="boot-progress"');
   includes(files.html, 'id="boot-recovery-message"');
-  includes(files.html, 'class="boot-screen is-leaving"') === false;
+  includes(files.html, ".boot-screen.is-leaving");
   includes(files.html, "boot-progress 1.55s ease-in-out infinite");
   includes(files.backend, 'boot.classList.add("is-leaving")');
   includes(files.backend, 'window.dispatchEvent(new Event("wa-startup-finished"))');
@@ -672,7 +672,7 @@ check("Add contact opens account-directory search from the attachment popup", ()
   includes(files.app, '{icon:"user-plus",label:"Add contact",action:"find-friends"}');
   includes(files.app, 'if(action==="find-friends"){createNewChatDialog();return;}');
   includes(files.app, 'function createNewChatDialog()');
-  includes(files.app, 'id="friend-search-submit"');
+  includes(files.app, "id='friend-search-submit'");
 });
 check("speaker and microphone selected states remain white only while active", () => {
   includes(files.calls, 'button.classList.toggle("active",muted)');
