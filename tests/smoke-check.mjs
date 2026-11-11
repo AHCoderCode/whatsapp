@@ -412,8 +412,8 @@ check("voice recorder exposes explicit discard/send and live audio levels", () =
   includes(files.css, ".wa-recording-waveform i.active");
 });
 check("message selection uses querySelectorAll for a list of message rows", () => {
-  includes(files.app, '$(".message-row",main).forEach(');
-  excludes(files.app, '$(".message-row",main).forEach(');
+  assert.ok(files.app.includes('$$(".message-row",main).forEach(row=>row.classList.toggle("message-selected",ids.has(String(row.dataset.messageId))));'), "message rows must use the multi-element helper");
+  assert.ok(!files.app.includes('$(".message-row",main).forEach(row=>row.classList.toggle("message-selected",ids.has(String(row.dataset.messageId))));'), "single-element querySelector must not be used with forEach");
 });
 check("incoming read receipts update visible blue ticks immediately", () => {
   includes(files.backend, 'table:"aeroshell_message_reads"},event=>{');
