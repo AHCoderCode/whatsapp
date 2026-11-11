@@ -1180,3 +1180,51 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:
   .wa-app-pin-lock{padding:18px}
   .wa-app-pin-card{padding:28px 20px 22px;border-radius:20px}
 }
+
+/* November 2026: legal consent, external share chooser, call filters and navigation alignment */
+.wa-terms-consent{display:flex;align-items:flex-start;gap:9px;margin:8px 0 14px;color:#667781;font-size:12px;line-height:1.5}
+.wa-terms-consent input{width:16px;height:16px;flex:0 0 16px;margin:1px 0 0;accent-color:#008f70}
+.wa-terms-consent a,.wa-auth-legal-links a{color:#008f70;text-decoration:underline;text-underline-offset:2px}
+.wa-auth-legal-links{display:flex;justify-content:center;gap:18px;margin:12px 0 0;font-size:12px}
+.mobile-nav{width:100%;box-sizing:border-box;justify-items:stretch;grid-template-columns:repeat(4,minmax(0,1fr))}
+.mobile-tab{width:100%;min-width:0;justify-self:stretch;box-sizing:border-box}
+.mobile-tab-icon{width:min(64px,100%)}
+.wa-call-filter{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;margin:8px 0 14px;border:1px solid #e7edef;border-radius:12px;background:#f1f4f5}
+.wa-call-filter button{min-height:40px;border:0;border-radius:9px;background:transparent;color:#667781;font:inherit;font-size:13px;font-weight:600}
+.wa-call-filter button.active{background:#fff;color:#008f70;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.wa-call-history-direction.missed,.wa-call-history-duration.missed,.wa-call-history-action.missed{color:#d93025}
+.wa-call-history-direction.completed,.wa-call-history-duration.completed,.wa-call-history-action.completed{color:#008f70}
+.wa-call-history-action.missed{background:#fdebea}
+.wa-call-history-action.completed{background:#e8f6ee}
+.wa-call-history-action.outgoing{background:#eef2f4;color:#667781}
+.wa-call-history-direction,.wa-call-history-duration{font-weight:600}
+.wa-call-history-duration{white-space:nowrap}
+.wa-call-history-row.is-missed .wa-call-history-copy>strong{color:#b42318}
+.theme-dark .wa-call-filter{background:#17232a;border-color:#28363d}
+.theme-dark .wa-call-filter button.active{background:#26343b;color:#65d5a4;box-shadow:none}
+.theme-dark .wa-call-history-direction.missed,.theme-dark .wa-call-history-duration.missed,.theme-dark .wa-call-history-action.missed{color:#ff8c84}
+.theme-dark .wa-call-history-direction.completed,.theme-dark .wa-call-history-duration.completed,.theme-dark .wa-call-history-action.completed{color:#65d5a4}
+.theme-dark .wa-call-history-action.missed{background:#442523}
+.theme-dark .wa-call-history-action.completed{background:#173c32}
+.wa-incoming-share-files{display:flex;flex-direction:column;gap:8px;margin:10px 0}
+.wa-incoming-share-file{display:grid;grid-template-columns:30px minmax(0,1fr) auto;align-items:center;gap:9px;padding:9px 10px;border:1px solid #e7edef;border-radius:10px}
+.wa-incoming-share-file>span{display:grid;place-items:center;color:#008f70}
+.wa-incoming-share-file>span svg{width:20px;height:20px}
+.wa-incoming-share-file strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.wa-incoming-share-file small{color:#667781;font-size:11px}
+.wa-incoming-share-recipient-list{display:flex;flex-direction:column;gap:2px;max-height:230px;overflow:auto;margin:8px 0 14px}
+.wa-incoming-share-target{display:grid;grid-template-columns:40px minmax(0,1fr) 22px;align-items:center;gap:10px;padding:9px 8px;border-radius:9px;cursor:pointer}
+.wa-incoming-share-target:active{background:#eef7f2}
+.wa-incoming-share-target .avatar{width:40px;height:40px;flex-basis:40px}
+.wa-incoming-share-target>span:nth-child(2){display:flex;flex-direction:column;gap:3px;min-width:0}
+.wa-incoming-share-target strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.wa-incoming-share-target small{color:#667781;font-size:11px}
+.wa-incoming-share-target input{width:17px;height:17px;accent-color:#008f70}
+.wa-blocked-contact-list{padding:4px 12px}
+.wa-blocked-contact-row{display:flex;align-items:center;gap:12px;min-height:68px;border-bottom:1px solid #edf0f1}
+.wa-blocked-contact-row:last-child{border-bottom:0}
+.wa-blocked-contact-copy{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+.wa-blocked-contact-copy strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+.wa-blocked-contact-copy small{color:#667781;font-size:11px}
+.theme-dark .wa-incoming-share-file,.theme-dark .wa-blocked-contact-row{border-color:#28363d}
+.theme-dark .wa-incoming-share-target:active{background:#1b3029}

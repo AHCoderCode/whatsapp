@@ -16,6 +16,7 @@
   let authMode = "signup";
   let view = "chats";
   let filter = "all";
+  let callsFilter = "received";
   let selectedChatId = null;
   let settingsTab = "account";
   let settingsQuery = "";
@@ -101,9 +102,11 @@
     ],
     help:[
       ["help","Help center","Browse common questions.","button"],
-      ["phone","Contact us","Contact support (preview only).","button"],
-      ["file","Terms and privacy policy","Review the app's privacy details.","button"],
-      ["info","App info","WhatsApp · v1.0","button"]
+      ["phone","Contact us","Open the project support and issue tracker.","button"],
+      ["shield","Privacy Policy","How this app collects, uses and protects data.","button"],
+      ["file","Terms of Service","Rules for using this independent messaging service.","button"],
+      ["user-minus","Blocked contacts","Review and unblock accounts you have blocked.","button"],
+      ["info","App info","Independent messaging app · v1.0","button"]
     ],
     shortcuts:[
       ["new","New chat","Ctrl + Alt + N","Ctrl + Alt + N"],
@@ -251,6 +254,7 @@
         "<div class='form-field'><label for='signup-phone'>Your in-app ID</label><div class='phone-field-wrap'><span class='phone-prefix'>" + icon("phone") + "+990</span><input id='signup-phone' name='phone' type='tel' value='" + esc(phone.replace("+990 ","")) + "' inputmode='numeric' autocomplete='tel-national' required></div><span class='field-help'>This is an in-app ID, not a telephone number. You can share it to help people find your account.</span><span class='form-username-match' id='signup-phone-match'></span></div>" +
         authField("signup-password","Password","password","At least 8 characters","","Use a unique password and do not share it.","autocomplete='new-password' minlength='8' required") +
         authField("signup-confirm","Confirm password","password","Type your password again","","","autocomplete='new-password' minlength='8' required") +
+        "<label class='wa-terms-consent'><input id='signup-terms' name='terms' type='checkbox' required><span>I agree to the <a href='/terms-of-service.html'>Terms of Service</a> and acknowledge the <a href='/privacy-policy.html'>Privacy Policy</a>.</span></label>" +
         "<div class='form-error' id='signup-error' role='alert'></div><button class='auth-primary' type='submit'>Create account " + icon("chevron") + "</button></form>";
       const phoneInput = $("#signup-phone");
       if (phoneInput) phoneInput.addEventListener("input", () => {
@@ -348,7 +352,7 @@
   }
   function renderSidebar() {
     const title = $("#sidebar-title");
-    if (title) title.textContent = view==="chats" ? (archivedMode?"Archived":"Chats") : view==="requests" ? "Contact requests" : view==="profile" ? "Profile" : view==="settings" ? "Settings" : view==="calls" ? "Calls" : view==="updates" ? "Updates" : view==="communities" ? "Communities" : view==="channels" ? "Channels" : view==="starred" ? "Starred messages" : view==="archived" ? "Archived" : view==="locked" ? "Locked chats" : "Chats";
+    if (title) title.textContent = view==="chats" ? (archivedMode?"Archived":"Chats") : view==="requests" ? "Contact requests" : view==="profile" ? "Profile" : view==="settings" ? "Settings" : view==="calls" ? "Calls" : view==="blocked" ? "Blocked contacts" : view==="updates" ? "Updates" : view==="communities" ? "Communities" : view==="channels" ? "Channels" : view==="starred" ? "Starred messages" : view==="archived" ? "Archived" : view==="locked" ? "Locked chats" : "Chats";
     const isChatList = ["chats","archived","locked"].includes(view);
     $("#chat-search-row").style.display = isChatList ? "flex" : "none";
     $("#chat-filter-row").style.display = isChatList && !archivedMode && view==="chats" ? "flex" : "none";
@@ -507,6 +511,52 @@
       event.stopPropagation();
       handleAction("share-contact-to-chat",button);
     },true);
+  }
+  function maybeOpenPendingIncomingShare() {
+    if(!pendingIncomingShare||pendingIncomingShare.dialogOpened||!state||!currentUser)return;
+    openIncomingShareDialog();
+  }
+  function openIncomingShareDialog() {
+    if(!pendingIncomingShare||!state||!currentUser)return;
+    pendingIncomingShare.dialogOpened=true;
+    const targets=(state.chats||[]).filter(chat=>chat.type==="person"&&!chat.archived&&!chat.blockedByMe&&!chat.blockedMe);
+    const files=pendingIncomingShare.files||[];
+    const text=String(pendingIncomingShare.text||"");
+    const fileSummary=files.map(file=>"<div class='wa-incoming-share-file'><span>"+icon("file")+"</span><strong>"+esc(file.name||"Shared file")+"</strong><small>"+esc(Math.max(1,Math.ceil((file.size||0)/1024))+" KB")+"</small></div>").join("");
+    const recipients=targets.length?targets.map(chat=>"<label class='wa-incoming-share-target'>"+avatarHTML(chat)+"<span><strong>"+esc(chat.name||chat.username||"Contact")+"</strong><small>@"+esc(chat.username||"")+"</small></span><input type='checkbox' data-incoming-share-contact value='"+esc(chat.id)+"'></label>").join(""):"<div class='empty-state'>Add or accept a contact before sharing to WhatsApp.</div>";
+    const body="<p class='screen-description'>Choose one or more contacts. Your shared item will be sent as a private chat message.</p>"+
+      (files.length?"<div class='wa-incoming-share-files'>"+fileSummary+"</div>":"")+
+      "<div class='wa-incoming-share-recipient-list'>"+recipients+"</div>"+
+      "<div class='dialog-field'><label for='wa-incoming-share-caption'>"+(files.length?"Caption":"Message")+"</label><textarea id='wa-incoming-share-caption' rows='3' maxlength='2000' placeholder='"+(files.length?"Add a caption (optional)":"Write a message")+"'>"+esc(text)+"</textarea></div>";
+    openDialog("Share to WhatsApp",body,"<button type='button' class='secondary-button' data-action='cancel-incoming-share'>Cancel</button><button type='button' class='primary-button' data-action='send-incoming-share' "+(!targets.length?"disabled":"")+">Send</button>",true);
+  }
+  window.onWhatsAppNativeShare=function(payload) {
+    try {
+      const native=window.WhatsAppNativeAndroid;
+      const files=[];
+      const items=payload&&Array.isArray(payload.items)?payload.items:[];
+      for(const item of items){
+        if(!native||typeof native.getIncomingShareFileBase64!=="function")throw new Error("The Android share file is not available.");
+        const encoded=native.getIncomingShareFileBase64(Number(item.index));
+        if(!encoded)throw new Error("Could not read "+String(item.name||"the shared file")+". Choose it again and retry.");
+        const binary=atob(encoded),bytes=new Uint8Array(binary.length);
+        for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+        const mime=String(item.mime||"application/octet-stream");
+        files.push(new File([bytes],String(item.name||"shared-file"),{type:mime,lastModified:Date.now()}));
+      }
+      pendingIncomingShare={files,text:String(payload&&payload.text||""),dialogOpened:false};
+      maybeOpenPendingIncomingShare();
+      return true;
+    }catch(error){
+      toast("Could not open shared content: "+String(error&&error.message||"Unknown error"));
+      return false;
+    }
+  };
+  function clearPendingIncomingShare() {
+    pendingIncomingShare=null;
+    const native=window.WhatsAppNativeAndroid;
+    if(native&&typeof native.clearIncomingShare==="function")native.clearIncomingShare();
+    closeDialog();
   }
   function renderWelcome() {
     main.innerHTML = "<div class='welcome-pane'><div class='welcome-content'><svg class='welcome-art' viewBox='0 0 320 250' aria-hidden='true'><ellipse cx='161' cy='220' rx='112' ry='9' fill='#e0e6e8'/><path d='M61 142c-1-40 39-70 89-70 45 0 79 25 83 60 4 36-31 66-78 69l-30 24 4-26c-40-8-67-29-68-57Z' fill='#d9fdd3'/><path d='M76 139c0-30 31-54 71-54 40 0 72 24 72 54s-32 54-72 54c-10 0-20-1-29-4l-22 14 4-22c-15-10-24-24-24-42Z' fill='#25d366'/><path d='M128 114c-3-5-5-5-8-5s-7 3-8 7c-2 5 2 15 7 23 8 11 18 19 30 25 7 3 13 5 17 4 5-1 8-6 8-10 0-2-1-3-4-5l-10-5c-2-1-3 0-5 2l-4 5c-1 1-2 2-4 1-6-2-12-7-17-12-4-4-7-9-8-12 0-1 0-2 1-3l4-4c1-2 1-3 1-4l-4-7Z' fill='#fff'/></svg><h2>Messaging Web</h2><p>Send and receive messages with ease, right from your computer.</p><div class='welcome-divider'></div>"+((state&&Array.isArray(state.chats)&&state.chats.length===0)?"<div class='wa-empty-actions'><button class='primary-button' data-action='new-chat'>Find people</button><button class='secondary-button' data-action='new-group'>Create group</button></div>":"")+"<div class='welcome-caption'>" + icon("lock") + "<span>Your messages sync through the connected account backend</span></div></div><div class='welcome-footer'>" + icon("lock") + "<span>WhatsApp is an independent messaging app and is not connected to other messaging accounts</span></div></div>";
@@ -1177,9 +1227,10 @@
     if(title==="Contact us"){
       openDialog("Contact support","<p class='screen-description'>This app does not currently have a built-in support inbox. Use the public issue tracker to report a problem, with private information removed.</p><p><a href='https://github.com/AHCoderCode/whatsapp/issues/new' target='_blank' rel='noopener noreferrer'>Open the issue tracker</a></p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
     }
-    if(title==="Terms and privacy policy"){
-      openDialog("Privacy and data","<p class='screen-description'>This independent app stores account profiles, messages, contact requests, groups, statuses and attachments using its connected Supabase project. Browser preferences and contact aliases are stored locally. Device notifications require permission. Do not send sensitive information unless you understand this project's deployment and data practices.</p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
-    }
+    if(title==="Privacy Policy"){window.location.href="/privacy-policy.html";return;}
+    if(title==="Terms of Service"){window.location.href="/terms-of-service.html";return;}
+    if(title==="Blocked contacts"){setView("blocked");return;}
+    if(title==="Terms and privacy policy"){window.location.href="/privacy-policy.html";return;}
     if(title==="App info"){
       openDialog("App info","<p class='screen-description'><strong>WhatsApp-inspired web app</strong><br>Build: 2026.10.28<br>Installed web app · Service worker updates enabled</p><p class='screen-description'>This is an independent app and is not the official WhatsApp service.</p>","<button class='secondary-button' data-action='close-dialog'>Close</button>");return;
     }
@@ -1384,32 +1435,48 @@
 
   function renderCalls() {
     const rows = currentUser && currentUser.isSupabase && state && Array.isArray(state.calls) ? state.calls : [];
+    const received = callsFilter !== "sent";
+    const visibleRows = rows.filter(row => received ? row.type === "incoming" : row.type === "outgoing");
     const description = currentUser && currentUser.isSupabase
-      ? "Your recent voice and video calls. Tap a person to call them again."
+      ? "Review incoming calls or switch to Sent to see calls you placed."
       : "Sign in to see call history and call your accepted contacts.";
-    const history = rows.length ? rows.map((row,index) => {
+    const history = visibleRows.length ? visibleRows.map((row,index) => {
       const name = row.name || "Unknown contact";
       const outgoing = row.type === "outgoing";
       const video = row.mediaType === "video";
-      return "<button type='button' class='wa-call-history-row' data-action='call-entry' data-call-name='" +
+      const missed = !outgoing && (row.outcome === "missed" || ["missed","rejected","declined","no_answer"].includes(String(row.status||"").toLowerCase()));
+      const durationSeconds = Math.max(0,Number(row.durationSeconds)||0);
+      const duration = String(Math.floor(durationSeconds/60)).padStart(2,"0")+":"+String(durationSeconds%60).padStart(2,"0");
+      const statusLabel = missed ? "Missed call" : durationSeconds ? "Duration "+duration : row.outcome === "pending" ? "Calling…" : "Received";
+      const statusClass = missed ? " missed" : (!missed && !outgoing ? " completed" : (durationSeconds ? " completed" : " outgoing"));
+      const callIcon = missed ? "phone-missed" : outgoing ? "phone" : "phone-incoming";
+      return "<button type='button' class='wa-call-history-row"+(missed?" is-missed":"")+"' data-action='call-entry' data-call-name='" +
         esc(name) + "' data-chat-id='" + esc(row.contactId || "") + "' data-media-type='" + esc(video ? "video" : "audio") + "'>" +
         "<div class='wa-call-history-avatar'>" + avatarHTML({name,avatar:row.avatar || index+1}) + "</div>" +
         "<span class='wa-call-history-copy'><strong>" + esc(name) + "</strong>" +
-        "<span class='wa-call-history-meta'><span class='wa-call-history-direction'>" +
-        icon(outgoing ? "forward" : "reply") + (outgoing ? "Outgoing" : "Incoming") +
+        "<span class='wa-call-history-meta'><span class='wa-call-history-direction"+statusClass+"'>" +
+        icon(outgoing ? "forward" : (missed ? "phone-missed" : "reply")) + (outgoing ? "Sent" : (missed ? "Missed" : "Received")) +
         "</span><span class='wa-call-history-separator'>·</span><time>" + esc(row.time || "Recent call") +
         "</time><span class='wa-call-history-kind'>" + icon(video ? "video" : "phone") +
-        (video ? "Video call" : "Voice call") + "</span></span></span>" +
-        "<span class='wa-call-history-action' aria-hidden='true'>" + icon("phone") + "</span></button>";
+        (video ? "Video call" : "Voice call") + "</span><span class='wa-call-history-duration"+statusClass+"'>"+esc(statusLabel)+"</span></span></span>" +
+        "<span class='wa-call-history-action"+statusClass+"' aria-hidden='true'>" + icon(callIcon) + "</span></button>";
     }).join("") : "<div class='wa-call-history-empty'><span class='wa-call-history-empty-icon'>" + icon("phone") +
-      "</span><strong>No calls yet</strong><span>Your calls will appear here. Start one from an accepted contact.</span>" +
+      "</span><strong>No "+(received?"received":"sent")+" calls yet</strong><span>"+(received?"Incoming calls will appear here. Missed calls are marked in red.":"Calls you place will appear here.")+"</span>" +
       "<button type='button' class='primary-button' data-action='new-call'>Start a call</button></div>";
+    const filterBar = "<div class='wa-call-filter' role='tablist' aria-label='Call history filter'>" +
+      "<button type='button' role='tab' data-action='calls-filter' data-filter-id='received' aria-selected='"+(received?"true":"false")+"' class='"+(received?"active":"")+"'>Received</button>" +
+      "<button type='button' role='tab' data-action='calls-filter' data-filter-id='sent' aria-selected='"+(!received?"true":"false")+"' class='"+(!received?"active":"")+"'>Sent</button></div>";
     main.innerHTML = "<section class='section-screen wa-calls-screen'>" +
       screenHeader("Calls","<button type='button' class='primary-button wa-call-new-button' data-action='new-call'>" + icon("phone") + "<span>New call</span></button>") +
       "<div class='screen-content wa-calls-content'><p class='screen-description wa-calls-description'>" + description +
-      "</p><div class='section-card wa-call-history-card'><div class='wa-call-history-heading'><h3>Recent calls</h3>" +
-      "<span>" + (rows.length ? rows.length + (rows.length === 1 ? " call" : " calls") : "Call history") +
+      "</p>"+filterBar+"<div class='section-card wa-call-history-card'><div class='wa-call-history-heading'><h3>"+(received?"Received calls":"Sent calls")+"</h3>" +
+      "<span>" + visibleRows.length + (visibleRows.length === 1 ? " call" : " calls") +
       "</span></div><div class='wa-call-history-list'>" + history + "</div></div></div></section>";
+  }
+  function renderBlockedContacts() {
+    const blocked=(state&&Array.isArray(state.chats)?state.chats:[]).filter(chat=>chat.type==="person"&&chat.blockedByMe);
+    const rows=blocked.map(chat=>"<div class='wa-blocked-contact-row'>"+avatarHTML(chat)+"<span class='wa-blocked-contact-copy'><strong>"+esc(chat.name||chat.username||"Contact")+"</strong><small>@"+esc(chat.username||"")+"</small></span><button type='button' class='secondary-button' data-action='confirm-block-chat' data-chat-id='"+esc(chat.id)+"'>Unblock</button></div>").join("");
+    main.innerHTML="<section class='section-screen'>"+screenHeader("Blocked contacts")+"<div class='screen-content'><p class='screen-description'>Blocked accounts cannot send you direct messages, and you cannot send direct messages to them. Shared group conversations remain available.</p><div class='section-card wa-blocked-contact-list'>"+(rows||"<div class='empty-state'>You have not blocked anyone.</div>")+"</div></div></section>";
   }
   function renderCommunities() {
     if(currentUser&&currentUser.isSupabase){
@@ -1455,6 +1522,7 @@
     else if(view==="info") renderInfo(currentChat());
     else if(view==="updates") renderUpdates();
     else if(view==="calls") renderCalls();
+    else if(view==="blocked") renderBlockedContacts();
     else if(view==="communities") renderCommunities();
     else if(view==="channels") renderChannels();
     else if(view==="starred") renderBasic("Starred messages",state.starredMessages.map(entry=>({id:entry.chatId,name:entry.chatName,preview:entry.text,avatar:entry.avatar})).filter(x=>x.id),"Messages you star will appear here.","star");
@@ -1462,6 +1530,7 @@
     else if(view==="locked") renderBasic("Locked chats",state.chats.filter(c=>c.locked),"Chats you lock appear here in this local preview.","lock");
     else renderWelcome();
     updateMobileMode();
+    maybeOpenPendingIncomingShare();
   }
   function renderApp() {
     if(!state||!currentUser)return;
@@ -2674,6 +2743,27 @@ function openSharedItemsDialog(chat,kind) {
 
   const originalHandleAction=handleAction;
   handleAction=function(action,el){
+    if(action==="calls-filter"){callsFilter=el.dataset.filterId==="sent"?"sent":"received";renderCalls();return;}
+    if(action==="open-privacy-policy"){window.location.href="/privacy-policy.html";return;}
+    if(action==="open-terms-of-service"){window.location.href="/terms-of-service.html";return;}
+    if(action==="cancel-incoming-share"){clearPendingIncomingShare();return;}
+    if(action==="send-incoming-share"){
+      const selected=Array.from(document.querySelectorAll("[data-incoming-share-contact]:checked")).map(input=>String(input.value||"")).filter(Boolean);
+      if(!selected.length){toast("Select at least one contact.");return;}
+      const share=pendingIncomingShare;if(!share){toast("The shared content is no longer available. Share it again from the other app.");closeDialog();return;}
+      const caption=String($("#wa-incoming-share-caption")?.value||"").trim();
+      const files=Array.isArray(share.files)?share.files:[];
+      const text=files.length?caption:(caption||String(share.text||"").trim());
+      if(!files.length&&!text){toast("Add a message before sending.");return;}
+      void (async()=>{try{
+        const send=window.waAppBridge&&window.waAppBridge.shareIncomingContent;
+        if(typeof send!=="function")throw new Error("The sharing service is still loading. Refresh and try again.");
+        const count=await send(selected,files,text);
+        clearPendingIncomingShare();
+        toast("Shared to "+count+" contact"+(count===1?"":"s")+".");
+      }catch(error){toast("Could not send shared content: "+String(error&&error.message||"Unknown error"));}})();
+      return;
+    }
     if(action==="block-chat"||action==="confirm-block-chat"){
       const chat=findChat(el.dataset.chatId)||currentChat();if(!chat||chat.type!=="person"){toast("Blocking is available for direct contacts.");return;}
       if(action==="block-chat"){openDialog(chat.blockedByMe?"Unblock contact?":"Block contact?","<p class='screen-description'>"+(chat.blockedByMe?"This allows this contact to message you again.":"This stops direct messages between both accounts. Shared groups are not affected. The person is not notified.")+"</p>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='danger-button' data-action='confirm-block-chat' data-chat-id='"+esc(chat.id)+"'>"+(chat.blockedByMe?"Unblock":"Block contact")+"</button>");return;}
