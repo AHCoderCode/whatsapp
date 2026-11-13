@@ -389,7 +389,7 @@
     view = next;
     archivedMode = next==="archived";
     selectedChatId = null;
-    if (next==="locked") filter="locked"; else if (next==="chats" && filter==="locked") filter="all";
+    if (next==="locked") filter="locked"; else if (next==="chats") { filter="all"; searchQuery=""; const search=$("#chat-search"); if(search) search.value=""; }
     closePopup(); closeDialog();
     renderSidebar(); renderMain(); updateNav(); updateMobileMode();
   }
@@ -2167,7 +2167,7 @@ function openSharedItemsDialog(chat,kind) {
     if(action==="notification-settings-help"){closeDialog();toast("Open your browser's site settings for this website, set Notifications to Allow, then reopen WhatsApp.");return;}
     if(action==="sidebar-menu"||action==="row-menu"||action==="chat-menu"||action==="call-menu"||action==="attachment"||action==="emoji"||action==="more-lists"||action==="search-filters"||action==="pinned-menu"||action==="message-menu"){actionMenu(el,action);return;}
     if(action==="close-dialog"){closeDialog();return;}
-    if(action==="back-to-list"){selectedChatId=null;view="chats";renderSidebar();renderMain();updateMobile();return;}
+    if(action==="back-to-list"){setView("chats");return;}
     if(action==="back-to-chat"){view="chats";renderMain();updateMobile();return;}
     if(action==="edit-profile"){editProfileDialog();return;}
     if(action==="edit-about"){editAboutDialog();return;}
@@ -2292,7 +2292,7 @@ function openSharedItemsDialog(chat,kind) {
     if(!t)return;
     if(t.dataset.authMode){renderAuth(t.dataset.authMode);return;}
     if(t.dataset.menuAction){runMenuAction(t.dataset.menuAction,findChat(menuChatId));return;}
-    if(t.dataset.view){const v=t.dataset.view;if(v==="chats"){filter="all";archivedMode=false;searchQuery="";$("#chat-search").value="";}setView(v);return;}
+    if(t.dataset.view){setView(t.dataset.view);return;}
     if(t.dataset.filter){filter=t.dataset.filter;archivedMode=false;view="chats";selectedChatId=null;renderSidebar();renderMain();return;}
     if(t.dataset.requestId){
       const id=t.dataset.requestId;

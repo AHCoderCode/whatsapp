@@ -83,10 +83,10 @@ check("media, privacy, subgroup and synced-list handlers are present", () => {
   includes(files.app, "WhatsAppFeatureGaps.onBackendData");
 });
 check("feature-gap module is in the app shell cache", () => {
-  includes(files.html, "/feature-gaps.js?v=whatsapp-secure-release-20261111e");
-  includes(files.sw, "/feature-gaps.js?v=whatsapp-secure-release-20261111e");
-  includes(files.html, "/group-calls.js?v=whatsapp-secure-release-20261111e");
-  includes(files.sw, "/group-calls.js?v=whatsapp-secure-release-20261111e");
+  includes(files.html, "/feature-gaps.js?v=whatsapp-secure-release-20261113a");
+  includes(files.sw, "/feature-gaps.js?v=whatsapp-secure-release-20261113a");
+  includes(files.html, "/group-calls.js?v=whatsapp-secure-release-20261113a");
+  includes(files.sw, "/group-calls.js?v=whatsapp-secure-release-20261113a");
 });
 check("inline HTML scripts parse", () => {
   const scripts = [...files.html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
@@ -96,11 +96,16 @@ check("inline HTML scripts parse", () => {
 });
 check("manifest is valid JSON", () => JSON.parse(files.manifest));
 check("CSS braces balance", () => assert.equal((files.css.match(/{/g)||[]).length, (files.css.match(/}/g)||[]).length));
+check("returning to Chats clears archived, locked and stale search filters", () => {
+  includes(files.app, 'else if (next==="chats") { filter="all"; searchQuery=""; const search=$("#chat-search"); if(search) search.value=""; }');
+  includes(files.app, 'if(action==="back-to-list"){setView("chats");return;}');
+  includes(files.app, 'if(t.dataset.view){setView(t.dataset.view);return;}');
+});
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-secure-release-20261111e");
-  includes(files.sw, "whatsapp-secure-release-20261111e");
-  includes(files.manifest, "whatsapp-secure-release-20261111e");
-  includes(files.sw, "whatsapp-final-shell-v75");
+  includes(files.html, "whatsapp-secure-release-20261113a");
+  includes(files.sw, "whatsapp-secure-release-20261113a");
+  includes(files.manifest, "whatsapp-secure-release-20261113a");
+  includes(files.sw, "whatsapp-final-shell-v76");
 });
 check("mobile settings use a full-width account detail pane", () => {
   includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
@@ -171,7 +176,7 @@ check("web/PWA clients receive an actionable update banner while Android checks 
 });
 
 check("every Android Update tap refreshes and installs only the newest published APK", () => {
-  includes(files.updater, 'const APP_BUILD = "whatsapp-secure-release-20261111e"');
+  includes(files.updater, 'const APP_BUILD = "whatsapp-secure-release-20261113a"');
   includes(files.updater, "installAfterFreshCheck = true");
   includes(files.updater, "repeatFreshCheckAfterCurrent = true");
   includes(files.updater, "check(true)");
@@ -183,10 +188,10 @@ check("every Android Update tap refreshes and installs only the newest published
   includes(files.nativeActivity, "No older release was installed.");
 });
 check("PWA app shell and service worker share the current update build", () => {
-  includes(files.html, "whatsapp-secure-release-20261111e");
-  includes(files.sw, "whatsapp-secure-release-20261111e");
-  includes(files.manifest, "whatsapp-secure-release-20261111e");
-  includes(files.sw, "whatsapp-final-shell-v75");
+  includes(files.html, "whatsapp-secure-release-20261113a");
+  includes(files.sw, "whatsapp-secure-release-20261113a");
+  includes(files.manifest, "whatsapp-secure-release-20261113a");
+  includes(files.sw, "whatsapp-final-shell-v76");
 });
 check("Android update remains available from Settings after dismissing the banner", () => {
   includes(files.app, '["updates","download","App updates"]');
