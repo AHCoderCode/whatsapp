@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  const APP_BUILD = "whatsapp-secure-release-20261113a";
+  const APP_BUILD = "whatsapp-secure-release-20261114a";
   const native = window.WhatsAppNativeAndroid;
   const nativeApp = !!(native && typeof native.isNativeApp === "function" && native.isNativeApp());
   const playStoreBuild = !!(nativeApp && typeof native.isPlayStoreBuild === "function" && native.isPlayStoreBuild());

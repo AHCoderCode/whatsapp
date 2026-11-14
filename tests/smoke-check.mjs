@@ -83,10 +83,10 @@ check("media, privacy, subgroup and synced-list handlers are present", () => {
   includes(files.app, "WhatsAppFeatureGaps.onBackendData");
 });
 check("feature-gap module is in the app shell cache", () => {
-  includes(files.html, "/feature-gaps.js?v=whatsapp-secure-release-20261113a");
-  includes(files.sw, "/feature-gaps.js?v=whatsapp-secure-release-20261113a");
-  includes(files.html, "/group-calls.js?v=whatsapp-secure-release-20261113a");
-  includes(files.sw, "/group-calls.js?v=whatsapp-secure-release-20261113a");
+  includes(files.html, "/feature-gaps.js?v=whatsapp-secure-release-20261114a");
+  includes(files.sw, "/feature-gaps.js?v=whatsapp-secure-release-20261114a");
+  includes(files.html, "/group-calls.js?v=whatsapp-secure-release-20261114a");
+  includes(files.sw, "/group-calls.js?v=whatsapp-secure-release-20261114a");
 });
 check("inline HTML scripts parse", () => {
   const scripts = [...files.html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
@@ -102,10 +102,10 @@ check("returning to Chats clears archived, locked and stale search filters", () 
   includes(files.app, 'if(t.dataset.view){setView(t.dataset.view);return;}');
 });
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-secure-release-20261113a");
-  includes(files.sw, "whatsapp-secure-release-20261113a");
-  includes(files.manifest, "whatsapp-secure-release-20261113a");
-  includes(files.sw, "whatsapp-final-shell-v76");
+  includes(files.html, "whatsapp-secure-release-20261114a");
+  includes(files.sw, "whatsapp-secure-release-20261114a");
+  includes(files.manifest, "whatsapp-secure-release-20261114a");
+  includes(files.sw, "whatsapp-final-shell-v77");
 });
 check("mobile settings use a full-width account detail pane", () => {
   includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
@@ -176,7 +176,7 @@ check("web/PWA clients receive an actionable update banner while Android checks 
 });
 
 check("every Android Update tap refreshes and installs only the newest published APK", () => {
-  includes(files.updater, 'const APP_BUILD = "whatsapp-secure-release-20261113a"');
+  includes(files.updater, 'const APP_BUILD = "whatsapp-secure-release-20261114a"');
   includes(files.updater, "installAfterFreshCheck = true");
   includes(files.updater, "repeatFreshCheckAfterCurrent = true");
   includes(files.updater, "check(true)");
@@ -188,10 +188,10 @@ check("every Android Update tap refreshes and installs only the newest published
   includes(files.nativeActivity, "No older release was installed.");
 });
 check("PWA app shell and service worker share the current update build", () => {
-  includes(files.html, "whatsapp-secure-release-20261113a");
-  includes(files.sw, "whatsapp-secure-release-20261113a");
-  includes(files.manifest, "whatsapp-secure-release-20261113a");
-  includes(files.sw, "whatsapp-final-shell-v76");
+  includes(files.html, "whatsapp-secure-release-20261114a");
+  includes(files.sw, "whatsapp-secure-release-20261114a");
+  includes(files.manifest, "whatsapp-secure-release-20261114a");
+  includes(files.sw, "whatsapp-final-shell-v77");
 });
 check("Android update remains available from Settings after dismissing the banner", () => {
   includes(files.app, '["updates","download","App updates"]');
@@ -216,18 +216,22 @@ check("WebView attachment inputs remain clickable and native calls set audio mod
   includes(files.calls, "beginCallAudio(speakerOn)");
   includes(files.nativeActivity, "AudioManager.MODE_IN_COMMUNICATION");
   includes(files.nativeActivity, "AudioManager.STREAM_VOICE_CALL");
-  excludes(files.nativeActivity, "getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)");
+  includes(files.nativeActivity, "getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)");
+  includes(files.nativeActivity, "Math.round(maximum * 0.75f)");
+  includes(files.nativeActivity, "restoreNativeCallVolume(manager)");
   includes(files.nativeActivity, "setCommunicationDevice(device)");
   includes(files.nativeActivity, "TYPE_BUILTIN_EARPIECE");
   excludes(files.nativeActivity, "TYPE_BUILTIN_SPEAKER) && manager.setCommunicationDevice(device)");
 });
 check("call speaker starts in earpiece mode and uses separate speaker/earpiece output levels", () => {
   includes(files.calls, "speakerOn=false");
-  includes(files.calls, "gain.gain.value=speakerOn?2.2:0.82");
-  includes(files.calls, "compressor.threshold.value=-9");
+  includes(files.calls, "gain.gain.value=speakerOn?2.6:0.82");
+  includes(files.calls, "makeup.gain.value=speakerOn?1.25:1");
+  includes(files.calls, "limiter.threshold.value=-3");
+  includes(files.calls, "compressor.threshold.value=-18");
   includes(files.calls, "createDynamicsCompressor()");
   includes(files.nativeActivity, "TYPE_BUILTIN_EARPIECE");
-  excludes(files.nativeActivity, "setStreamVolume(AudioManager.STREAM_VOICE_CALL");
+  includes(files.nativeActivity, "setStreamVolume(AudioManager.STREAM_VOICE_CALL");
 });
 check("minimized calls stay connected while chats remain accessible", () => {
   includes(files.calls, "callMinimized=false");
@@ -242,7 +246,9 @@ check("minimized calls stay connected while chats remain accessible", () => {
 });
 check("speaker route changes both Android output route and call output gain", () => {
   includes(files.calls, "setNativeCallSpeaker(speakerOn)");
-  includes(files.calls, "gain.gain.value=speakerOn?2.2:0.82");
+  includes(files.calls, "gain.gain.value=speakerOn?2.6:0.82");
+  includes(files.calls, "callOutputMakeupGain");
+  includes(files.nativeActivity, "adjustNativeCallVolume(manager, enabled)");
   includes(files.calls, "function updateCallOutputGain()");
   includes(files.calls, 'button.innerHTML=bridge.icon("volume")+"<span>Speaker</span>"');
   excludes(files.calls, "Speaker on");
@@ -259,7 +265,8 @@ check("audio call screen centers the contact name, profile photo and live status
   includes(files.calls, 'function callAvatarMarkup(peer,className="wa-call-avatar")');
   includes(files.calls, "<div class='wa-call-audio-stage'><h2>");
   includes(files.calls, "callAvatarMarkup(peer)");
-  includes(files.calls, '"<p>"+esc(status)');
+  includes(files.calls, "wa-call-status-indicator");
+  includes(files.calls, "wa-call-status-text");
   includes(files.css, ".wa-call-audio-stage .wa-call-avatar");
   includes(files.css, "background:#202124!important");
 });
@@ -340,9 +347,10 @@ check("attachment menu opens the Android file picker before closing and has a We
   includes(files.nativeActivity, "onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params)");
   includes(files.nativeActivity, "WebChromeClient.FileChooserParams.parseResult(result, data)");
 });
-check("microphone source errors retry default constraints and explain permission/device failures", () => {
-  includes(files.calls, "noiseSuppression:true");
-  includes(files.calls, "audio:true,video:video?{facingMode:\"user\"}:false");
+check("microphone retries keep echo cancellation and noise processing enabled", () => {
+  includes(files.calls, "CALL_MICROPHONE_CONSTRAINTS={echoCancellation:{ideal:true},noiseSuppression:{ideal:true},autoGainControl:{ideal:true}}");
+  includes(files.calls, "audio:CALL_MICROPHONE_CONSTRAINTS");
+  excludes(files.calls, "getUserMedia({audio:true,video:");
   includes(files.calls, "Could not start the microphone audio source.");
   includes(files.calls, "Allow the permission for WhatsApp in browser or Android app settings");
 });
@@ -436,13 +444,18 @@ check("optional feed failures cannot hide direct chats", () => {
   includes(files.backend, "const relations=requestResult.error?[]:(requestResult.data||[]);");
   includes(files.backend, "const directMessagePeers=");
 });
-check("voice recorder exposes explicit discard/send and live audio levels", () => {
+check("voice recorder exposes discard/send, upload retry, and live audio levels", () => {
   includes(files.backend, "data-wa-recording-action='cancel'");
   includes(files.backend, "data-wa-recording-action='send'");
+  includes(files.backend, "data-wa-recording-action='retry'");
+  includes(files.backend, "pendingVoiceSend={blob,options:");
+  includes(files.backend, "async function sendPendingVoiceMessage()");
+  includes(files.backend, "chatId:stoppedChatId");
   includes(files.backend, "createMediaStreamSource(recorderStream).connect(recorderAnalyser)");
   includes(files.backend, 'if(stopReason==="cancel"){say("Voice message discarded.");return;}');
   includes(files.css, ".wa-recording-bar{");
   includes(files.css, ".wa-recording-waveform i.active");
+  includes(files.css, ".wa-voice-send-status{");
 });
 check("message selection uses querySelectorAll for a list of message rows", () => {
   assert.ok(files.app.includes('$$(".message-row",main).forEach('), "message row selection must use querySelectorAll");
@@ -692,11 +705,18 @@ check("typing and voice recording activity use ephemeral realtime signals and an
   includes(files.css,"@keyframes wa-typing-dot");
   includes(files.css,"@keyframes wa-activity-wave");
 });
-check("outgoing call status advances from Calling to Ringing on peer presence and Connecting on acceptance", () => {
+check("outgoing call status follows confirmed realtime presence and has a visible indicator", () => {
   includes(files.calls,'activeCall.peerRinging?"Ringing…":"Calling…"');
   includes(files.calls,"syncOutgoingPresenceStatus");
+  includes(files.calls,"wa-call-status-indicator");
   includes(files.calls,'setPhase("connecting","Connecting…")');
+  includes(files.backend,"presenceReady=status==="SUBSCRIBED"");
   includes(files.backend,"isBackendUserOnline=isBackendUserOnline");
+});
+check("the call header has no top-right X while the regular hang-up action remains", () => {
+  excludes(files.calls,"wa-call-close");
+  includes(files.calls,"data-wa-call='minimize'");
+  includes(files.calls,"data-wa-call='end'");
 });
 check("read receipt setting prevents database reads when disabled", () => includes(files.backend, "if(!stillVisible()||settings.readReceipts===false)return;"));
 check("read ticks have distinct grey and blue states", () => {

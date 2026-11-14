@@ -66,6 +66,8 @@ public final class MainActivity extends Activity {
     private AudioFocusRequest callAudioFocusRequest;
     private int previousAudioMode = AudioManager.MODE_NORMAL;
     private boolean previousSpeakerphoneOn;
+    private int previousVoiceCallVolume = -1;
+    private int appliedVoiceCallVolume = -1;
     private AudioDeviceInfo previousCommunicationDevice;
     private boolean callAudioSessionActive;
     private final AudioManager.OnAudioFocusChangeListener callAudioFocusListener = focusChange -> {};
@@ -511,10 +513,14 @@ public final class MainActivity extends Activity {
     }
 
     private void applyNativeCallSpeaker(AudioManager manager, boolean enabled) {
+        boolean routeSelected = false;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (enabled) {
                 for (AudioDeviceInfo device : manager.getAvailableCommunicationDevices()) {
-                    if (device.getType() == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER && manager.setCommunicationDevice(device)) return;
+                    if (device.getType() == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER && manager.setCommunicationDevice(device)) {
+                        routeSelected = true;
+                        break;
+                    }
                 }
             } else {
                 // Restore an active headset route when one was selected before
@@ -523,17 +529,64 @@ public final class MainActivity extends Activity {
                     && previousCommunicationDevice.getType() != AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
                     for (AudioDeviceInfo device : manager.getAvailableCommunicationDevices()) {
                         if (device.getId() == previousCommunicationDevice.getId()
-                            && manager.setCommunicationDevice(device)) return;
+                            && manager.setCommunicationDevice(device)) {
+                            routeSelected = true;
+                            break;
+                        }
                     }
                 }
-                for (AudioDeviceInfo device : manager.getAvailableCommunicationDevices()) {
-                    if (device.getType() == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
-                        && manager.setCommunicationDevice(device)) return;
+                if (!routeSelected) {
+                    for (AudioDeviceInfo device : manager.getAvailableCommunicationDevices()) {
+                        if (device.getType() == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
+                            && manager.setCommunicationDevice(device)) {
+                            routeSelected = true;
+                            break;
+                        }
+                    }
                 }
             }
-            manager.clearCommunicationDevice();
+            if (!routeSelected) {
+                manager.clearCommunicationDevice();
+                manager.setSpeakerphoneOn(enabled);
+            }
+        } else {
+            manager.setSpeakerphoneOn(enabled);
         }
-        manager.setSpeakerphoneOn(enabled);
+        adjustNativeCallVolume(manager, enabled);
+    }
+
+    private void adjustNativeCallVolume(AudioManager manager, boolean speakerEnabled) {
+        try {
+            if (speakerEnabled) {
+                if (previousVoiceCallVolume < 0) previousVoiceCallVolume = manager.getStreamVolume(AudioManager.STREAM_VOICE_CALL);
+                int current = manager.getStreamVolume(AudioManager.STREAM_VOICE_CALL);
+                int maximum = manager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL);
+                // Raise a quiet speaker route to a comfortable upper range, not device maximum.
+                int target = Math.max(current, Math.round(maximum * 0.75f));
+                if (target > current) manager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, target, 0);
+                appliedVoiceCallVolume = target;
+            } else {
+                restoreNativeCallVolume(manager);
+            }
+        } catch (RuntimeException error) {
+            android.util.Log.w("WhatsApp", "Could not adjust call speaker volume", error);
+        }
+    }
+
+    private void restoreNativeCallVolume(AudioManager manager) {
+        if (previousVoiceCallVolume < 0) return;
+        try {
+            int current = manager.getStreamVolume(AudioManager.STREAM_VOICE_CALL);
+            // Preserve a manual volume change made by the user during the call.
+            if (appliedVoiceCallVolume < 0 || current == appliedVoiceCallVolume) {
+                manager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, previousVoiceCallVolume, 0);
+            }
+        } catch (RuntimeException error) {
+            android.util.Log.w("WhatsApp", "Could not restore the previous call volume", error);
+        } finally {
+            previousVoiceCallVolume = -1;
+            appliedVoiceCallVolume = -1;
+        }
     }
 
     private void restoreNativeCallRoute(AudioManager manager) {
@@ -572,6 +625,7 @@ public final class MainActivity extends Activity {
         try {
             if (Build.VERSION.SDK_INT >= 26 && callAudioFocusRequest != null) manager.abandonAudioFocusRequest(callAudioFocusRequest);
             else manager.abandonAudioFocus(callAudioFocusListener);
+            restoreNativeCallVolume(manager);
             restoreNativeCallRoute(manager);
             manager.setMode(previousAudioMode);
         } catch (Exception ignored) {}

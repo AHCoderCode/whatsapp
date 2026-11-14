@@ -1259,3 +1259,24 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:
   .wa-call-mini-restore,.wa-call-mini-end{min-height:38px;padding:0 9px;font-size:11px}
   .wa-call-mini-avatar{width:36px;height:36px;flex-basis:36px}
 }
+
+
+/* Compact live call status, with a distinct online/ringing indicator. */
+.wa-call-status-indicator{display:inline-flex!important;align-items:center;justify-content:center;gap:7px;margin:4px 0 0!important;font-size:12px!important;line-height:1.3}
+.wa-call-status-indicator-dot{width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:#c58b37;box-shadow:0 0 0 3px #c58b3720}
+.wa-call-status-indicator.is-ringing .wa-call-status-indicator-dot,.wa-call-status-indicator.is-connected .wa-call-status-indicator-dot,.wa-call-status-dot.is-ringing,.wa-call-status-dot.is-connected{background:#20a66a;box-shadow:0 0 0 3px #20a66a20}
+.wa-call-status-indicator.is-calling .wa-call-status-indicator-dot,.wa-call-status-indicator.is-connecting .wa-call-status-indicator-dot,.wa-call-status-dot.is-calling,.wa-call-status-dot.is-connecting{background:#c58b37;box-shadow:0 0 0 3px #c58b3720}
+.wa-call-status-indicator.is-incoming .wa-call-status-indicator-dot,.wa-call-status-dot.is-incoming{background:#20a66a}
+.wa-call-status-text{display:inline-block}
+.wa-call-status-indicator.is-ringing .wa-call-status-indicator-dot{animation:wa-call-ringing-pulse 1.35s ease-out infinite}
+@keyframes wa-call-ringing-pulse{0%{box-shadow:0 0 0 0 #20a66a55}100%{box-shadow:0 0 0 7px #20a66a00}}
+
+/* A failed voice-note upload keeps its recording available for Retry. */
+.wa-voice-send-status{position:fixed;z-index:10030;left:12px;right:12px;bottom:calc(86px + env(safe-area-inset-bottom));display:flex;align-items:center;gap:10px;max-width:560px;min-height:54px;margin:0 auto;padding:9px 12px;border:1px solid #cbd6d9;border-radius:14px;background:#f8fbfc;color:#183239;box-shadow:0 8px 28px #0003}
+.wa-voice-send-copy{flex:1;min-width:0;font-size:13px;font-weight:600}
+.wa-voice-send-status button{min-height:36px;padding:0 12px;border:0;border-radius:9px;background:#075e54;color:#fff;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.wa-voice-send-status .wa-voice-send-discard{background:#e7edef;color:#32454b}
+.wa-voice-send-status.is-sending .wa-voice-send-copy{color:#52666c}
+.theme-dark .wa-voice-send-status{border-color:#3b494e;background:#202d32;color:#eef6f7}
+.theme-dark .wa-voice-send-status .wa-voice-send-discard{background:#35444a;color:#eef6f7}
+@media(max-width:420px){.wa-voice-send-status{gap:7px;padding:8px 9px}.wa-voice-send-status button{padding:0 9px;font-size:11px}}
