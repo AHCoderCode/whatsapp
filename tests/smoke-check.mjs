@@ -705,16 +705,21 @@ check("typing and voice recording activity use ephemeral realtime signals and an
   includes(files.css,"@keyframes wa-typing-dot");
   includes(files.css,"@keyframes wa-activity-wave");
 });
-check("outgoing call status uses an actual recipient push receipt, with active-presence fallback", () => {
+check("outgoing call status requires a confirmed incoming-call display, not online presence", () => {
   includes(files.calls,'activeCall.peerRinging?"Ringing…":"Calling…"');
   includes(files.calls,"startOutgoingReachabilityPolling");
   includes(files.calls,'action:"call-reachability"');
-  includes(files.calls,"bridge.isBackendUserOnline");
-  includes(files.push,"push_event_received_at");
+  excludes(files.calls,"bridge.isBackendUserOnline");
+  includes(files.calls,'action:"confirm-call-ringing"');
+  includes(files.calls,"startIncomingRingingAcknowledgement");
+  includes(files.push,"notification_api_resolved_at");
+  includes(files.push,'body.action === "confirm-call-ringing"');
   includes(files.push,'body.action === "call-reachability"');
   includes(files.push,'probe_id: callId');
-  includes(files.sw,'kind === "call" && /^[0-9a-f]');
-  includes(files.nativeMessaging,"reportCallPushReceived");
+  includes(files.sw,'reportCallTestReceipt(probeId, "shown")');
+  includes(files.nativeMessaging,"reportCallPushShown");
+  includes(files.nativeMessaging,'body.put("stage", "shown")');
+  includes(files.nativeNotifications,"return showCall(context, data);");
 });
 check("video calls support camera switching and use a reduced 480p frame budget", () => {
   includes(files.calls,"data-wa-call='switch-camera'");
