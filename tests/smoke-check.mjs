@@ -19,6 +19,7 @@ const files = {
   nativeNotifications: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/NativeCallNotifications.java"),
   nativeReceiver: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/CallNotificationActionReceiver.java"),
   nativeActivity: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/MainActivity.java"),
+  nativeMessaging: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/WhatsAppMessagingService.java"),
   incomingActivity: read("android-native/app/src/main/java/com/ahcodercode/whatsapp/IncomingCallActivity.java"),
   updater: read("updater.js"),
   buildWorkflow: read(".github/workflows/build-native-android.yml"),
@@ -225,11 +226,10 @@ check("WebView attachment inputs remain clickable and native calls set audio mod
 });
 check("call speaker starts in earpiece mode and uses separate speaker/earpiece output levels", () => {
   includes(files.calls, "speakerOn=false");
-  includes(files.calls, "gain.gain.value=speakerOn?2.6:0.82");
-  includes(files.calls, "makeup.gain.value=speakerOn?1.25:1");
-  includes(files.calls, "limiter.threshold.value=-3");
-  includes(files.calls, "compressor.threshold.value=-18");
-  includes(files.calls, "createDynamicsCompressor()");
+  includes(files.calls, "speakerOn=false");
+  includes(files.calls, "element.volume=speakerOn?0.86:0.68");
+  excludes(files.calls, "createMediaStreamSource(stream)");
+  excludes(files.calls, "gain.gain.value=speakerOn?2.6:0.82");
   includes(files.nativeActivity, "TYPE_BUILTIN_EARPIECE");
   includes(files.nativeActivity, "setStreamVolume(AudioManager.STREAM_VOICE_CALL");
 });
@@ -246,8 +246,8 @@ check("minimized calls stay connected while chats remain accessible", () => {
 });
 check("speaker route changes both Android output route and call output gain", () => {
   includes(files.calls, "setNativeCallSpeaker(speakerOn)");
-  includes(files.calls, "gain.gain.value=speakerOn?2.6:0.82");
-  includes(files.calls, "callOutputMakeupGain");
+  includes(files.calls, "element.volume=speakerOn?0.86:0.68");
+  excludes(files.calls, "callOutputAudioContext");
   includes(files.nativeActivity, "adjustNativeCallVolume(manager, enabled)");
   includes(files.calls, "function updateCallOutputGain()");
   includes(files.calls, 'button.innerHTML=bridge.icon("volume")+"<span>Speaker</span>"');
@@ -705,13 +705,35 @@ check("typing and voice recording activity use ephemeral realtime signals and an
   includes(files.css,"@keyframes wa-typing-dot");
   includes(files.css,"@keyframes wa-activity-wave");
 });
-check("outgoing call status follows confirmed realtime presence and has a visible indicator", () => {
+check("outgoing call status uses an actual recipient push receipt, with active-presence fallback", () => {
   includes(files.calls,'activeCall.peerRinging?"Ringing…":"Calling…"');
-  includes(files.calls,"syncOutgoingPresenceStatus");
-  includes(files.calls,"wa-call-status-indicator");
-  includes(files.calls,'setPhase("connecting","Connecting…")');
-  includes(files.backend, 'presenceReady=status==="SUBSCRIBED"');
-  includes(files.backend,"isBackendUserOnline=isBackendUserOnline");
+  includes(files.calls,"startOutgoingReachabilityPolling");
+  includes(files.calls,'action:"call-reachability"');
+  includes(files.calls,"bridge.isBackendUserOnline");
+  includes(files.push,"push_event_received_at");
+  includes(files.push,'body.action === "call-reachability"');
+  includes(files.push,'probe_id: callId');
+  includes(files.sw,'kind === "call" && /^[0-9a-f]');
+  includes(files.nativeMessaging,"reportCallPushReceived");
+});
+check("video calls support camera switching and use a reduced 480p frame budget", () => {
+  includes(files.calls,"data-wa-call='switch-camera'");
+  includes(files.calls,"async function switchCamera()");
+  includes(files.calls,"sender.replaceTrack(newTrack)");
+  includes(files.calls,"width:{ideal:640,max:640}");
+  includes(files.calls,"frameRate:{ideal:20,max:24}");
+  includes(files.calls,"maxFramerate=20");
+});
+check("call audio uses direct WebRTC playback and supported echo/noise processing", () => {
+  includes(files.calls,"noiseSuppression:{ideal:true}");
+  includes(files.calls,"echoCancellation:{ideal:true}");
+  includes(files.calls,"element.muted=false");
+  excludes(files.calls,"createDynamicsCompressor()");
+});
+check("Android recovers the shell if the WebView renderer exits during a call", () => {
+  includes(files.nativeActivity,"onRenderProcessGone");
+  includes(files.nativeActivity,"RENDERER_PRIORITY_BOUND");
+  includes(files.nativeActivity,"FLAG_ACTIVITY_CLEAR_TASK");
 });
 check("the call header has no top-right X while the regular hang-up action remains", () => {
   excludes(files.calls,"wa-call-close");

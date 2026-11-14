@@ -14,7 +14,7 @@
   const esc = value => bridge.escapeHTML(String(value == null ? "" : value));
   const usernamePattern = /^[a-z0-9_]{3,20}$/;
   let signedProfile = null, liveChannel = null, liveUserId = "", people = new Map(), activeChannelId = "";
-  let presenceChannel = null, presenceUserId = "", presenceReady = false;
+  let presenceChannel = null, presenceUserId = "";
   let activityChannel = null, activityUserId = "", activityReady = false;
   const localChatActivities = new Map(), remoteChatActivities = new Map();
   let busy = false, loading = false, refreshQueued = false, searchTimer = null, searchCounter = 0;
@@ -246,7 +246,7 @@
   }
   function isBackendUserOnline(userId){
     const id=String(userId||"");
-    if(!id||!presenceChannel||!presenceReady)return false;
+    if(!id||!presenceChannel)return false;
     try{return Object.values(presenceChannel.presenceState()||{}).flat().some(item=>item&&String(item.user_id||"")===id&&item.online!==false);}catch(_){return false;}
   }
   function getChatById(chatId){
@@ -384,7 +384,6 @@
     if(!db||!userId)return;
     if(presenceChannel&&presenceUserId===String(userId)){refreshPresenceUI();return;}
     if(presenceChannel)void db.removeChannel(presenceChannel);
-    presenceReady=false;
     presenceUserId=String(userId);
     const channel=db.channel("whatsapp-online-status",{config:{presence:{key:String(userId)}}});
     presenceChannel=channel;
@@ -393,9 +392,7 @@
       .on("presence",{event:"join"},reconcile)
       .on("presence",{event:"leave"},reconcile)
       .subscribe(async status=>{
-        if(presenceChannel!==channel)return;
-        presenceReady=status==="SUBSCRIBED";
-        if(!presenceReady){refreshPresenceUI();return;}
+        if(status!=="SUBSCRIBED"||presenceChannel!==channel)return;
         try{await channel.track({user_id:String(userId),online:true,online_at:new Date().toISOString()});refreshPresenceUI();}
         catch(error){console.warn("Could not publish online status:",error&&error.message||error);}
       });
@@ -797,7 +794,6 @@
   const ATTACHMENT_BUCKET = "master-chat-attachments";
   let recorder = null, recorderStream = null, recorderChunks = [], recorderStartedAt = 0, recorderChatId = null, recorderStopReason = "";
   let recorderAudioContext=null,recorderAnalyser=null,recorderAnimationFrame=0,recorderUiTimer=null;
-  let pendingVoiceSend=null;
   function currentSelectedChat() {
     const selected = bridge.getCurrentChat();
     return selected && selected.id ? selected : null;
@@ -822,37 +818,6 @@
       button.setAttribute("aria-label",hasText?"Send message":"Record voice message");
     }
     if(input){input.disabled=false;input.placeholder="Type a message";}
-  }
-  function clearVoiceSendStatus(){
-    const status=$("#wa-voice-send-status");if(status)status.remove();
-  }
-  function renderVoiceSendStatus(isSending){
-    clearVoiceSendStatus();
-    const status=document.createElement("div");
-    status.id="wa-voice-send-status";
-    status.className="wa-voice-send-status "+(isSending?"is-sending":"is-retry");
-    status.setAttribute("role","status");
-    status.setAttribute("aria-live","polite");
-    status.innerHTML=isSending
-      ?"<span class='wa-voice-send-copy'>Sending voice message…</span>"
-      :"<span class='wa-voice-send-copy'>Voice message wasn’t sent.</span><button type='button' data-wa-recording-action='retry'>Retry</button><button type='button' class='wa-voice-send-discard' data-wa-recording-action='discard-pending'>Discard</button>";
-    document.body.appendChild(status);
-  }
-  async function sendPendingVoiceMessage(){
-    const pending=pendingVoiceSend;
-    if(!pending||pending.busy)return false;
-    pending.busy=true;
-    renderVoiceSendStatus(true);
-    const sent=await uploadStoredAttachment(pending.blob,pending.options);
-    if(pendingVoiceSend!==pending)return sent;
-    if(sent){
-      pendingVoiceSend=null;
-      clearVoiceSendStatus();
-    }else{
-      pending.busy=false;
-      renderVoiceSendStatus(false);
-    }
-    return sent;
   }
   function showRecordingBar(){
     const form=$("#message-form");if(!form)return;
@@ -937,14 +902,14 @@
     return "direct/"+me.id+"/"+chat.id+"/"+nonce+"-"+fileName;
   }
   async function uploadStoredAttachment(blobOrFile, options) {
-    const me=getUser(), chat=options.chatId?getChatById(options.chatId):currentSelectedChat();
+    const me=getUser(), chat=currentSelectedChat();
     const isVoice=options.type==="voice";
-    if(!me||!me.isSupabase){say("Sign in to send an attachment.");return false;}
-    if(!chat){say("Open the original conversation before sending this attachment.");return false;}
-    if(!blobOrFile||!blobOrFile.size){say("This attachment is empty.");return false;}
-    if(blobOrFile.size>15*1024*1024){say("Attachments must be 15 MB or smaller.");return false;}
+    if(!me||!me.isSupabase)return say("Sign in to send an attachment.");
+    if(!chat)return say("Open a conversation first.");
+    if(!blobOrFile||!blobOrFile.size)return say("This attachment is empty.");
+    if(blobOrFile.size>15*1024*1024)return say("Attachments must be 15 MB or smaller.");
     const mime=String(options.mime||blobOrFile.type||"application/octet-stream").split(";")[0].trim().toLowerCase();
-    if(isVoice&&!mime.startsWith("audio/")){say("The browser returned an unsupported audio format. Try a different browser.");return false;}
+    if(isVoice&&!mime.startsWith("audio/"))return say("The browser returned an unsupported audio format. Try a different browser.");
     const filename=safeFileName(options.name||blobOrFile.name||(isVoice?"voice-note.webm":"attachment"));
     const path=attachmentPath(me,chat,filename);
     const uploadFile=blobOrFile instanceof File?blobOrFile:new File([blobOrFile],filename,{type:mime,lastModified:Date.now()});
@@ -969,11 +934,9 @@
       if(data){insertMessageIntoUI(data);void dispatchServerPush("notify-message",{messageId:data.id});}
       if(!isVoice)say("Attachment sent.");
       else say("Voice message sent.");
-      return true;
     }catch(error){
       try{await db.storage.from(ATTACHMENT_BUCKET).remove([path]);}catch(_){}
       say(safeError(error,"Attachment upload failed. Check your connection and try again."));
-      return false;
     }
   }
   async function shareIncomingContent(targetIds,files,captionOrText) {
@@ -1065,11 +1028,10 @@
     const me=getUser(),chat=currentSelectedChat();
     if(!me||!me.isSupabase)return say("Sign in to record and send a voice note.");
     if(!chat)return say("Open a conversation first.");
-    if(pendingVoiceSend)return say("Retry or discard the unsent voice message before recording another.");
     if(recorder)return stopVoiceRecording("send");
     if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==="undefined")return say("Voice notes are not supported by this browser. Try the latest Chrome, Edge or Safari over HTTPS.");
     try{
-      recorderStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:{ideal:true},noiseSuppression:{ideal:true},autoGainControl:{ideal:true}}});
+      recorderStream=await navigator.mediaDevices.getUserMedia({audio:true});
       if(!currentSelectedChat()||String(currentSelectedChat().id)!==String(chat.id)){
         recorderStream.getTracks().forEach(t=>t.stop());recorderStream=null;return say("The conversation changed. Open it again before recording.");
       }
@@ -1094,8 +1056,7 @@
         if(stopReason==="error"){say("Voice recording failed.");return;}
         if(!stillSameChat){say("Voice note cancelled because the conversation changed.");return;}
         if(!blob.size){say("No audio was captured. Record a voice message and try again.");return;}
-        pendingVoiceSend={blob,options:{type:"voice",name:"voice-note."+ext,mime:blobType,durationMs:duration,chatId:stoppedChatId},busy:false};
-        void sendPendingVoiceMessage();
+        void uploadStoredAttachment(blob,{type:"voice",name:"voice-note."+ext,mime:blobType,durationMs:duration});
       };
       recorder.start(250);
       setChatActivity("recording",true,chat);
@@ -1737,10 +1698,6 @@
       recorderStopReason="cancel";stopVoiceRecording("cancel");
     }else if(control.dataset.waRecordingAction==="send"){
       stopVoiceRecording("send");
-    }else if(control.dataset.waRecordingAction==="retry"){
-      void sendPendingVoiceMessage();
-    }else if(control.dataset.waRecordingAction==="discard-pending"){
-      pendingVoiceSend=null;clearVoiceSendStatus();say("Unsent voice message discarded.");
     }
   },true);
   document.addEventListener("click",event=>{
@@ -1771,7 +1728,7 @@
     if(activityChannel&&db)try{await db.removeChannel(activityChannel);}catch(_){}
     for(const entry of localChatActivities.values()){publishChatActivity(entry.chat,entry.activity,false);clearActivityEntry(entry);}
     localChatActivities.clear();
-    presenceChannel=null;presenceUserId="";presenceReady=false;activityChannel=null;activityUserId="";activityReady=false;
+    presenceChannel=null;presenceUserId="";activityChannel=null;activityUserId="";activityReady=false;
     liveChannel=null;liveUserId="";if(window.WhatsAppCalls)window.WhatsAppCalls.cleanup();
     const nativeToken=String(window.__waNativeFCMToken||"").trim();
     if(nativeToken)try{await unregisterNativeAndroidPushToken(nativeToken);}catch(error){console.warn("Could not unregister native Android push token:",error&&error.message||error);}

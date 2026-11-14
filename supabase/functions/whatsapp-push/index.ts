@@ -261,7 +261,7 @@ async function sendAndroidPushToUsers(
         const response = await fetch("https://fcm.googleapis.com/v1/projects/" + encodeURIComponent(firebase.projectId) + "/messages:send", {
           method: "POST",
           headers: { "Authorization": "Bearer " + firebase.accessToken, "Content-Type": "application/json" },
-          body: JSON.stringify({message:{token:item.token,data:nativeData,android:{priority:"HIGH",ttl:(kind==="call"||kind==="call-ended")?"60s":"3600s",collapse_key:collapseKey}}})
+          body: JSON.stringify({message:{token:item.token,data:nativeData,android:{priority:"HIGH",ttl:kind==="call"?"20s":kind==="call-ended"?"60s":"3600s",collapse_key:collapseKey}}})
         });
         if (response.ok) { sent++; return; }
         const errorBody = await response.text().catch(() => "");
@@ -352,6 +352,9 @@ async function notifyCall(userId: string, body: any) {
   if (!call || call.caller_id !== userId || call.status !== "ringing" || call.group_call_id) {
     return { sent: 0, reason: "call-not-active" };
   }
+  const { error: receiptRowError } = await admin.from("whatsapp_push_diagnostics")
+    .insert({ probe_id: callId, user_id: call.callee_id });
+  if (receiptRowError && receiptRowError.code !== "23505") throw receiptRowError;
   const { data: caller } = await admin.from("aeroshell_profiles")
     .select("id,username,display_name").eq("id", userId).maybeSingle();
   const callerName = clean(caller?.display_name || caller?.username || "Contact", 80);
@@ -363,6 +366,7 @@ async function notifyCall(userId: string, body: any) {
     data: {
       kind: "call",
       callId: String(call.id),
+      probeId: String(call.id),
       chatId: String(call.caller_id),
       callerName,
       mediaType: call.media_type === "video" ? "video" : "audio",
@@ -370,7 +374,7 @@ async function notifyCall(userId: string, body: any) {
     }
   };
   const [webResult, androidResult] = await Promise.all([
-    sendPushToUsers([call.callee_id], "calls_enabled", pushPayload, 300),
+    sendPushToUsers([call.callee_id], "calls_enabled", pushPayload, 20),
     sendAndroidCallPushToUsers([call.callee_id], pushPayload)
   ]);
   const result = {
@@ -685,6 +689,25 @@ async function transitionCall(userId: string, body: any, authorization: string) 
   return { ok: true, status: updated.status, changed: true, push };
 }
 
+async function getCallReachability(userId: string, body: any) {
+  if (!admin) throw new Error("Push service is unavailable.");
+  const callId = String(body?.callId || "");
+  if (!uuidPattern.test(callId)) throw new Error("A valid call ID is required.");
+  const { data: call, error: callError } = await admin.from("aeroshell_calls")
+    .select("id,caller_id,callee_id,status,created_at")
+    .eq("id", callId).maybeSingle();
+  if (callError) throw callError;
+  if (!call || String(call.caller_id) !== String(userId)) return { ok: false, reachable: false };
+  const { data: receipt, error: receiptError } = await admin.from("whatsapp_push_diagnostics")
+    .select("push_event_received_at")
+    .eq("probe_id", callId).eq("user_id", call.callee_id).maybeSingle();
+  if (receiptError) throw receiptError;
+  const receivedAt = Date.parse(String(receipt?.push_event_received_at || ""));
+  const freshReceipt = Number.isFinite(receivedAt) &&
+    Date.now() >= receivedAt && Date.now() - receivedAt <= 25000;
+  return { ok: true, reachable: call.status === "ringing" && freshReceipt };
+}
+
 async function recordPushReceipt(body: any) {
   const probeId = String(body?.probeId || "");
   const stage = String(body?.stage || "");
@@ -796,6 +819,7 @@ Deno.serve(async (req: Request) => {
     }
     if (body.action === "notify-message") return response(await notifyMessage(user.id, body));
     if (body.action === "notify-call") return response(await notifyCall(user.id, body));
+    if (body.action === "call-reachability") return response(await getCallReachability(user.id, body));
     if (body.action === "notify-group-call") return response(await notifyGroupCall(user.id, body));
     if (body.action === "mark-call-connected") return response(await markCallConnected(user.id, body, req.headers.get("Authorization") || ""));
     if (body.action === "transition-call") return response(await transitionCall(user.id, body, req.headers.get("Authorization") || ""));

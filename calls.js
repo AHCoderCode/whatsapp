@@ -25,7 +25,7 @@
   let pendingRecoveryPromise=null;
   let incomingOffer=null, callChannel=null, channelUser="", pendingSignals=new Map(), seenSignals=new Set();
   let incomingPollTimer=null,incomingPollBusy=false,incomingPollUser="",incomingPollVisibilityHandler=null,incomingPollLastErrorAt=0;
-  let callTimer=null, ringTimer=null, callSetupTimer=null, callPushReminderTimer=null, callStart=0, callConnectedAt="", callConnectedId="", callConnectedPromise=null, elapsed=0, muted=false, cameraOff=false, speakerOn=false, callMinimized=false, busy=false;
+  let callTimer=null, ringTimer=null, callSetupTimer=null, callPushReminderTimer=null, outgoingReachabilityTimer=null, outgoingReachabilityBusy=false, callStart=0, callConnectedAt="", callConnectedId="", callConnectedPromise=null, elapsed=0, muted=false, cameraOff=false, speakerOn=false, callMinimized=false, busy=false, cameraFacingMode="user", cameraSwitchBusy=false;
   const PENDING_CALL_ACTION_KEY="wa_pending_native_call_action_v1";
   const DIRECT_FALLBACK_ICE_SERVERS=[{urls:"stun:stun.relay.metered.ca:80"},{urls:"stun:stun.cloudflare.com:3478"},{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun1.l.google.com:19302"}];
   function configureDirectFallback(connection){
@@ -62,7 +62,7 @@
 const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
   let ringtoneAudio=null,ringtoneObjectUrl="",ringtoneRequestId=0,ringtoneWanted=false,ringtoneStartPromise=null,previewRingtoneTimer=null,builtInRingtoneBlob=null;
   let ringtoneAudioContext=null,ringtoneGain=null,ringtoneCompressor=null,ringtoneSource=null;
-  let callOutputAudioContext=null,callOutputSource=null,callOutputGain=null,callOutputCompressor=null,callOutputMakeupGain=null,callOutputLimiter=null,callOutputStream=null;
+
   function openRingtoneDatabase(){return new Promise((resolve,reject)=>{if(!("indexedDB" in window)){reject(new Error("This browser cannot save a custom ringtone."));return;}const request=indexedDB.open(RINGTONE_DB_NAME,1);request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains(RINGTONE_STORE_NAME))request.result.createObjectStore(RINGTONE_STORE_NAME);};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error||new Error("Could not open local ringtone storage."));request.onblocked=()=>reject(new Error("Ringtone storage is busy. Close other WhatsApp tabs and retry."));});}
   async function getSavedRingtone(){const database=await openRingtoneDatabase();return new Promise((resolve,reject)=>{const request=database.transaction(RINGTONE_STORE_NAME,"readonly").objectStore(RINGTONE_STORE_NAME).get("custom");request.onsuccess=()=>{const result=request.result||null;database.close();resolve(result);};request.onerror=()=>{const error=request.error||new Error("Could not load the saved ringtone.");database.close();reject(error);};});}
   async function setCustomRingtone(file){if(!file||typeof file.size!=="number")throw new Error("Choose an MP3 audio file first.");if(!/\.mp3$/i.test(String(file.name||"")))throw new Error("Select an .mp3 file for your ringtone.");if(file.size<1024||file.size>10*1024*1024)throw new Error("Choose an MP3 between 1 KB and 10 MB.");stopIncomingRingtone();const database=await openRingtoneDatabase();await new Promise((resolve,reject)=>{const transaction=database.transaction(RINGTONE_STORE_NAME,"readwrite");transaction.objectStore(RINGTONE_STORE_NAME).put({blob:file,name:String(file.name),type:file.type||"audio/mpeg",savedAt:Date.now()},"custom");transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error||new Error("Could not save this ringtone on the device."));transaction.onabort=()=>reject(transaction.error||new Error("Saving the ringtone was cancelled."));}).finally(()=>database.close());try{localStorage.setItem("wa_call_ringtone_name",String(file.name));}catch(_){}return getRingtoneInfo();}
@@ -113,11 +113,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     try{
       if(!ringtoneAudioContext||ringtoneAudioContext.state==="closed")ringtoneAudioContext=new AudioContextClass();
       if(ringtoneAudioContext.state!=="running")void ringtoneAudioContext.resume().catch(()=>{});
-      if(!callOutputAudioContext||callOutputAudioContext.state==="closed")callOutputAudioContext=new AudioContextClass({latencyHint:"interactive"});
-      if(callOutputAudioContext.state!=="running")void callOutputAudioContext.resume().then(()=>{
-        const output=$("#wa-call-remote-audio")||$("#wa-call-remote-video");
-        if(output&&callOutputStream&&output.srcObject===callOutputStream)output.muted=true;
-      }).catch(()=>{});
+
     }catch(_){}
   }
   document.addEventListener("pointerdown",()=>{primeCallAudio();if(phase==="incoming"&&ringtoneWanted)void startIncomingRingtone();},true);
@@ -269,7 +265,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
   const CALL_MICROPHONE_CONSTRAINTS={echoCancellation:{ideal:true},noiseSuppression:{ideal:true},autoGainControl:{ideal:true}};
   const userMedia = async video => {
     if(!navigator.mediaDevices?.getUserMedia||typeof RTCPeerConnection==="undefined")throw new Error("This browser cannot make secure calls. Use an up-to-date browser over HTTPS.");
-    const videoConstraints=video?{facingMode:"user",width:{ideal:1280},height:{ideal:720}}:false;
+    const videoConstraints=video?{facingMode:{ideal:cameraFacingMode},width:{ideal:640,max:640},height:{ideal:480,max:480},frameRate:{ideal:20,max:24}}:false;
     try{
       return await navigator.mediaDevices.getUserMedia({
         audio:CALL_MICROPHONE_CONSTRAINTS,
@@ -282,7 +278,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       // released. Wait briefly, then retry with default capture constraints.
       await new Promise(resolve=>setTimeout(resolve,350));
       try{
-        return await navigator.mediaDevices.getUserMedia({audio:CALL_MICROPHONE_CONSTRAINTS,video:video?{facingMode:"user"}:false});
+        return await navigator.mediaDevices.getUserMedia({audio:CALL_MICROPHONE_CONSTRAINTS,video:video?videoConstraints:false});
       }catch(fallbackError){
         const fallbackName=String(fallbackError&&fallbackError.name||"");
         if(!["NotReadableError","AbortError","OverconstrainedError"].includes(fallbackName))throw mediaPermissionError(fallbackError,video);
@@ -291,7 +287,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
         await new Promise(resolve=>setTimeout(resolve,650));
         try{
           if(video){
-            return await navigator.mediaDevices.getUserMedia({audio:CALL_MICROPHONE_CONSTRAINTS,video:{facingMode:"user"}});
+            return await navigator.mediaDevices.getUserMedia({audio:CALL_MICROPHONE_CONSTRAINTS,video:videoConstraints});
           }
           return await navigator.mediaDevices.getUserMedia({audio:CALL_MICROPHONE_CONSTRAINTS,video:false});
         }catch(lastError){
@@ -340,7 +336,8 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     if(callTimer!==null)clearInterval(callTimer);
     if(callSetupTimer!==null)clearTimeout(callSetupTimer);
     if(callPushReminderTimer!==null)clearInterval(callPushReminderTimer);
-    ringTimer=null;callTimer=null;callSetupTimer=null;callPushReminderTimer=null;
+    if(outgoingReachabilityTimer!==null)clearInterval(outgoingReachabilityTimer);
+    ringTimer=null;callTimer=null;callSetupTimer=null;callPushReminderTimer=null;outgoingReachabilityTimer=null;outgoingReachabilityBusy=false;
   }
   function startCallPushReminders(callId,client){
     if(callPushReminderTimer!==null)clearInterval(callPushReminderTimer);
@@ -379,7 +376,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     localStream=null;
     if(remoteStream)remoteStream.getTracks().forEach(t=>{try{t.stop();}catch(_){}});
     remoteStream=null;
-    activeCall=null;incomingOffer=null;phase="idle";busy=false;muted=false;cameraOff=false;speakerOn=false;callMinimized=false;elapsed=0;callStart=0;callConnectedAt="";callConnectedId="";callConnectedPromise=null;
+    activeCall=null;incomingOffer=null;phase="idle";busy=false;muted=false;cameraOff=false;speakerOn=false;callMinimized=false;cameraFacingMode="user";cameraSwitchBusy=false;elapsed=0;callStart=0;callConnectedAt="";callConnectedId="";callConnectedPromise=null;
     pendingSignals.clear();seenSignals.clear();
     directFallbackAttempted=false;directFallbackLocalStarted=false;directFallbackBusy=false;directFallbackRequested=false;directFallbackRequestSent=false;directFallbackRemoteReady=false;pendingDirectCandidates=[];
     root().innerHTML="";
@@ -387,61 +384,20 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
   }
   function formatTime(total){const seconds=Math.max(0,Math.floor(total));return String(Math.floor(seconds/60)).padStart(2,"0")+":"+String(seconds%60).padStart(2,"0");}
   function disconnectCallOutputGraph(){
-    try{
-      if(callOutputSource)callOutputSource.disconnect();
-      if(callOutputGain)callOutputGain.disconnect();
-      if(callOutputCompressor)callOutputCompressor.disconnect();
-      if(callOutputMakeupGain)callOutputMakeupGain.disconnect();
-      if(callOutputLimiter)callOutputLimiter.disconnect();
-    }catch(_){}
-    callOutputSource=null;callOutputGain=null;callOutputCompressor=null;
-    callOutputMakeupGain=null;callOutputLimiter=null;callOutputStream=null;
+    const audio=$("#wa-call-remote-audio");
+    if(audio){try{audio.pause();audio.srcObject=null;}catch(_){}}
   }
   function updateCallOutputGain(){
-    const level=speakerOn?2.6:0.82,makeup=speakerOn?1.25:1;
-    const now=callOutputAudioContext&&callOutputAudioContext.currentTime||0;
-    if(callOutputGain){
-      try{callOutputGain.gain.setTargetAtTime(level,now,0.045);}
-      catch(_){callOutputGain.gain.value=level;}
-    }
-    if(callOutputMakeupGain){
-      try{callOutputMakeupGain.gain.setTargetAtTime(makeup,now,0.045);}
-      catch(_){callOutputMakeupGain.gain.value=makeup;}
-    }
     const audio=$("#wa-call-remote-audio");
-    if(audio&&!callOutputGain)audio.volume=speakerOn?1:0.42;
+    if(audio)audio.volume=speakerOn?0.86:0.68;
   }
   async function attachRemoteCallAudio(element,stream){
     if(!element||!stream)return;
-    element.srcObject=stream;element.volume=speakerOn?1:0.42;element.muted=false;
-    const AudioContextClass=window.AudioContext||window.webkitAudioContext;
-    if(!AudioContextClass){void element.play().catch(()=>{});return;}
-    try{
-      if(!callOutputAudioContext||callOutputAudioContext.state==="closed")callOutputAudioContext=new AudioContextClass({latencyHint:"interactive"});
-      if(callOutputStream!==stream||!callOutputSource){
-        disconnectCallOutputGraph();
-        const source=callOutputAudioContext.createMediaStreamSource(stream);
-        const gain=callOutputAudioContext.createGain();
-        const compressor=callOutputAudioContext.createDynamicsCompressor();
-        const makeup=callOutputAudioContext.createGain();
-        const limiter=callOutputAudioContext.createDynamicsCompressor();
-        gain.gain.value=speakerOn?2.6:0.82;
-        compressor.threshold.value=-18;compressor.knee.value=18;compressor.ratio.value=4;
-        compressor.attack.value=0.003;compressor.release.value=0.24;
-        makeup.gain.value=speakerOn?1.25:1;
-        limiter.threshold.value=-3;limiter.knee.value=0;limiter.ratio.value=20;
-        limiter.attack.value=0.003;limiter.release.value=0.2;
-        source.connect(gain);gain.connect(compressor);compressor.connect(makeup);makeup.connect(limiter);limiter.connect(callOutputAudioContext.destination);
-        callOutputSource=source;callOutputGain=gain;callOutputCompressor=compressor;
-        callOutputMakeupGain=makeup;callOutputLimiter=limiter;callOutputStream=stream;
-      }
-      if(callOutputAudioContext.state!=="running")await callOutputAudioContext.resume();
-      if(callOutputAudioContext.state==="running"&&callOutputStream===stream)element.muted=true;
-      await element.play().catch(()=>{});
-    }catch(error){
-      console.warn("[calls] Remote audio boost unavailable; using the device's normal call audio:",error&&error.message||error);
-      element.muted=false;element.volume=1;void element.play().catch(()=>{});
-    }
+    if(element.srcObject!==stream)element.srcObject=stream;
+    element.muted=false;
+    element.volume=speakerOn?0.86:0.68;
+    try{await element.play();}
+    catch(error){console.warn("[calls] Remote audio playback is waiting for device audio focus:",error&&error.message||error);}
   }
   function renderCallOverlay(notice) {
     const host=root();
@@ -474,7 +430,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       incoming?"<button class='wa-call-control decline' type='button' data-wa-call='decline' aria-label='Decline call'>" + bridge.icon("phone") + "<span>Decline</span></button><button class='wa-call-control accept' type='button' data-wa-call='accept' aria-label='Accept call'>"+(video?bridge.icon("video"):bridge.icon("phone"))+"<span>Accept</span></button>":
       (phase==="connected"||phase==="connecting"||phase==="outgoing"||phase==="preparing"?
       "<button class='wa-call-control "+(muted?"active":"")+"' type='button' data-wa-call='mute' aria-pressed='"+(muted?"true":"false")+"' aria-label='"+(muted?"Unmute microphone":"Mute microphone")+"'>"+bridge.icon(muted?"mute":"mic")+"<span>"+(muted?"Unmute":"Mute")+"</span></button>"+
-      (video?"<button class='wa-call-control "+(cameraOff?"active":"")+"' type='button' data-wa-call='camera' aria-label='Toggle camera'>"+bridge.icon("video")+"<span>"+(cameraOff?"Camera on":"Camera off")+"</span></button>":"<button class='wa-call-control "+(speakerOn?"active":"")+"' type='button' data-wa-call='speaker' aria-pressed='"+(speakerOn?"true":"false")+"' aria-label='"+(speakerOn?"Turn speaker off":"Turn speaker on")+"'>"+bridge.icon("volume")+"<span>"+"Speaker"+"</span></button>")+
+      (video?"<button class='wa-call-control "+(cameraOff?"active":"")+"' type='button' data-wa-call='camera' aria-label='Toggle camera'>"+bridge.icon("video")+"<span>"+(cameraOff?"Camera on":"Camera off")+"</span></button><button class='wa-call-control wa-call-switch-camera' type='button' data-wa-call='switch-camera' aria-label='Switch camera' title='Switch front/back camera'><span aria-hidden='true'>⇄</span><span>Flip</span></button>":"<button class='wa-call-control "+(speakerOn?"active":"")+"' type='button' data-wa-call='speaker' aria-pressed='"+(speakerOn?"true":"false")+"' aria-label='"+(speakerOn?"Turn speaker off":"Turn speaker on")+"'>"+bridge.icon("volume")+"<span>"+"Speaker"+"</span></button>")+
       "<button class='wa-call-control decline' type='button' data-wa-call='end' aria-label='End call'>" + bridge.icon("phone") + "<span>End call</span></button>":""))+
       "</div><p class='wa-call-footnote'>Calls connect only when both people are online and have allowed microphone/camera access.</p></section></div>";
     const remoteVideo=$("#wa-call-remote-video"),localVideo=$("#wa-call-local-video"),remoteAudio=$("#wa-call-remote-audio");
@@ -482,15 +438,44 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       if(remoteVideo){remoteVideo.srcObject=remoteStream;remoteVideo.muted=true;void remoteVideo.play().catch(()=>{});}
       if(remoteAudio)void attachRemoteCallAudio(remoteAudio,remoteStream);
     }
-    if(localVideo&&localStream){localVideo.srcObject=localStream;void localVideo.play().catch(()=>{});}
+    if(localVideo&&localStream){localVideo.srcObject=localStream;void localVideo.play().catch(()=>{});updateCameraSwitchButton();}
     const placeholder=$("#wa-call-video-placeholder");
     if(placeholder&&remoteStream&&remoteStream.getVideoTracks().some(t=>t.readyState==="live"))placeholder.style.display="none";
   }
   function setPhase(next,notice){phase=next;renderCallOverlay(notice);}
   function syncOutgoingPresenceStatus(){
-    if(!activeCall||activeCall.direction!=="outgoing"||!activeCall.offerSent||!(phase==="preparing"||phase==="outgoing"))return;
-    const online=!!(bridge.isBackendUserOnline&&bridge.isBackendUserOnline(activeCall.callee_id));
-    if(!!activeCall.peerRinging!==online){activeCall.peerRinging=online;renderCallOverlay();}
+    if(!activeCall||activeCall.direction!=="outgoing"||!activeCall.offerSent||!(phase==="preparing"||phase==="outgoing")||outgoingReachabilityBusy)return;
+    const expectedId=String(activeCall.id),client=db();
+    if(!client)return;
+    outgoingReachabilityBusy=true;
+    const presenceOnline=!!(bridge.isBackendUserOnline&&bridge.isBackendUserOnline(activeCall.callee_id));
+    void withCallTimeout(
+      client.functions.invoke("whatsapp-push",{body:{action:"call-reachability",callId:expectedId}}),
+      4500,
+      "Recipient reachability check timed out."
+    ).then(result=>{
+      if(result.error)throw result.error;
+      const reachable=!!(result.data&&result.data.reachable)||presenceOnline;
+      if(activeCall&&String(activeCall.id)===expectedId&&(phase==="preparing"||phase==="outgoing")&&activeCall.peerRinging!==reachable){
+        activeCall.peerRinging=reachable;renderCallOverlay();
+      }
+    }).catch(()=>{
+      if(activeCall&&String(activeCall.id)===expectedId&&(phase==="preparing"||phase==="outgoing")&&activeCall.peerRinging!==presenceOnline){
+        activeCall.peerRinging=presenceOnline;renderCallOverlay();
+      }
+    }).finally(()=>{outgoingReachabilityBusy=false;});
+  }
+  function startOutgoingReachabilityPolling(callId){
+    if(outgoingReachabilityTimer!==null)clearInterval(outgoingReachabilityTimer);
+    const expectedId=String(callId);
+    void syncOutgoingPresenceStatus();
+    outgoingReachabilityTimer=setInterval(()=>{
+      if(!activeCall||String(activeCall.id)!==expectedId||phase==="connected"||phase==="connecting"||phase==="idle"){
+        if(outgoingReachabilityTimer!==null)clearInterval(outgoingReachabilityTimer);
+        outgoingReachabilityTimer=null;return;
+      }
+      void syncOutgoingPresenceStatus();
+    },2500);
   }
   function updateConnectedDuration(){
     const text=formatTime(elapsed),host=root();
@@ -514,6 +499,13 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     if(!button)return;
     button.classList.toggle("active",cameraOff);
     button.innerHTML=(cameraOff?bridge.icon("camera"):bridge.icon("video"))+"<span>"+(cameraOff?"Camera on":"Camera off")+"</span>";
+  }
+  function updateCameraSwitchButton(){
+    const button=root().querySelector("[data-wa-call='switch-camera']");
+    if(!button)return;
+    button.disabled=cameraSwitchBusy||!localStream||!localStream.getVideoTracks().length;
+    button.setAttribute("aria-label",cameraFacingMode==="user"?"Switch to back camera":"Switch to front camera");
+    button.title=cameraFacingMode==="user"?"Switch to back camera":"Switch to front camera";
   }
   function updateSpeakerButton(){
     const button=root().querySelector("[data-wa-call='speaker']");
@@ -761,7 +753,19 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
         }
       }
     };
-    if(localStream)localStream.getTracks().forEach(track=>connection.addTrack(track,localStream));
+    if(localStream)localStream.getTracks().forEach(track=>{
+      const sender=connection.addTrack(track,localStream);
+      if(track.kind==="video"){
+        try{
+          const parameters=sender.getParameters();
+          if(parameters.encodings&&parameters.encodings.length){
+            parameters.encodings[0].maxBitrate=450000;
+            parameters.encodings[0].maxFramerate=20;
+            void sender.setParameters(parameters).catch(()=>{});
+          }
+        }catch(_){}
+      }
+    });
     return connection;
   }
   async function startCall(person,mediaType) {
@@ -846,7 +850,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
         activeCall.offerSent=true;
         activeCall.peerRinging=!!(bridge.isBackendUserOnline&&bridge.isBackendUserOnline(person.id));
         setPhase("outgoing");
-        syncOutgoingPresenceStatus();
+        startOutgoingReachabilityPolling(newId);
       }
     }catch(error){
       const wasCancelled=!activeCall||(newId?activeCall.id!==newId:activeCall.id!==pendingId);
@@ -1102,7 +1106,54 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     updateMuteButton();
   }
   function toggleCamera(){
-    cameraOff=!cameraOff;if(localStream)localStream.getVideoTracks().forEach(t=>t.enabled=!cameraOff);updateCameraButton();
+    cameraOff=!cameraOff;
+    if(localStream)localStream.getVideoTracks().forEach(track=>{track.enabled=!cameraOff;});
+    updateCameraButton();
+  }
+  async function switchCamera(){
+    if(cameraSwitchBusy||!activeCall||activeCall.media_type!=="video")return;
+    const oldTrack=localStream&&localStream.getVideoTracks()[0];
+    if(!oldTrack)return say("The camera is still starting. Try switching again in a moment.");
+    cameraSwitchBusy=true;updateCameraSwitchButton();
+    let temporaryStream=null;
+    const nextFacing=cameraFacingMode==="user"?"environment":"user";
+    try{
+      const devices=await navigator.mediaDevices.enumerateDevices().catch(()=>[]);
+      const cameras=devices.filter(device=>device.kind==="videoinput");
+      if(cameras.length<2)throw new Error("This phone reports only one available camera.");
+      const labelPattern=nextFacing==="environment"?/back|rear|environment/i:/front|user|facetime/i;
+      const currentId=oldTrack.getSettings?oldTrack.getSettings().deviceId:"";
+      let target=cameras.find(device=>labelPattern.test(device.label||""));
+      if(!target||target.deviceId===currentId){
+        const currentIndex=cameras.findIndex(device=>device.deviceId===currentId);
+        target=cameras.find((device,index)=>device.deviceId!==currentId&&index!==currentIndex)||cameras.find(device=>device.deviceId!==currentId);
+      }
+      const videoBase={width:{ideal:640,max:640},height:{ideal:480,max:480},frameRate:{ideal:20,max:24}};
+      const videoConstraints=target?Object.assign({deviceId:{exact:target.deviceId}},videoBase):Object.assign({facingMode:{ideal:nextFacing}},videoBase);
+      try{
+        temporaryStream=await navigator.mediaDevices.getUserMedia({audio:false,video:videoConstraints});
+      }catch(firstError){
+        temporaryStream=await navigator.mediaDevices.getUserMedia({audio:false,video:Object.assign({facingMode:{ideal:nextFacing}},videoBase)});
+      }
+      const newTrack=temporaryStream.getVideoTracks()[0];
+      if(!newTrack)throw new Error("The selected camera did not start.");
+      newTrack.enabled=!cameraOff;
+      const sender=pc&&pc.getSenders().find(item=>item.track&&item.track.kind==="video");
+      if(sender)await sender.replaceTrack(newTrack);
+      localStream.removeTrack(oldTrack);
+      localStream.addTrack(newTrack);
+      const preview=$("#wa-call-local-video");
+      if(preview){preview.srcObject=null;preview.srcObject=localStream;void preview.play().catch(()=>{});}
+      oldTrack.stop();
+      cameraFacingMode=nextFacing;
+      temporaryStream=null;
+      updateCameraSwitchButton();
+    }catch(error){
+      say(error&&error.message||"Could not switch cameras. Check camera permission and try again.");
+    }finally{
+      if(temporaryStream)temporaryStream.getTracks().forEach(track=>{try{track.stop();}catch(_){}});
+      cameraSwitchBusy=false;updateCameraSwitchButton();
+    }
   }
   function openPicker(mediaType){
     const s=appState();
@@ -1359,6 +1410,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       else if(callAction==="end")void endCall();
       else if(callAction==="mute")toggleMute();
       else if(callAction==="camera")toggleCamera();
+      else if(callAction==="switch-camera")void switchCamera();
       else if(callAction==="speaker")toggleSpeaker();
       else if(callAction==="minimize")minimizeCall();
       else if(callAction==="restore")restoreCall();

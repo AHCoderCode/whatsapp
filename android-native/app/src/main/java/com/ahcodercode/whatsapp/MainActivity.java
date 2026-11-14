@@ -45,6 +45,7 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.RenderProcessGoneDetail;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import androidx.core.app.NotificationManagerCompat;
@@ -108,7 +109,10 @@ public final class MainActivity extends Activity {
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
         settings.setSupportMultipleWindows(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        if (Build.VERSION.SDK_INT >= 26) settings.setSafeBrowsingEnabled(true);
+        if (Build.VERSION.SDK_INT >= 26) {
+            settings.setSafeBrowsingEnabled(true);
+            webView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_BOUND, true);
+        }
         webView.setOverScrollMode(WebView.OVER_SCROLL_NEVER);
         webView.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -125,6 +129,28 @@ public final class MainActivity extends Activity {
                     dispatchIncomingShare();
                     if (!pendingNativeCallId.isEmpty()) webView.postDelayed(MainActivity.this::dispatchPendingNativeCallAction, 250);
                 }
+            }
+            @Override public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+                android.util.Log.e("WhatsApp", "WebView renderer exited; rebuilding the app shell. Crashed=" +
+                    (detail != null && detail.didCrash()));
+                if (view != webView) {
+                    try { view.destroy(); } catch (Exception ignored) {}
+                    return true;
+                }
+                pageLoaded = false;
+                webView = null;
+                if (pendingWebPermissionRequest != null) {
+                    try { pendingWebPermissionRequest.deny(); } catch (Exception ignored) {}
+                    pendingWebPermissionRequest = null;
+                }
+                endNativeCallAudio();
+                try { view.destroy(); } catch (Exception ignored) {}
+                Intent restart = new Intent(MainActivity.this, MainActivity.class);
+                restart.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                restart.putExtra("waRendererRecovery", true);
+                startActivity(restart);
+                finish();
+                return true;
             }
         });
         webView.setWebChromeClient(new WebChromeClient() {
@@ -562,7 +588,7 @@ public final class MainActivity extends Activity {
                 int current = manager.getStreamVolume(AudioManager.STREAM_VOICE_CALL);
                 int maximum = manager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL);
                 // Raise a quiet speaker route to a comfortable upper range, not device maximum.
-                int target = Math.max(current, Math.round(maximum * 0.75f));
+                int target = Math.max(current, Math.round(maximum * 0.68f));
                 if (target > current) manager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, target, 0);
                 appliedVoiceCallVolume = target;
             } else {

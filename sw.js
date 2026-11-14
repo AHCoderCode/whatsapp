@@ -1,4 +1,4 @@
-const CACHE_NAME = "whatsapp-final-shell-v77";
+const CACHE_NAME = "whatsapp-final-shell-v78";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -127,7 +127,7 @@ self.addEventListener("push", event => {
       ? [{ action: "accept", title: "Accept" }, { action: "decline", title: "Decline" }]
       : kind === "call" ? [] : [{ action: "open", title: "Open chat" }]
   };
-  const probeId = kind === "call" && data.test === true && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(data.probeId || ""))
+  const probeId = kind === "call" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(data.probeId || ""))
     ? String(data.probeId) : "";
   event.waitUntil((async () => {
     // Report receipt alongside display; never make the alert wait for a network
