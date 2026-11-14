@@ -33,11 +33,11 @@ public final class WhatsAppMessagingService extends FirebaseMessagingService {
         super.onMessageReceived(message);
         if (message == null || message.getData() == null) return;
         Map<String, String> data = message.getData();
-        NativeCallNotifications.showIncomingCall(this, data);
-        if ("call".equals(data.get("kind"))) reportCallPushReceived(data);
+        boolean incomingCallShown = NativeCallNotifications.showIncomingCall(this, data);
+        if ("call".equals(data.get("kind")) && incomingCallShown) reportCallPushShown(data);
     }
 
-    private void reportCallPushReceived(Map<String, String> data) {
+    private void reportCallPushShown(Map<String, String> data) {
         String probeId = data.get("probeId");
         if (probeId == null || !probeId.matches("(?i)[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")) {
             probeId = data.get("callId");
@@ -48,7 +48,7 @@ public final class WhatsAppMessagingService extends FirebaseMessagingService {
             JSONObject body = new JSONObject();
             body.put("action", "push-receipt");
             body.put("probeId", probeId);
-            body.put("stage", "received");
+            body.put("stage", "shown");
             byte[] payload = body.toString().getBytes(StandardCharsets.UTF_8);
             connection = (HttpURLConnection) new URL(RECEIPT_URL).openConnection();
             connection.setRequestMethod("POST");
