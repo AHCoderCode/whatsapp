@@ -84,10 +84,10 @@ check("media, privacy, subgroup and synced-list handlers are present", () => {
   includes(files.app, "WhatsAppFeatureGaps.onBackendData");
 });
 check("feature-gap module is in the app shell cache", () => {
-  includes(files.html, "/feature-gaps.js?v=whatsapp-secure-release-20261114a");
-  includes(files.sw, "/feature-gaps.js?v=whatsapp-secure-release-20261114a");
-  includes(files.html, "/group-calls.js?v=whatsapp-secure-release-20261114a");
-  includes(files.sw, "/group-calls.js?v=whatsapp-secure-release-20261114a");
+  includes(files.html, "/feature-gaps.js?v=whatsapp-secure-release-20261114b");
+  includes(files.sw, "/feature-gaps.js?v=whatsapp-secure-release-20261114b");
+  includes(files.html, "/group-calls.js?v=whatsapp-secure-release-20261114b");
+  includes(files.sw, "/group-calls.js?v=whatsapp-secure-release-20261114b");
 });
 check("inline HTML scripts parse", () => {
   const scripts = [...files.html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
@@ -103,10 +103,10 @@ check("returning to Chats clears archived, locked and stale search filters", () 
   includes(files.app, 'if(t.dataset.view){setView(t.dataset.view);return;}');
 });
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-secure-release-20261114a");
-  includes(files.sw, "whatsapp-secure-release-20261114a");
-  includes(files.manifest, "whatsapp-secure-release-20261114a");
-  includes(files.sw, "whatsapp-final-shell-v77");
+  includes(files.html, "whatsapp-secure-release-20261114b");
+  includes(files.sw, "whatsapp-secure-release-20261114b");
+  includes(files.manifest, "whatsapp-secure-release-20261114b");
+  includes(files.sw, "whatsapp-final-shell-v79");
 });
 check("mobile settings use a full-width account detail pane", () => {
   includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
@@ -177,7 +177,7 @@ check("web/PWA clients receive an actionable update banner while Android checks 
 });
 
 check("every Android Update tap refreshes and installs only the newest published APK", () => {
-  includes(files.updater, 'const APP_BUILD = "whatsapp-secure-release-20261114a"');
+  includes(files.updater, 'const APP_BUILD = "whatsapp-secure-release-20261114b"');
   includes(files.updater, "installAfterFreshCheck = true");
   includes(files.updater, "repeatFreshCheckAfterCurrent = true");
   includes(files.updater, "check(true)");
@@ -189,10 +189,10 @@ check("every Android Update tap refreshes and installs only the newest published
   includes(files.nativeActivity, "No older release was installed.");
 });
 check("PWA app shell and service worker share the current update build", () => {
-  includes(files.html, "whatsapp-secure-release-20261114a");
-  includes(files.sw, "whatsapp-secure-release-20261114a");
-  includes(files.manifest, "whatsapp-secure-release-20261114a");
-  includes(files.sw, "whatsapp-final-shell-v77");
+  includes(files.html, "whatsapp-secure-release-20261114b");
+  includes(files.sw, "whatsapp-secure-release-20261114b");
+  includes(files.manifest, "whatsapp-secure-release-20261114b");
+  includes(files.sw, "whatsapp-final-shell-v79");
 });
 check("Android update remains available from Settings after dismissing the banner", () => {
   includes(files.app, '["updates","download","App updates"]');
@@ -218,7 +218,7 @@ check("WebView attachment inputs remain clickable and native calls set audio mod
   includes(files.nativeActivity, "AudioManager.MODE_IN_COMMUNICATION");
   includes(files.nativeActivity, "AudioManager.STREAM_VOICE_CALL");
   includes(files.nativeActivity, "getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)");
-  includes(files.nativeActivity, "Math.round(maximum * 0.75f)");
+  includes(files.nativeActivity, "Math.round(maximum * 0.68f)");
   includes(files.nativeActivity, "restoreNativeCallVolume(manager)");
   includes(files.nativeActivity, "setCommunicationDevice(device)");
   includes(files.nativeActivity, "TYPE_BUILTIN_EARPIECE");
@@ -728,7 +728,8 @@ check("call audio uses direct WebRTC playback and supported echo/noise processin
   includes(files.calls,"noiseSuppression:{ideal:true}");
   includes(files.calls,"echoCancellation:{ideal:true}");
   includes(files.calls,"element.muted=false");
-  excludes(files.calls,"createDynamicsCompressor()");
+  excludes(files.calls,"callOutputAudioContext");
+  excludes(files.calls,"callOutputMakeupGain");
 });
 check("Android recovers the shell if the WebView renderer exits during a call", () => {
   includes(files.nativeActivity,"onRenderProcessGone");
