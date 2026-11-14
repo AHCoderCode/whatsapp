@@ -59,14 +59,15 @@ public final class NativeCallNotifications {
         return channel == null || channel.getImportance() != NotificationManager.IMPORTANCE_NONE;
     }
 
-    public static void showIncomingCall(Context context, Map<String, String> data) {
+    public static boolean showIncomingCall(Context context, Map<String, String> data) {
         String kind = value(data, "kind", "call");
-        if ("call".equals(kind)) { ensureChannel(context); showCall(context, data); }
+        if ("call".equals(kind)) { ensureChannel(context); return showCall(context, data); }
         else if ("call-ended".equals(kind)) endIncomingCall(context, value(data, "callId", ""));
         else if ("message".equals(kind)) showMessage(context, data);
+        return false;
     }
 
-    private static void showCall(Context context, Map<String, String> data) {
+    private static boolean showCall(Context context, Map<String, String> data) {
         String callId = value(data, "callId", "");
         boolean test = "true".equalsIgnoreCase(value(data, "test", "false"));
         String caller = value(data, "callerName", "Contact");
@@ -101,7 +102,14 @@ public final class NativeCallNotifications {
             builder.addAction(new NotificationCompat.Action.Builder(android.R.drawable.ic_menu_close_clear_cancel, "Decline",
                 CallNotificationActionReceiver.pendingIntent(context, callId, "decline", id)).build());
         }
-        try { NotificationManagerCompat.from(context).notify(id, builder.build()); } catch (SecurityException ignored) {}
+        NotificationManagerCompat notifications = NotificationManagerCompat.from(context);
+        if (!notifications.areNotificationsEnabled() || !isChannelEnabled(context, CHANNEL_ID)) return false;
+        try {
+            notifications.notify(id, builder.build());
+            return true;
+        } catch (SecurityException ignored) {
+            return false;
+        }
     }
 
     public static void endIncomingCall(Context context, String callId) {
