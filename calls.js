@@ -25,7 +25,7 @@
   let pendingRecoveryPromise=null;
   let incomingOffer=null, callChannel=null, channelUser="", pendingSignals=new Map(), seenSignals=new Set();
   let incomingPollTimer=null,incomingPollBusy=false,incomingPollUser="",incomingPollVisibilityHandler=null,incomingPollLastErrorAt=0;
-  let callTimer=null, ringTimer=null, callSetupTimer=null, callPushReminderTimer=null, outgoingReachabilityTimer=null, outgoingReachabilityBusy=false, callStart=0, callConnectedAt="", callConnectedId="", callConnectedPromise=null, elapsed=0, muted=false, cameraOff=false, speakerOn=false, callMinimized=false, busy=false, cameraFacingMode="user", cameraSwitchBusy=false;
+  let callTimer=null, ringTimer=null, callSetupTimer=null, callPushReminderTimer=null, outgoingReachabilityTimer=null, outgoingReachabilityBusy=false, incomingRingingAckTimer=null, incomingRingingAckBusy=false, callStart=0, callConnectedAt="", callConnectedId="", callConnectedPromise=null, elapsed=0, muted=false, cameraOff=false, speakerOn=false, callMinimized=false, busy=false, cameraFacingMode="user", cameraSwitchBusy=false;
   const PENDING_CALL_ACTION_KEY="wa_pending_native_call_action_v1";
   const DIRECT_FALLBACK_ICE_SERVERS=[{urls:"stun:stun.relay.metered.ca:80"},{urls:"stun:stun.cloudflare.com:3478"},{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun1.l.google.com:19302"}];
   function configureDirectFallback(connection){
@@ -230,6 +230,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     incomingOffer=null;phase="incoming";acceptRequested=false;
     void startIncomingRingtone();
     renderCallOverlay();
+    startIncomingRingingAcknowledgement(row.id,client);
     runPendingNotificationAction();
     try{if(navigator.vibrate)navigator.vibrate([180,80,180]);}catch(_){}
     ringTimer=null;
@@ -337,7 +338,8 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     if(callSetupTimer!==null)clearTimeout(callSetupTimer);
     if(callPushReminderTimer!==null)clearInterval(callPushReminderTimer);
     if(outgoingReachabilityTimer!==null)clearInterval(outgoingReachabilityTimer);
-    ringTimer=null;callTimer=null;callSetupTimer=null;callPushReminderTimer=null;outgoingReachabilityTimer=null;outgoingReachabilityBusy=false;
+    if(incomingRingingAckTimer!==null)clearInterval(incomingRingingAckTimer);
+    ringTimer=null;callTimer=null;callSetupTimer=null;callPushReminderTimer=null;outgoingReachabilityTimer=null;outgoingReachabilityBusy=false;incomingRingingAckTimer=null;incomingRingingAckBusy=false;
   }
   function startCallPushReminders(callId,client){
     if(callPushReminderTimer!==null)clearInterval(callPushReminderTimer);
@@ -442,39 +444,65 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     const placeholder=$("#wa-call-video-placeholder");
     if(placeholder&&remoteStream&&remoteStream.getVideoTracks().some(t=>t.readyState==="live"))placeholder.style.display="none";
   }
-  function setPhase(next,notice){phase=next;renderCallOverlay(notice);}
-  function syncOutgoingPresenceStatus(){
+  function stopIncomingRingingAcknowledgement(){
+    if(incomingRingingAckTimer!==null)clearInterval(incomingRingingAckTimer);
+    incomingRingingAckTimer=null;
+  }
+  async function sendIncomingRingingAcknowledgement(callId,client){
+    if(incomingRingingAckBusy||!client||!activeCall||String(activeCall.id)!==String(callId)||activeCall.direction!=="incoming"||phase!=="incoming"||acceptRequested)return;
+    incomingRingingAckBusy=true;
+    try{
+      const result=await withCallTimeout(
+        client.functions.invoke("whatsapp-push",{body:{action:"confirm-call-ringing",callId:String(callId)}}),
+        4000,
+        "Incoming call display acknowledgement timed out."
+      );
+      if(result.error)throw result.error;
+    }catch(error){console.debug("[calls] Incoming ringing confirmation could not be sent:",error&&error.message||error);}
+    finally{incomingRingingAckBusy=false;}
+  }
+  function startIncomingRingingAcknowledgement(callId,client){
+    stopIncomingRingingAcknowledgement();
+    const expectedId=String(callId);
+    const tick=()=>{
+      if(!activeCall||String(activeCall.id)!==expectedId||activeCall.direction!=="incoming"||phase!=="incoming"||acceptRequested){stopIncomingRingingAcknowledgement();return;}
+      void sendIncomingRingingAcknowledgement(expectedId,client);
+    };
+    void tick();
+    incomingRingingAckTimer=setInterval(tick,10000);
+  }
+  function setPhase(next,notice){phase=next;if(next!=="incoming")stopIncomingRingingAcknowledgement();renderCallOverlay(notice);}
+  function syncOutgoingRingingStatus(){
     if(!activeCall||activeCall.direction!=="outgoing"||!activeCall.offerSent||!(phase==="preparing"||phase==="outgoing")||outgoingReachabilityBusy)return;
     const expectedId=String(activeCall.id),client=db();
     if(!client)return;
     outgoingReachabilityBusy=true;
-    const presenceOnline=!!(bridge.isBackendUserOnline&&bridge.isBackendUserOnline(activeCall.callee_id));
     void withCallTimeout(
       client.functions.invoke("whatsapp-push",{body:{action:"call-reachability",callId:expectedId}}),
       4500,
-      "Recipient reachability check timed out."
+      "Recipient ringing check timed out."
     ).then(result=>{
       if(result.error)throw result.error;
-      const reachable=!!(result.data&&result.data.reachable)||presenceOnline;
-      if(activeCall&&String(activeCall.id)===expectedId&&(phase==="preparing"||phase==="outgoing")&&activeCall.peerRinging!==reachable){
-        activeCall.peerRinging=reachable;renderCallOverlay();
+      const ringing=!!(result.data&&result.data.ringing);
+      if(activeCall&&String(activeCall.id)===expectedId&&(phase==="preparing"||phase==="outgoing")&&activeCall.peerRinging!==ringing){
+        activeCall.peerRinging=ringing;renderCallOverlay();
       }
     }).catch(()=>{
-      if(activeCall&&String(activeCall.id)===expectedId&&(phase==="preparing"||phase==="outgoing")&&activeCall.peerRinging!==presenceOnline){
-        activeCall.peerRinging=presenceOnline;renderCallOverlay();
+      if(activeCall&&String(activeCall.id)===expectedId&&(phase==="preparing"||phase==="outgoing")&&activeCall.peerRinging){
+        activeCall.peerRinging=false;renderCallOverlay();
       }
     }).finally(()=>{outgoingReachabilityBusy=false;});
   }
   function startOutgoingReachabilityPolling(callId){
     if(outgoingReachabilityTimer!==null)clearInterval(outgoingReachabilityTimer);
     const expectedId=String(callId);
-    void syncOutgoingPresenceStatus();
+    void syncOutgoingRingingStatus();
     outgoingReachabilityTimer=setInterval(()=>{
       if(!activeCall||String(activeCall.id)!==expectedId||phase==="connected"||phase==="connecting"||phase==="idle"){
         if(outgoingReachabilityTimer!==null)clearInterval(outgoingReachabilityTimer);
         outgoingReachabilityTimer=null;return;
       }
-      void syncOutgoingPresenceStatus();
+      void syncOutgoingRingingStatus();
     },2500);
   }
   function updateConnectedDuration(){
@@ -848,7 +876,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       await withCallTimeout(sendSignal(activeCall,"offer",{type:"offer",sdp:pc.localDescription.sdp}),8000,"The call offer could not be delivered. Check the connection and try again.");
       if(activeCall&&activeCall.id===newId){
         activeCall.offerSent=true;
-        activeCall.peerRinging=!!(bridge.isBackendUserOnline&&bridge.isBackendUserOnline(person.id));
+        activeCall.peerRinging=false;
         setPhase("outgoing");
         startOutgoingReachabilityPolling(newId);
       }
@@ -866,7 +894,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     if(!current||!current.isSupabase||!signal||!client||signal.to_user_id!==current.id||seenSignals.has(signal.id))return;
     seenSignals.add(signal.id);
     if(activeCall&&activeCall.id===signal.call_id&&activeCall.direction==="incoming"&&signal.kind==="offer"){
-      incomingOffer=signal;void startIncomingRingtone();renderCallOverlay();runPendingNotificationAction();return;
+      incomingOffer=signal;void startIncomingRingtone();renderCallOverlay();startIncomingRingingAcknowledgement(activeCall.id,client);runPendingNotificationAction();return;
     }
     if(!activeCall||activeCall.id!==signal.call_id){
       if(signal.kind==="offer"){
@@ -876,7 +904,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
         const profileResult=await client.from("aeroshell_profiles").select("id,username,display_name,avatar_data").eq("id",data.caller_id).maybeSingle();
         const peer=profileResult.data||{id:data.caller_id,username:"contact"};
         activeCall=Object.assign({},data,{direction:"incoming",peer:{id:peer.id,username:peer.username,name:peer.display_name||peer.username,avatarData:peer.avatar_data||""}});
-        incomingOffer=signal;phase="incoming";void startIncomingRingtone();renderCallOverlay();runPendingNotificationAction();
+        incomingOffer=signal;phase="incoming";void startIncomingRingtone();renderCallOverlay();startIncomingRingingAcknowledgement(activeCall.id,client);runPendingNotificationAction();
         ringTimer=null; // Keep incoming audio looping until answered or ended.
       }else if(signal.kind==="ice"){
         const list=pendingSignals.get(signal.call_id)||[];list.push(signal);pendingSignals.set(signal.call_id,list);
@@ -1433,6 +1461,6 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     resume:()=>{if(me()&&me().isSupabase){void restorePendingNotificationAction().catch(error=>console.warn("[calls] Cold-start call restoration failed:",error&&error.message||error));void pollIncomingCallState({force:true});}},
     cleanup:()=>{cleanupLocal();stopIncomingCallPolling();if(callChannel&&db())void db().removeChannel(callChannel);callChannel=null;channelUser="";},
     getPhase:()=>phase,
-    onPeerPresenceChanged:syncOutgoingPresenceStatus
+    onPeerPresenceChanged:syncOutgoingRingingStatus
   };
 })();
