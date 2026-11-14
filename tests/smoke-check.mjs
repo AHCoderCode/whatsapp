@@ -710,7 +710,7 @@ check("outgoing call status follows confirmed realtime presence and has a visibl
   includes(files.calls,"syncOutgoingPresenceStatus");
   includes(files.calls,"wa-call-status-indicator");
   includes(files.calls,'setPhase("connecting","Connecting…")');
-  includes(files.backend,"presenceReady=status==="SUBSCRIBED"");
+  includes(files.backend, 'presenceReady=status==="SUBSCRIBED"');
   includes(files.backend,"isBackendUserOnline=isBackendUserOnline");
 });
 check("the call header has no top-right X while the regular hang-up action remains", () => {
