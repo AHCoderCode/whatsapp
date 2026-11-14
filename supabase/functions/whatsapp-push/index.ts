@@ -699,13 +699,34 @@ async function getCallReachability(userId: string, body: any) {
   if (callError) throw callError;
   if (!call || String(call.caller_id) !== String(userId)) return { ok: false, reachable: false };
   const { data: receipt, error: receiptError } = await admin.from("whatsapp_push_diagnostics")
-    .select("push_event_received_at")
+    .select("notification_api_resolved_at")
     .eq("probe_id", callId).eq("user_id", call.callee_id).maybeSingle();
   if (receiptError) throw receiptError;
-  const receivedAt = Date.parse(String(receipt?.push_event_received_at || ""));
-  const freshReceipt = Number.isFinite(receivedAt) &&
-    Date.now() >= receivedAt && Date.now() - receivedAt <= 25000;
-  return { ok: true, reachable: call.status === "ringing" && freshReceipt };
+  const shownAt = Date.parse(String(receipt?.notification_api_resolved_at || ""));
+  const freshDisplayConfirmation = Number.isFinite(shownAt) &&
+    Date.now() >= shownAt && Date.now() - shownAt <= 30000;
+  return { ok: true, ringing: call.status === "ringing" && freshDisplayConfirmation };
+}
+
+async function confirmCallRinging(userId: string, body: any) {
+  if (!admin) throw new Error("Push service is unavailable.");
+  const callId = String(body?.callId || "");
+  if (!uuidPattern.test(callId)) throw new Error("A valid call ID is required.");
+  const { data: call, error: callError } = await admin.from("aeroshell_calls")
+    .select("id,caller_id,callee_id,status")
+    .eq("id", callId).maybeSingle();
+  if (callError) throw callError;
+  if (!call || String(call.callee_id) !== String(userId) || call.status !== "ringing") {
+    return { ok: false, ringing: false };
+  }
+  const confirmedAt = new Date().toISOString();
+  const { error: receiptError } = await admin.from("whatsapp_push_diagnostics").upsert({
+    probe_id: callId,
+    user_id: userId,
+    notification_api_resolved_at: confirmedAt
+  }, { onConflict: "probe_id" });
+  if (receiptError) throw receiptError;
+  return { ok: true, ringing: true, confirmedAt };
 }
 
 async function recordPushReceipt(body: any) {
@@ -819,6 +840,7 @@ Deno.serve(async (req: Request) => {
     }
     if (body.action === "notify-message") return response(await notifyMessage(user.id, body));
     if (body.action === "notify-call") return response(await notifyCall(user.id, body));
+    if (body.action === "confirm-call-ringing") return response(await confirmCallRinging(user.id, body));
     if (body.action === "call-reachability") return response(await getCallReachability(user.id, body));
     if (body.action === "notify-group-call") return response(await notifyGroupCall(user.id, body));
     if (body.action === "mark-call-connected") return response(await markCallConnected(user.id, body, req.headers.get("Authorization") || ""));
