@@ -2904,7 +2904,7 @@ function openSharedItemsDialog(chat,kind) {
       const ids=new Set((Array.isArray(messageIds)?messageIds:[messageIds]).map(String));
       $(".message-row",main).forEach(row=>{
         if(!ids.has(String(row.dataset.messageId||"")))return;
-        const status=$(".message-read-status",row);
+        const status=row.querySelectorAll(".message-read-status")[0];
         if(!status)return;
         status.classList.remove("is-delivered");
         status.classList.add("is-read");
