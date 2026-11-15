@@ -106,7 +106,7 @@ check("current asset version is shared by HTML and service worker", () => {
   includes(files.html, "whatsapp-secure-release-20261115a");
   includes(files.sw, "whatsapp-secure-release-20261115a");
   includes(files.manifest, "whatsapp-secure-release-20261115a");
-  includes(files.sw, "whatsapp-final-shell-v80");
+  includes(files.sw, "whatsapp-final-shell-v81");
 });
 check("mobile settings use a full-width account detail pane", () => {
   includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
@@ -192,7 +192,7 @@ check("PWA app shell and service worker share the current update build", () => {
   includes(files.html, "whatsapp-secure-release-20261115a");
   includes(files.sw, "whatsapp-secure-release-20261115a");
   includes(files.manifest, "whatsapp-secure-release-20261115a");
-  includes(files.sw, "whatsapp-final-shell-v80");
+  includes(files.sw, "whatsapp-final-shell-v81");
 });
 check("Android update remains available from Settings after dismissing the banner", () => {
   includes(files.app, '["updates","download","App updates"]');
