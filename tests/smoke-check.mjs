@@ -721,6 +721,36 @@ check("outgoing call status requires a confirmed incoming-call display, not onli
   includes(files.nativeMessaging,'body.put("stage", "shown")');
   includes(files.nativeNotifications,"return showCall(context, data);");
 });
+
+check("voice notes play inside the message bubble with duration and waveform progress", () => {
+  includes(files.app,"data-duration-ms");
+  includes(files.app,"voiceDurationLabel");
+  includes(files.backend,"audio.className=\"wa-inline-voice-audio\"");
+  includes(files.backend,"updateVoicePlaybackUI");
+  includes(files.backend,"audio.addEventListener(\"timeupdate\"");
+  includes(files.backend,"pauseOtherVoicePlayers");
+  includes(files.css,".wa-inline-voice-audio{display:none!important}");
+  includes(files.css,".voice-waveform i.played");
+});
+check("incoming messages and read receipts do not interrupt an active voice recording", () => {
+  excludes(files.backend,'if(String(bridge.getSelectedChatId?bridge.getSelectedChatId():"")===String(chat.id))bridge.renderMain();');
+  includes(files.backend,'bridge.updateBackendMessageReadStatus(pending.map(m=>m.id))');
+  includes(files.backend,'window.addEventListener("wa-conversation-rendered"');
+  includes(files.app,'new CustomEvent("wa-conversation-rendered"');
+});
+check("video calls include speaker output control and camera switching has facing-mode fallbacks", () => {
+  includes(files.calls,"data-wa-call='switch-camera'");
+  includes(files.calls,"data-wa-call='speaker'");
+  includes(files.calls,'facingMode:{exact:nextFacing}');
+  includes(files.calls,"sender.replaceTrack(newTrack)");
+});
+check("call setup has an early ICE fallback and bounded connection timeout", () => {
+  includes(files.calls,"connection.oniceconnectionstatechange");
+  includes(files.calls,"armInitialRelayFallback");
+  includes(files.calls,"triggerIceFallback");
+  includes(files.calls,"},10000);");
+  includes(files.calls,"},22000);");
+});
 check("video calls support camera switching and use a reduced 480p frame budget", () => {
   includes(files.calls,"data-wa-call='switch-camera'");
   includes(files.calls,"async function switchCamera()");
