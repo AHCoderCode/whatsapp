@@ -2902,7 +2902,7 @@ function openSharedItemsDialog(chat,kind) {
     appendBackendMessage: (message,chat) => appendBackendMessageToConversation(message,chat),
     updateBackendMessageReadStatus: (messageIds) => {
       const ids=new Set((Array.isArray(messageIds)?messageIds:[messageIds]).map(String));
-      $(".message-row",main).forEach(row=>{
+      main.querySelectorAll(".message-row").forEach(row=>{
         if(!ids.has(String(row.dataset.messageId||"")))return;
         const status=row.querySelectorAll(".message-read-status")[0];
         if(!status)return;
