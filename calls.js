@@ -920,7 +920,6 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
         activeCall.peerRinging=false;
         setPhase("outgoing");
         startOutgoingReachabilityPolling(newId);
-        armInitialRelayFallback(newId,pc);
       }
     }catch(error){
       const wasCancelled=!activeCall||(newId?activeCall.id!==newId:activeCall.id!==pendingId);
@@ -1316,7 +1315,10 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
           return;
         }
         tracked.status=row.status;
-        if(row.status==="accepted"&&tracked.direction==="outgoing"&&phase==="outgoing")setPhase("connecting","Connecting…");
+        if(row.status==="accepted"&&tracked.direction==="outgoing"&&phase==="outgoing"){
+          setPhase("connecting","Connecting…");
+          if(pc)armInitialRelayFallback(tracked.id,pc);
+        }
         if(tracked.direction==="incoming"&&phase==="incoming"&&!incomingOffer)await recoverIncomingOffer(tracked.id,current.id,client);
         return;
       }
@@ -1451,6 +1453,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
             else if(row.status==="ended")say("The call has ended.");
           }else if(row.status==="accepted"&&activeCall.direction==="outgoing"&&phase==="outgoing"){
             setPhase("connecting","Connecting…");
+            if(pc)armInitialRelayFallback(activeCall.id,pc);
           }
         }).subscribe((status,error)=>{
           if(status==="SUBSCRIBED")console.info("[calls] Live call events connected.");
