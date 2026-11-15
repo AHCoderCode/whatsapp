@@ -417,8 +417,11 @@
     const isRead=message.status==="read";
     const checks = outgoing&&!callEvent ? "<span class='message-read-status " + (isRead?"is-read":"is-delivered") + "' title='" + (isRead?"Read by recipient":"Sent") + "' aria-label='" + (isRead?"Read by recipient":"Sent") + "'>" + icon(isRead?"checks":"check") + "</span>" : "";
     const isVoiceAttachment = message.attachmentType==="voice" || message.messageType==="voice";
+    const voiceDurationMs=Math.max(0,Math.min(120000,Number(message.voiceDurationMs)||0));
+    const voiceDurationSeconds=Math.ceil(voiceDurationMs/1000);
+    const voiceDurationLabel=String(Math.floor(voiceDurationSeconds/60)).padStart(2,"0")+":"+String(voiceDurationSeconds%60).padStart(2,"0");
     const voiceBars = "<span class='voice-waveform' aria-hidden='true'>" + [9,15,11,19,13,22,10,16,7,18,12,21,9,15,6,13].map((height,index)=>"<i style='--wave-height:"+height+"px;--wave-index:"+index+"'></i>").join("") + "</span>";
-    const attachmentAction = message.attachmentPath ? "<button type='button' class='message-attachment-open "+(isVoiceAttachment?"voice-message-open":"")+"' data-action='open-attachment' data-message-id='" + esc(message.id) + "' aria-label='"+(isVoiceAttachment?"Play voice message":"Open attachment")+"'>" + (isVoiceAttachment?"<span class='voice-play-button'>"+icon("play")+"</span>"+voiceBars+"<span class='voice-message-copy'><strong>Voice message</strong><small>Tap to listen</small></span>":icon((message.attachmentMime||"").startsWith("image/")?"image":(message.attachmentMime||"").startsWith("video/")?"video":(message.attachmentMime||"").startsWith("audio/")?"music":"file")+"<span>"+esc(message.attachmentName||"Open attachment")+"</span>") + "</button>" : "";
+    const attachmentAction = message.attachmentPath ? "<button type='button' class='message-attachment-open "+(isVoiceAttachment?"voice-message-open":"")+"' data-action='open-attachment' data-message-id='" + esc(message.id) + "' "+(isVoiceAttachment?"data-duration-ms='"+voiceDurationMs+"' aria-label='Play voice message, duration "+voiceDurationLabel+"'":"aria-label='Open attachment'")+">" + (isVoiceAttachment?"<span class='voice-play-button'>"+icon("play")+"</span>"+voiceBars+"<span class='voice-message-copy'><strong>Voice message</strong><small>00:00 / "+voiceDurationLabel+"</small></span>":icon((message.attachmentMime||"").startsWith("image/")?"image":(message.attachmentMime||"").startsWith("video/")?"video":(message.attachmentMime||"").startsWith("audio/")?"music":"file")+"<span>"+esc(message.attachmentName||"Open attachment")+"</span>") + "</button>" : "";
     const pollCard = message.poll ? (function(){
       const p=message.poll, options=Array.isArray(p.options)?p.options:[], counts=Array.isArray(p.counts)?p.counts:[];
       const total=counts.reduce((sum,count)=>sum+Number(count||0),0);
@@ -673,6 +676,7 @@
       }else syncComposerButton(composerInput);
       composerInput.addEventListener("input", () => syncComposerButton(composerInput));
     }
+    window.dispatchEvent(new CustomEvent("wa-conversation-rendered",{detail:{chatId:String(chat.id)}}));
     requestAnimationFrame(()=>{
       const sc=$("#message-scroll");
       if(!sc)return;
@@ -2896,6 +2900,19 @@ function openSharedItemsDialog(chat,kind) {
       return isOnScreen(main)&&isOnScreen($("#message-scroll",main));
     },
     appendBackendMessage: (message,chat) => appendBackendMessageToConversation(message,chat),
+    updateBackendMessageReadStatus: (messageIds) => {
+      const ids=new Set((Array.isArray(messageIds)?messageIds:[messageIds]).map(String));
+      $(".message-row",main).forEach(row=>{
+        if(!ids.has(String(row.dataset.messageId||"")))return;
+        const status=$(".message-read-status",row);
+        if(!status)return;
+        status.classList.remove("is-delivered");
+        status.classList.add("is-read");
+        status.title="Read by recipient";
+        status.setAttribute("aria-label","Read by recipient");
+        status.innerHTML=icon("checks");
+      });
+    },
     setConversationActivity: (chatId,kind,sender) => updateConversationActivity(chatId,kind,sender),
     updateConversationPresence: (chat) => updateConversationPresence(chat),
     setBackendUser: (authUser, profile) => {
