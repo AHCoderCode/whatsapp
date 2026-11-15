@@ -25,7 +25,7 @@
   let pendingRecoveryPromise=null;
   let incomingOffer=null, callChannel=null, channelUser="", pendingSignals=new Map(), seenSignals=new Set();
   let incomingPollTimer=null,incomingPollBusy=false,incomingPollUser="",incomingPollVisibilityHandler=null,incomingPollLastErrorAt=0;
-  let callTimer=null, ringTimer=null, callSetupTimer=null, callPushReminderTimer=null, outgoingReachabilityTimer=null, outgoingReachabilityBusy=false, incomingRingingAckTimer=null, incomingRingingAckBusy=false, callStart=0, callConnectedAt="", callConnectedId="", callConnectedPromise=null, elapsed=0, muted=false, cameraOff=false, speakerOn=false, callMinimized=false, busy=false, cameraFacingMode="user", cameraSwitchBusy=false;
+  let callTimer=null, ringTimer=null, callSetupTimer=null, callPushReminderTimer=null, outgoingReachabilityTimer=null, outgoingReachabilityBusy=false, incomingRingingAckTimer=null, incomingRingingAckBusy=false, iceDisconnectTimer=null, callStart=0, callConnectedAt="", callConnectedId="", callConnectedPromise=null, elapsed=0, muted=false, cameraOff=false, speakerOn=false, callMinimized=false, busy=false, cameraFacingMode="user", cameraSwitchBusy=false;
   const PENDING_CALL_ACTION_KEY="wa_pending_native_call_action_v1";
   const DIRECT_FALLBACK_ICE_SERVERS=[{urls:"stun:stun.relay.metered.ca:80"},{urls:"stun:stun.cloudflare.com:3478"},{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun1.l.google.com:19302"}];
   function configureDirectFallback(connection){
@@ -339,7 +339,8 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     if(callPushReminderTimer!==null)clearInterval(callPushReminderTimer);
     if(outgoingReachabilityTimer!==null)clearInterval(outgoingReachabilityTimer);
     if(incomingRingingAckTimer!==null)clearInterval(incomingRingingAckTimer);
-    ringTimer=null;callTimer=null;callSetupTimer=null;callPushReminderTimer=null;outgoingReachabilityTimer=null;outgoingReachabilityBusy=false;incomingRingingAckTimer=null;incomingRingingAckBusy=false;
+    if(iceDisconnectTimer!==null)clearTimeout(iceDisconnectTimer);
+    ringTimer=null;callTimer=null;callSetupTimer=null;callPushReminderTimer=null;outgoingReachabilityTimer=null;outgoingReachabilityBusy=false;incomingRingingAckTimer=null;incomingRingingAckBusy=false;iceDisconnectTimer=null;
   }
   function startCallPushReminders(callId,client){
     if(callPushReminderTimer!==null)clearInterval(callPushReminderTimer);
@@ -432,7 +433,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       incoming?"<button class='wa-call-control decline' type='button' data-wa-call='decline' aria-label='Decline call'>" + bridge.icon("phone") + "<span>Decline</span></button><button class='wa-call-control accept' type='button' data-wa-call='accept' aria-label='Accept call'>"+(video?bridge.icon("video"):bridge.icon("phone"))+"<span>Accept</span></button>":
       (phase==="connected"||phase==="connecting"||phase==="outgoing"||phase==="preparing"?
       "<button class='wa-call-control "+(muted?"active":"")+"' type='button' data-wa-call='mute' aria-pressed='"+(muted?"true":"false")+"' aria-label='"+(muted?"Unmute microphone":"Mute microphone")+"'>"+bridge.icon(muted?"mute":"mic")+"<span>"+(muted?"Unmute":"Mute")+"</span></button>"+
-      (video?"<button class='wa-call-control "+(cameraOff?"active":"")+"' type='button' data-wa-call='camera' aria-label='Toggle camera'>"+bridge.icon("video")+"<span>"+(cameraOff?"Camera on":"Camera off")+"</span></button><button class='wa-call-control wa-call-switch-camera' type='button' data-wa-call='switch-camera' aria-label='Switch camera' title='Switch front/back camera'><span aria-hidden='true'>⇄</span><span>Flip</span></button>":"<button class='wa-call-control "+(speakerOn?"active":"")+"' type='button' data-wa-call='speaker' aria-pressed='"+(speakerOn?"true":"false")+"' aria-label='"+(speakerOn?"Turn speaker off":"Turn speaker on")+"'>"+bridge.icon("volume")+"<span>"+"Speaker"+"</span></button>")+
+      (video?"<button class='wa-call-control "+(cameraOff?"active":"")+"' type='button' data-wa-call='camera' aria-label='Toggle camera'>"+bridge.icon("video")+"<span>"+(cameraOff?"Camera on":"Camera off")+"</span></button><button class='wa-call-control wa-call-switch-camera' type='button' data-wa-call='switch-camera' aria-label='Switch camera' title='Switch front/back camera'><span aria-hidden='true'>⇄</span><span>Flip</span></button><button class='wa-call-control "+(speakerOn?"active":"")+"' type='button' data-wa-call='speaker' aria-pressed='"+(speakerOn?"true":"false")+"' aria-label='"+(speakerOn?"Turn speaker off":"Turn speaker on")+"'>"+bridge.icon("volume")+"<span>Speaker</span></button>":"<button class='wa-call-control "+(speakerOn?"active":"")+"' type='button' data-wa-call='speaker' aria-pressed='"+(speakerOn?"true":"false")+"' aria-label='"+(speakerOn?"Turn speaker off":"Turn speaker on")+"'>"+bridge.icon("volume")+"<span>Speaker</span></button>")+
       "<button class='wa-call-control decline' type='button' data-wa-call='end' aria-label='End call'>" + bridge.icon("phone") + "<span>End call</span></button>":""))+
       "</div><p class='wa-call-footnote'>Calls connect only when both people are online and have allowed microphone/camera access.</p></section></div>";
     const remoteVideo=$("#wa-call-remote-video"),localVideo=$("#wa-call-local-video"),remoteAudio=$("#wa-call-remote-audio");
@@ -607,9 +608,25 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     if(callSetupTimer!==null)clearTimeout(callSetupTimer);
     callSetupTimer=setTimeout(()=>{
       if(activeCall&&String(activeCall.id)===String(callId)&&phase!=="connected"){
-        void endCall("The TURN relay and direct connection could not connect. Try again, or switch networks.");
+        void endCall("The relay and direct connection could not establish a call. Check the network, then try again.");
       }
-    },45000);
+    },22000);
+  }
+  function armInitialRelayFallback(callId,connection){
+    if(callSetupTimer!==null)clearTimeout(callSetupTimer);
+    callSetupTimer=setTimeout(()=>{
+      if(!activeCall||String(activeCall.id)!==String(callId)||pc!==connection||phase==="connected"||directFallbackAttempted)return;
+      const iceState=String(connection.iceConnectionState||"");
+      if(iceState==="connected"||iceState==="completed"||connection.connectionState==="connected")return;
+      if(activeCall.direction==="outgoing")void startDirectFallbackFromCaller();
+      else requestDirectFallback();
+    },10000);
+  }
+  function triggerIceFallback(callId,connection){
+    if(!activeCall||String(activeCall.id)!==String(callId)||pc!==connection||phase==="connected")return;
+    if(directFallbackAttempted||directFallbackBusy||directFallbackRequestSent||directFallbackLocalStarted)return;
+    if(activeCall.direction==="outgoing")void startDirectFallbackFromCaller();
+    else requestDirectFallback();
   }
   function waitForSignalingStableForFallback(connection,callId,timeoutMs=5000){
     if(!connection)return Promise.reject(new Error("The call connection is not available."));
@@ -757,10 +774,32 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       void client.from("aeroshell_call_signals").insert({call_id:call.id,from_user_id:current.id,to_user_id:peer,kind,payload:{candidate:event.candidate.toJSON()}})
         .then(({error})=>{if(error&&activeCall&&activeCall.id===call.id)say("A network candidate could not be delivered. Check the internet connection.");});
     };
+    connection.oniceconnectionstatechange=()=>{
+      if(pc!==connection||!activeCall)return;
+      const iceState=connection.iceConnectionState;
+      if(iceState==="connected"||iceState==="completed"){
+        if(iceDisconnectTimer!==null)clearTimeout(iceDisconnectTimer);
+        iceDisconnectTimer=null;
+        return;
+      }
+      if(iceState==="failed"){
+        if(iceDisconnectTimer!==null)clearTimeout(iceDisconnectTimer);
+        iceDisconnectTimer=null;
+        triggerIceFallback(call.id,connection);
+        return;
+      }
+      if(iceState==="disconnected"&&iceDisconnectTimer===null&&!directFallbackAttempted){
+        iceDisconnectTimer=setTimeout(()=>{
+          iceDisconnectTimer=null;
+          if(pc===connection&&connection.iceConnectionState==="disconnected")triggerIceFallback(call.id,connection);
+        },3500);
+      }
+    };
     connection.onconnectionstatechange=()=>{
       if(pc!==connection||!activeCall)return;
       if(connection.connectionState==="connected"){
         if(callSetupTimer!==null)clearTimeout(callSetupTimer);callSetupTimer=null;
+        if(iceDisconnectTimer!==null)clearTimeout(iceDisconnectTimer);iceDisconnectTimer=null;
         if(ringTimer!==null)clearTimeout(ringTimer);ringTimer=null;
         if(!callStart)callStart=Date.now();
         if(!callConnectedAt)callConnectedAt=new Date(callStart).toISOString();
@@ -822,6 +861,8 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
         return;
       }
       localStream=grantedStream;
+      const initialFacing=localStream.getVideoTracks()[0]?.getSettings?.().facingMode;
+      cameraFacingMode=initialFacing==="environment"?"environment":"user";
 
       const {data,error}=await client.from("aeroshell_calls")
         .insert({caller_id:current.id,callee_id:person.id,media_type:mediaType})
@@ -879,6 +920,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
         activeCall.peerRinging=false;
         setPhase("outgoing");
         startOutgoingReachabilityPolling(newId);
+        armInitialRelayFallback(newId,pc);
       }
     }catch(error){
       const wasCancelled=!activeCall||(newId?activeCall.id!==newId:activeCall.id!==pendingId);
@@ -975,6 +1017,8 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       const grantedStream=await userMediaWithTimeout(call.media_type==="video",20000);
       if(!activeCall||activeCall.id!==call.id){grantedStream.getTracks().forEach(track=>track.stop());return;}
       localStream=grantedStream;
+      const initialFacing=localStream.getVideoTracks()[0]?.getSettings?.().facingMode;
+      cameraFacingMode=initialFacing==="environment"?"environment":"user";
       const relayResult=await withCallTimeout(relaySetup,12000,"Secure relay setup timed out. Check TURN configuration and connection, then try again.");
       if(relayResult.error)throw relayResult.error;
       const servers=relayResult.servers;
@@ -995,6 +1039,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       await withCallTimeout(sendSignal(call,"answer",{type:"answer",sdp:pc.localDescription.sdp}),8000,"The call answer could not be delivered. Check the connection and try again.");
       clearPendingNotificationAction();
       setPhase("connecting","Connecting…");
+      armInitialRelayFallback(call.id,pc);
     }catch(error){
       try{await transitionCallStatus(call,statusAccepted?"ended":"rejected",client,current);}
       catch(statusError){console.warn("[calls] Failed acceptance cleanup was not confirmed:",statusError&&statusError.message||statusError);}
@@ -1142,38 +1187,63 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     if(cameraSwitchBusy||!activeCall||activeCall.media_type!=="video")return;
     const oldTrack=localStream&&localStream.getVideoTracks()[0];
     if(!oldTrack)return say("The camera is still starting. Try switching again in a moment.");
+    if(!navigator.mediaDevices||typeof navigator.mediaDevices.getUserMedia!=="function")return say("Camera switching is not supported by this device.");
     cameraSwitchBusy=true;updateCameraSwitchButton();
     let temporaryStream=null;
-    const nextFacing=cameraFacingMode==="user"?"environment":"user";
+    const oldSettings=oldTrack.getSettings?oldTrack.getSettings():{};
+    const currentId=String(oldSettings.deviceId||"");
+    const currentFacing=oldSettings.facingMode==="environment"?"environment":oldSettings.facingMode==="user"?"user":cameraFacingMode;
+    const nextFacing=currentFacing==="user"?"environment":"user";
+    const videoBase={width:{ideal:640,max:640},height:{ideal:480,max:480},frameRate:{ideal:20,max:24}};
     try{
       const devices=await navigator.mediaDevices.enumerateDevices().catch(()=>[]);
       const cameras=devices.filter(device=>device.kind==="videoinput");
-      if(cameras.length<2)throw new Error("This phone reports only one available camera.");
       const labelPattern=nextFacing==="environment"?/back|rear|environment/i:/front|user|facetime/i;
-      const currentId=oldTrack.getSettings?oldTrack.getSettings().deviceId:"";
-      let target=cameras.find(device=>labelPattern.test(device.label||""));
-      if(!target||target.deviceId===currentId){
+      let target=cameras.find(device=>labelPattern.test(device.label||"")&&device.deviceId!==currentId);
+      if(!target&&cameras.length>1){
         const currentIndex=cameras.findIndex(device=>device.deviceId===currentId);
         target=cameras.find((device,index)=>device.deviceId!==currentId&&index!==currentIndex)||cameras.find(device=>device.deviceId!==currentId);
       }
-      const videoBase={width:{ideal:640,max:640},height:{ideal:480,max:480},frameRate:{ideal:20,max:24}};
-      const videoConstraints=target?Object.assign({deviceId:{exact:target.deviceId}},videoBase):Object.assign({facingMode:{ideal:nextFacing}},videoBase);
-      try{
-        temporaryStream=await navigator.mediaDevices.getUserMedia({audio:false,video:videoConstraints});
-      }catch(firstError){
-        temporaryStream=await navigator.mediaDevices.getUserMedia({audio:false,video:Object.assign({facingMode:{ideal:nextFacing}},videoBase)});
+      const attempts=[];
+      attempts.push(Object.assign({facingMode:{exact:nextFacing}},videoBase));
+      if(target&&target.deviceId)attempts.push(Object.assign({deviceId:{exact:target.deviceId}},videoBase));
+      attempts.push(Object.assign({facingMode:{ideal:nextFacing}},videoBase));
+      let lastError=null;
+      for(const constraints of attempts){
+        try{
+          const candidate=await navigator.mediaDevices.getUserMedia({audio:false,video:constraints});
+          const track=candidate.getVideoTracks()[0];
+          if(!track){candidate.getTracks().forEach(t=>t.stop());continue;}
+          const settings=track.getSettings?track.getSettings():{};
+          const reportedFacing=settings.facingMode||"";
+          const reportedId=String(settings.deviceId||"");
+          const sameDevice=(currentId&&reportedId&&currentId===reportedId)||
+            (currentFacing&&reportedFacing&&currentFacing===reportedFacing);
+          if(sameDevice){
+            candidate.getTracks().forEach(t=>t.stop());
+            lastError=new Error("Android returned the same camera. Try again or check whether both cameras are available.");
+            continue;
+          }
+          temporaryStream=candidate;
+          break;
+        }catch(error){lastError=error;}
+      }
+      if(!temporaryStream){
+        const detail=lastError&&lastError.name==="NotAllowedError"?"Allow camera access in Android settings and try again.":"This device did not provide the opposite-facing camera to WhatsApp.";
+        throw new Error(detail);
       }
       const newTrack=temporaryStream.getVideoTracks()[0];
-      if(!newTrack)throw new Error("The selected camera did not start.");
       newTrack.enabled=!cameraOff;
       const sender=pc&&pc.getSenders().find(item=>item.track&&item.track.kind==="video");
-      if(sender)await sender.replaceTrack(newTrack);
+      if(!sender||typeof sender.replaceTrack!=="function")throw new Error("The video connection is not ready to switch cameras yet.");
+      await withCallTimeout(sender.replaceTrack(newTrack),6000,"The video connection did not accept the new camera.");
       localStream.removeTrack(oldTrack);
       localStream.addTrack(newTrack);
       const preview=$("#wa-call-local-video");
       if(preview){preview.srcObject=null;preview.srcObject=localStream;void preview.play().catch(()=>{});}
       oldTrack.stop();
-      cameraFacingMode=nextFacing;
+      const switchedFacing=newTrack.getSettings?newTrack.getSettings().facingMode:"";
+      cameraFacingMode=switchedFacing==="environment"||switchedFacing==="user"?switchedFacing:nextFacing;
       temporaryStream=null;
       updateCameraSwitchButton();
     }catch(error){
