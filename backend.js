@@ -794,7 +794,7 @@
   const ATTACHMENT_BUCKET = "master-chat-attachments";
   let recorder = null, recorderStream = null, recorderChunks = [], recorderStartedAt = 0, recorderChatId = null, recorderStopReason = "";
   let recorderAudioContext=null,recorderAnalyser=null,recorderAnimationFrame=0,recorderUiTimer=null;
-  let pendingVoiceSend=null;
+  let pendingVoiceSend=null,activeVoiceAudio=null,activeVoiceButton=null,activeVoiceDurationMs=0;
   function currentSelectedChat() {
     const selected = bridge.getCurrentChat();
     return selected && selected.id ? selected : null;
@@ -853,6 +853,8 @@
   }
   function showRecordingBar(){
     const form=$("#message-form");if(!form)return;
+    stopRecordingVisualizer();
+    const staleBar=$("#wa-recording-bar");if(staleBar)staleBar.remove();
     const bars=Array.from({length:28},(_,i)=>"<i style='height:"+(5+((i*7+3)%17))+"px'></i>").join("");
     form.insertAdjacentHTML("beforebegin",
       "<div class='wa-recording-bar' id='wa-recording-bar' role='status' aria-live='polite'>"+
@@ -921,7 +923,7 @@
       pending.forEach(m=>{m.read=true;});
       chat.unread=0;
       bridge.renderSidebar();
-      if(String(bridge.getSelectedChatId?bridge.getSelectedChatId():"")===String(chat.id))bridge.renderMain();
+      if(typeof bridge.updateBackendMessageReadStatus==="function")bridge.updateBackendMessageReadStatus(pending.map(m=>m.id));
     }catch(_){}
   }
   function safeFileName(name) {
@@ -1029,6 +1031,41 @@
     }
     return delivered;
   }
+  function formatVoicePlaybackTime(value){
+    const seconds=Math.max(0,Math.floor(Number(value)||0));
+    return String(Math.floor(seconds/60)).padStart(2,"0")+":"+String(seconds%60).padStart(2,"0");
+  }
+  function updateVoicePlaybackUI(button,audio,durationMs){
+    if(!button||!audio)return;
+    const duration=Number.isFinite(audio.duration)&&audio.duration>0?audio.duration:Math.max(0,Number(durationMs)||0)/1000;
+    const current=audio.ended?0:Math.max(0,Number(audio.currentTime)||0);
+    const progress=duration>0?Math.min(1,current/duration):0;
+    const waveform=button.querySelector(".voice-waveform");
+    if(waveform){
+      const bars=Array.from(waveform.children);
+      bars.forEach((bar,index)=>bar.classList.toggle("played",progress>0&&(index+1)/bars.length<=progress));
+    }
+    const time=button.querySelector(".voice-message-copy small");
+    if(time)time.textContent=formatVoicePlaybackTime(current)+" / "+formatVoicePlaybackTime(duration);
+    const playing=!audio.paused&&!audio.ended;
+    const play=button.querySelector(".voice-play-button");
+    if(play)play.innerHTML=bridge.icon(playing?"pause":"play");
+    button.setAttribute("aria-label",(playing?"Pause":"Play")+" voice message, duration "+formatVoicePlaybackTime(duration));
+  }
+  function pauseOtherVoicePlayers(except){
+    if(activeVoiceAudio&&activeVoiceAudio!==except){
+      const old=activeVoiceAudio,oldButton=activeVoiceButton,oldDuration=activeVoiceDurationMs;
+      try{old.pause();old.currentTime=0;}catch(_){}
+      updateVoicePlaybackUI(oldButton,old,oldDuration);
+    }
+    document.querySelectorAll("audio.wa-inline-voice-audio").forEach(audio=>{
+      if(audio===except)return;
+      try{audio.pause();audio.currentTime=0;}catch(_){}
+      const button=audio.previousElementSibling;
+      updateVoicePlaybackUI(button,audio,Number(button&&button.dataset.durationMs)||0);
+    });
+    if(activeVoiceAudio!==except){activeVoiceAudio=null;activeVoiceButton=null;activeVoiceDurationMs=0;}
+  }
   async function openAttachment(messageId) {
     const me=getUser(),s=appState();
     if(!me||!me.isSupabase||!s)return;
@@ -1037,18 +1074,53 @@
     if(!message||!message.attachmentPath)return say("The attachment is not available in this chat.");
     const isVoice=message.attachmentType==="voice"||message.messageType==="voice";
     const button=Array.from(document.querySelectorAll("[data-action='open-attachment']")).find(el=>String(el.dataset.messageId)===String(messageId));
-    if(isVoice&&button){
+    const isVoiceBubble=!!(isVoice&&button&&button.classList.contains("voice-message-open"));
+    const knownDurationMs=Math.max(0,Math.min(120000,Number(message.voiceDurationMs)||Number(button&&button.dataset.durationMs)||0));
+    if(isVoiceBubble){
       const existing=button.parentElement?.querySelector("audio.wa-inline-voice-audio");
-      if(existing){if(existing.paused)void existing.play().catch(()=>say("Tap the audio play control to start playback."));else existing.pause();return;}
+      if(existing){
+        if(existing.paused){
+          pauseOtherVoicePlayers(existing);
+          try{await existing.play();}catch(error){say("This voice message could not be played. Check your connection and try again.");}
+        }else existing.pause();
+        return;
+      }
     }
     try{
       const {data,error}=await db.storage.from(ATTACHMENT_BUCKET).createSignedUrl(message.attachmentPath,120);
       if(error||!data||!data.signedUrl)throw error||new Error("Could not create a private attachment link.");
       const url=String(data.signedUrl),name=esc(message.attachmentName||"Attachment"),mime=String(message.attachmentMime||"");
-      if(isVoice&&button){
-        const audio=document.createElement("audio");audio.className="wa-inline-voice-audio";audio.controls=true;audio.preload="none";audio.src=url;audio.setAttribute("aria-label","Voice message playback");
+      if(isVoiceBubble){
+        const audio=document.createElement("audio");
+        audio.className="wa-inline-voice-audio";
+        audio.preload="metadata";
+        audio.src=url;
+        audio.tabIndex=-1;
+        audio.setAttribute("aria-hidden","true");
         button.insertAdjacentElement("afterend",audio);
-        try{await audio.play();}catch(_){}
+        const sync=()=>updateVoicePlaybackUI(button,audio,knownDurationMs);
+        audio.addEventListener("loadedmetadata",sync);
+        audio.addEventListener("durationchange",sync);
+        audio.addEventListener("timeupdate",sync);
+        audio.addEventListener("play",()=>{
+          pauseOtherVoicePlayers(audio);
+          activeVoiceAudio=audio;activeVoiceButton=button;activeVoiceDurationMs=knownDurationMs;
+          sync();
+        });
+        audio.addEventListener("pause",()=>{
+          sync();
+          if(activeVoiceAudio===audio){activeVoiceAudio=null;activeVoiceButton=null;activeVoiceDurationMs=0;}
+        });
+        audio.addEventListener("ended",()=>{
+          try{audio.currentTime=0;}catch(_){}
+          sync();
+          if(activeVoiceAudio===audio){activeVoiceAudio=null;activeVoiceButton=null;activeVoiceDurationMs=0;}
+        });
+        audio.addEventListener("error",()=>say("This voice message could not be loaded. Check your connection and try again."));
+        sync();
+        pauseOtherVoicePlayers(audio);
+        try{await audio.play();}
+        catch(_){say("Tap the voice message again to start playback.");}
         return;
       }
       const safeUrl=esc(url);let preview="";
@@ -1058,6 +1130,15 @@
       bridge.openDialog("Shared attachment","<div class='wa-attachment-dialog'>"+preview+"<p>"+name+"</p><a class='primary-button' href='"+safeUrl+"' target='_blank' rel='noopener noreferrer'>Open / download attachment</a><small>This private link expires in about two minutes.</small></div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");
     }catch(error){say(safeError(error,"This private attachment could not be opened."));}
   }
+  window.addEventListener("wa-conversation-rendered",event=>{
+    if(!recorder||recorder.state==="inactive")return;
+    const renderedChatId=String(event&&event.detail&&event.detail.chatId||"");
+    if(!renderedChatId||renderedChatId!==String(recorderChatId))return;
+    if(!$("#wa-recording-bar"))showRecordingBar();
+    const button=$(".send-button"),input=$("#message-input");
+    if(button){button.classList.add("recording");button.hidden=true;}
+    if(input){input.disabled=true;input.placeholder="Recording… use the voice bar to discard or send";}
+  });
   async function startVoiceRecording() {
     const me=getUser(),chat=currentSelectedChat();
     if(!me||!me.isSupabase)return say("Sign in to record and send a voice note.");
