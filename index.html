@@ -28,6 +28,7 @@
   <link rel="apple-touch-icon" href="/icon.svg?v=whatsapp-secure-release-20261115a">
   <link rel="manifest" href="/manifest.webmanifest?v=whatsapp-secure-release-20261115a">
   <link rel="stylesheet" href="/styles.css?v=whatsapp-secure-release-20261115a">
+  <link rel="stylesheet" href="/entry.css?v=whatsapp-entry-20261116a">
   <style>
     body.wa-booting > :not(#boot-screen) { visibility: hidden !important; }
     .boot-screen{position:fixed;inset:0;z-index:999999;display:grid;place-items:center;overflow:hidden;padding:22px;background:radial-gradient(ellipse at 50% 42%,#123c31 0%,#0a2922 39%,#061b17 76%,#04130f 100%);color:#f4fff9;font-family:"Segoe UI",Arial,sans-serif;opacity:1;transition:opacity .46s ease,visibility .46s ease}
@@ -76,7 +77,95 @@
     var icon = window.icon = window.icon || function(name,cls){var safeName=ESC(name||"info");return "<svg"+(cls?" class='"+ESC(cls)+"'":"")+" viewBox='0 0 24 24' aria-hidden='true'><use href='#i-"+safeName+"'></use></svg>";};
   </script>
 </head>
-<body class="wa-booting">
+<body class="wa-booting wa-entry-gated">
+<!-- First-visit choice screen: download Android or continue to the existing web app. -->
+<div id="entry-gate" class="entry-gate">
+  <header class="entry-header">
+    <a class="entry-brand" href="/" aria-label="WhatsApp home">
+      <span class="entry-brand-mark"><img src="/icon.svg?v=whatsapp-secure-release-20261115a" alt=""></span>
+      <span><span class="entry-brand-name">WhatsApp</span><span class="entry-brand-caption">MESSAGING MADE SIMPLE</span></span>
+    </a>
+    <div class="entry-header-note"><span aria-hidden="true"></span> Simple ways to stay connected</div>
+  </header>
+
+  <main class="entry-main">
+    <section class="entry-copy" aria-labelledby="entry-title">
+      <div class="entry-eyebrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2L12 3Z"/></svg> ONE APP. YOUR PEOPLE.</div>
+      <h1 id="entry-title">Stay close.<br><span>Wherever life happens.</span></h1>
+      <p class="entry-description">Your conversations, all in one place. Choose the way you want to connect and pick up right where your people are.</p>
+
+      <div class="entry-choices" aria-label="Choose how to use WhatsApp">
+        <a class="entry-choice entry-choice-primary" href="https://github.com/AHCoderCode/whatsapp/releases/latest/download/whatsapp.apk" aria-label="Download the latest Android APK">
+          <span class="entry-choice-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v11m-5-5 5 5 5-5M4 17v3h16v-3"/></svg></span>
+          <span class="entry-choice-copy"><strong>Download the APK</strong><small>Android app · latest release</small></span>
+          <svg class="entry-choice-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+        </a>
+
+        <button class="entry-choice entry-choice-secondary" id="entry-continue" type="button">
+          <span class="entry-choice-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8A8.5 8.5 0 0 1 8.7 3.9a8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8Z"/></svg></span>
+          <span class="entry-choice-copy"><strong>Try the messaging app for free</strong><small>Open the full web app in your browser</small></span>
+          <svg class="entry-choice-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+        </button>
+      </div>
+
+      <p class="entry-microcopy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 5 6v5c0 5 3 8 7 10 4-2 7-5 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg> The browser app is free to try. No download is needed.</p>
+
+      <div class="entry-feature-row" aria-label="Available features">
+        <span class="entry-feature"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8A8.5 8.5 0 0 1 8.7 3.9"/></svg> Chats</span>
+        <span class="entry-feature"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.4 19.4 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7"/></svg> Voice & video calls</span>
+        <span class="entry-feature"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M2 20v-1a7 7 0 0 1 14 0v1m1-13a3 3 0 0 1 0 6m2 2a5 5 0 0 1 3 5"/></svg> Groups</span>
+      </div>
+    </section>
+
+    <aside class="entry-preview" aria-label="Preview of the messaging app">
+      <div class="entry-preview-glow"></div>
+      <div class="entry-preview-window">
+        <div class="entry-window-bar"><span class="entry-window-dot"></span><span class="entry-window-dot"></span><span class="entry-window-dot"></span><span class="entry-window-address">whatsapp-for.vercel.app</span></div>
+        <div class="entry-preview-app">
+          <div class="entry-preview-rail" aria-hidden="true">
+            <img src="/icon.svg?v=whatsapp-secure-release-20261115a" alt="">
+            <span class="active"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8A8.5 8.5 0 0 1 8.7 3.9"/></svg></span>
+            <span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+            <span><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9"/></svg></span>
+            <span><svg viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.4 19.4 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3"/></svg></span>
+          </div>
+          <div class="entry-preview-content">
+            <div class="entry-preview-title"><strong>Chats</strong><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg></span></div>
+            <div class="entry-preview-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg> Search or start a new chat</div>
+            <div class="entry-preview-list">
+              <div class="entry-preview-chat"><span class="entry-preview-avatar a">AL</span><span class="entry-preview-chat-copy"><strong>Alex</strong><small>That sounds great! 😊</small></span><time>10:42</time><span class="entry-preview-unread">2</span></div>
+              <div class="entry-preview-chat"><span class="entry-preview-avatar b">SM</span><span class="entry-preview-chat-copy"><strong>Sam</strong><small>Voice message · 0:18</small></span><time>09:18</time></div>
+              <div class="entry-preview-chat"><span class="entry-preview-avatar c">WK</span><span class="entry-preview-chat-copy"><strong>Weekend crew</strong><small>You: See you there!</small></span><time>Yesterday</time></div>
+              <div class="entry-preview-chat"><span class="entry-preview-avatar d">JR</span><span class="entry-preview-chat-copy"><strong>Jordan</strong><small>Photo</small></span><time>Monday</time></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="entry-float-note"><span class="entry-float-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></span><span><strong>All your chats, together</strong><small>Pick up the conversation anywhere</small></span></div>
+    </aside>
+  </main>
+
+  <footer class="entry-footer">
+    <span>Made for everyday conversations.</span>
+    <span class="entry-footer-links"><a href="/privacy-policy.html">Privacy</a><a href="/terms-of-service.html">Terms</a><span>Independent messaging app · Not affiliated with Meta</span></span>
+  </footer>
+</div>
+<script>
+(function(){
+  var body = document.body;
+  function revealApp(){ body.classList.remove("wa-entry-gated"); }
+  var params = new URLSearchParams(window.location.search);
+  if (params.has("waPushKind") || params.has("waCallId") || params.has("waPushAction") || params.has("waChatId")) revealApp();
+  var continueButton = document.getElementById("entry-continue");
+  if (continueButton) continueButton.addEventListener("click", revealApp);
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("message", function(event){
+      if (event.data && event.data.type === "whatsapp-notification-action") revealApp();
+    });
+  }
+})();
+</script>
+
 <div id="boot-screen" class="boot-screen" role="status" aria-live="polite">
   <div class="boot-card">
     <div class="boot-visual" aria-hidden="true">
