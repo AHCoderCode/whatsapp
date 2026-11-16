@@ -28,6 +28,7 @@ const files = {
   nativeGradle: read("android-native/app/build.gradle"),
   calls: read("calls.js"),
   sw: read("sw.js"),
+  entryCss: read("entry.css"),
   html: read("index.html"),
   css: read("styles.css"),
   manifest: read("manifest.webmanifest"),
@@ -106,7 +107,7 @@ check("current asset version is shared by HTML and service worker", () => {
   includes(files.html, "whatsapp-secure-release-20261115a");
   includes(files.sw, "whatsapp-secure-release-20261115a");
   includes(files.manifest, "whatsapp-secure-release-20261115a");
-  includes(files.sw, "whatsapp-final-shell-v81");
+  includes(files.sw, "whatsapp-final-shell-v82");
 });
 check("mobile settings use a full-width account detail pane", () => {
   includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
@@ -192,7 +193,7 @@ check("PWA app shell and service worker share the current update build", () => {
   includes(files.html, "whatsapp-secure-release-20261115a");
   includes(files.sw, "whatsapp-secure-release-20261115a");
   includes(files.manifest, "whatsapp-secure-release-20261115a");
-  includes(files.sw, "whatsapp-final-shell-v81");
+  includes(files.sw, "whatsapp-final-shell-v82");
 });
 check("Android update remains available from Settings after dismissing the banner", () => {
   includes(files.app, '["updates","download","App updates"]');
@@ -1246,5 +1247,19 @@ check("push notifications never expose message text or attachment names", () => 
   excludes(files.push, "clean(message.body");
   excludes(files.push, "message.attachment_name");
 });
+
+check("welcome screen is responsive across phones, tablets and desktop safe areas", () => {
+  includes(files.html, "entry.css?v=whatsapp-entry-20261116c");
+  includes(files.sw, "/entry.css?v=whatsapp-entry-20261116c");
+  includes(files.sw, "whatsapp-final-shell-v82");
+  includes(files.entryCss, "env(safe-area-inset-top)");
+  includes(files.entryCss, "env(safe-area-inset-bottom)");
+  includes(files.entryCss, "@media (max-width: 880px)");
+  includes(files.entryCss, "@media (max-width: 760px) and (orientation: landscape)");
+  includes(files.entryCss, "@media (max-width: 420px)");
+  includes(files.entryCss, "@media (max-height: 560px)");
+  assert.equal((files.entryCss.match(/{/g)||[]).length, (files.entryCss.match(/}/g)||[]).length);
+});
+
 console.log("\n" + passed + " passed, " + failed + " failed.");
 if (failed) process.exitCode = 1;
