@@ -29,6 +29,10 @@ body.wa-entry-gated > #entry-gate {
   display: grid;
   visibility: visible !important;
 }
+/* Beat the original boot screen's broad direct-child visibility rule. */
+body.wa-booting.wa-entry-gated > #entry-gate {
+  visibility: visible !important;
+}
 #entry-gate::before {
   position: absolute;
   z-index: -1;
