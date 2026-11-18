@@ -155,7 +155,13 @@
   var body = document.body;
   function revealApp(){ body.classList.remove("wa-entry-gated"); }
   var params = new URLSearchParams(window.location.search);
-  if (params.has("waPushKind") || params.has("waCallId") || params.has("waPushAction") || params.has("waChatId")) revealApp();
+  var nativeApp = false;
+  try {
+    nativeApp = !!(window.WhatsAppNativeAndroid &&
+      typeof window.WhatsAppNativeAndroid.isNativeApp === "function" &&
+      window.WhatsAppNativeAndroid.isNativeApp());
+  } catch (_) {}
+  if (nativeApp || params.has("waNativeApp") || params.has("waPushKind") || params.has("waCallId") || params.has("waPushAction") || params.has("waChatId")) revealApp();
   var continueButton = document.getElementById("entry-continue");
   if (continueButton) continueButton.addEventListener("click", revealApp);
   if ("serviceWorker" in navigator) {
