@@ -93,13 +93,15 @@
         const value=JSON.parse(row.body.slice(CALL_MESSAGE_PREFIX.length));
         const participants=[String(value&&value.callerId||""),String(value&&value.calleeId||"")];
         if(value&&value.v===1&&value.callId===String(row.id)&&participants.includes(String(me.id))&&participants.includes(String(chat.id))&&
-          ["missed","completed"].includes(value.outcome)&&["audio","video"].includes(value.mediaType)){
+          ["missed","completed","declined"].includes(value.outcome)&&["audio","video"].includes(value.mediaType)){
           callEvent={callId:String(row.id),callerId:participants[0],calleeId:participants[1],outcome:value.outcome,mediaType:value.mediaType,durationSeconds:Math.max(0,Math.min(86400,Number(value.durationSeconds)||0))};
         }
       }catch(_){}
     }
     const direction=callEvent?(callEvent.callerId===String(me.id)?"Outgoing ":"Incoming "):"";
-    const body=callEvent?(callEvent.outcome==="missed"?"Missed ":direction)+(callEvent.mediaType==="video"?"video":"voice")+" call":rawBody;
+    const declinedByMe=!!(callEvent&&callEvent.outcome==="declined"&&callEvent.calleeId===String(me.id));
+    const callKind=callEvent?(callEvent.mediaType==="video"?"video":"voice"):"";
+    const body=callEvent?(callEvent.outcome==="declined"?(declinedByMe?"You declined the "+callKind+" call":"Your "+callKind+" call was declined"):(callEvent.outcome==="missed"?"Missed ":direction)+callKind+" call"):rawBody;
     return {id:row.id,from:row.sender_id===me.id?"me":"them",text:body,callEvent,
       time:stamp.toLocaleTimeString([],{hour:"numeric",minute:"2-digit",hour12:true}),
       date:stamp.toDateString()===new Date().toDateString()?"TODAY":stamp.toDateString()===new Date(Date.now()-86400000).toDateString()?"YESTERDAY":stamp.toLocaleDateString([],{month:"short",day:"numeric",...(stamp.getFullYear()!==new Date().getFullYear()?{year:"numeric"}:{})}),
