@@ -1054,14 +1054,14 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
     }catch(error){console.warn("[calls] End-of-call push request failed:",error&&error.message||error);}
   }
   const CALL_MESSAGE_PREFIX="wa-call-event:v1:";
-  async function persistCallEvent(call,client,current){
+  async function persistCallEvent(call,client,current,outcomeOverride){
     if(!call||!call.id||String(call.id).startsWith("pending-")||!client||!current||!current.id)return;
     const callerId=String(call.caller_id||""),calleeId=String(call.callee_id||"");
     if(!callerId||!calleeId||callerId===calleeId||![callerId,calleeId].includes(String(current.id)))return;
     const peerId=String(current.id)===callerId?calleeId:callerId;
     const mediaType=call.media_type==="video"?"video":"audio";
     const connected=!!(callConnectedAt||callStart>0);
-    const outcome=connected?"completed":"missed";
+    const outcome=outcomeOverride==="declined"?"declined":connected?"completed":"missed";
     const connectedTimestamp=callConnectedAt||(callStart>0?new Date(callStart).toISOString():"");
     const durationSeconds=connected?Math.max(0,Math.floor((Date.now()-(Date.parse(connectedTimestamp)||callStart))/1000)):0;
     const event={v:1,callId:String(call.id),callerId,calleeId,outcome,mediaType,durationSeconds};
@@ -1099,7 +1099,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
         "The call server did not confirm the status change in time."
       );
       if(!result.error&&result.data&&result.data.ok&&result.data.status===nextStatus){
-        if(nextStatus==="rejected"||nextStatus==="ended")void persistCallEvent(call,client,current);
+        if(nextStatus==="rejected"||nextStatus==="ended")void persistCallEvent(call,client,current,nextStatus==="rejected"?"declined":undefined);
         return {status:result.data.status,changed:!!result.data.changed};
       }
       serverFailure=result.error||new Error(result.data&&result.data.reason||"The call server did not confirm the status change.");
@@ -1117,7 +1117,7 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       );
       if(result.error)directFailure=result.error;
       else if(result.data){
-        if(nextStatus==="rejected"||nextStatus==="ended"){void notifyCallEnded(call,client);void persistCallEvent(call,client,current);}
+        if(nextStatus==="rejected"||nextStatus==="ended"){void notifyCallEnded(call,client);void persistCallEvent(call,client,current,nextStatus==="rejected"?"declined":undefined);}
         return {status:result.data.status,changed:true};
       }
     }catch(error){directFailure=error;}
@@ -1129,11 +1129,11 @@ const RINGTONE_DB_NAME="whatsapp-local-ringtones",RINGTONE_STORE_NAME="media";
       );
       const state=latest&&latest.data&&latest.data.status;
       if(!latest.error&&state===nextStatus){
-        if(nextStatus==="rejected"||nextStatus==="ended")void persistCallEvent(call,client,current);
+        if(nextStatus==="rejected"||nextStatus==="ended")void persistCallEvent(call,client,current,nextStatus==="rejected"?"declined":undefined);
         return {status:state,changed:false};
       }
       if(!latest.error&&(nextStatus==="rejected"||nextStatus==="ended")&&["rejected","ended"].includes(state)){
-        void persistCallEvent(call,client,current);
+        void persistCallEvent(call,client,current,nextStatus==="rejected"?"declined":undefined);
         return {status:state,changed:false};
       }
     }catch(error){directFailure=directFailure||error;}
