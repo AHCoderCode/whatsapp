@@ -441,11 +441,13 @@
     const selected = selectedMessage && String(selectedMessage.id) === String(message.id) && String(selectedMessage.chatId) === String(chat.id) ? " message-selected" : "";
     const mediaType=callEvent&&callEvent.mediaType==="video"?"video":"audio";
     const missedCall=!!callEvent&&callEvent.outcome==="missed";
+    const declinedCall=!!callEvent&&callEvent.outcome==="declined";
     const durationSeconds=callEvent?Math.max(0,Number(callEvent.durationSeconds)||0):0;
     const durationLabel=String(Math.floor(durationSeconds/60)).padStart(2,"0")+":"+String(durationSeconds%60).padStart(2,"0");
-    const callTitle=missedCall?(callerIsMe?"Missed outgoing ":"Missed incoming ")+(mediaType==="video"?"video":"voice")+" call":(callerIsMe?"Outgoing ":"Incoming ")+(mediaType==="video"?"video":"voice")+" call";
-    const callDetail=missedCall?"Not answered":(durationSeconds?"Duration "+durationLabel:"Call connected");
-    const callEventCard=callEvent?"<div class='wa-call-event-card "+(missedCall?"missed":"completed")+"' role='group' aria-label='"+esc(callTitle)+"'><span class='wa-call-event-icon'>"+icon(mediaType==="video"?"video":"phone")+"</span><span class='wa-call-event-copy'><strong>"+esc(callTitle)+"</strong><small>"+esc(callDetail)+"</small></span></div>":"";
+    const callKind=mediaType==="video"?"video":"voice";
+    const callTitle=declinedCall?(callerIsMe?"Your "+callKind+" call was declined":"You declined the "+callKind+" call"):missedCall?(callerIsMe?"Missed outgoing ":"Missed incoming ")+callKind+" call":(callerIsMe?"Outgoing ":"Incoming ")+callKind+" call";
+    const callDetail=declinedCall?(callerIsMe?"The other person declined your call":"Declined"):missedCall?"Not answered":(durationSeconds?"Duration "+durationLabel:"Call connected");
+    const callEventCard=callEvent?"<div class='wa-call-event-card "+(declinedCall?"declined":missedCall?"missed":"completed")+"' role='group' aria-label='"+esc(callTitle)+"'><span class='wa-call-event-icon'>"+icon(mediaType==="video"?"video":"phone")+"</span><span class='wa-call-event-copy'><strong>"+esc(callTitle)+"</strong><small>"+esc(callDetail)+"</small></span></div>":"";
     const messageLabel = callEvent?callTitle:((outgoing ? "You: " : (chat.name || "Contact") + ": ") + String(message.text || message.attachmentName || "Message").slice(0,100));
     const bubbleContent=callEvent?callEventCard:(sender+forwardedLabel+replyQuote+"<span class='message-text'>"+textBody+"</span>"+pollCard+eventCard+attachmentAction);
     return "<div class='message-row " + (visualOutgoing?"outgoing":"incoming") + (callEvent?" call-event-message":"") + selected + "' data-message-id='" + esc(message.id) + "' tabindex='0' aria-label='" + esc(messageLabel) + "'><div class='message-bubble'>" + bubbleContent + "<span class='message-meta'>" + edited + time + checks + "</span>" + reactions + "</div></div>";
