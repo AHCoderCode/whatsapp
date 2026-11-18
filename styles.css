@@ -836,6 +836,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:
 }
 .wa-call-event-card.completed{background:#128c7e;color:#fff}
 .wa-call-event-card.missed{background:#d93645;color:#fff}
+.wa-call-event-card.declined{background:#b92f3d;color:#fff}
 .wa-call-event-icon{
   display:grid;
   place-items:center;
