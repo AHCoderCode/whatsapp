@@ -1248,6 +1248,17 @@ check("push notifications never expose message text or attachment names", () => 
   excludes(files.push, "message.attachment_name");
 });
 
+check("installed Android APK bypasses the web download gate", () => {
+  includes(files.html, "window.WhatsAppNativeAndroid.isNativeApp()");
+  includes(files.html, 'params.has("waNativeApp")');
+  includes(files.nativeActivity, 'HOME_URL = "https://whatsapp-for.vercel.app/?waNativeApp=1"');
+});
+check("call overlay has a full-screen native-app presentation", () => {
+  includes(files.calls, "function renderCallOverlay(notice)");
+  includes(files.calls, "wa-call-backdrop wa-call-fullscreen");
+  includes(files.css, ".wa-call-backdrop,.wa-call-fullscreen{padding:0");
+});
+
 check("welcome screen is responsive across phones, tablets and desktop safe areas", () => {
   includes(files.html, "entry.css?v=whatsapp-entry-20261116c");
   includes(files.sw, "/entry.css?v=whatsapp-entry-20261116c");
