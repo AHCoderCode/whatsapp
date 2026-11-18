@@ -56,7 +56,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class MainActivity extends Activity {
-    public static final String HOME_URL = "https://whatsapp-for.vercel.app/";
+    public static final String HOME_URL = "https://whatsapp-for.vercel.app/?waNativeApp=1";
     private static final int REQUEST_NOTIFICATIONS = 8001, REQUEST_MEDIA = 8002, REQUEST_FILE = 8003, REQUEST_CAPTURE = 8004;
     private WebView webView;
     private ValueCallback<Uri[]> fileChooserCallback;
