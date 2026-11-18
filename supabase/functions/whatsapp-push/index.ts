@@ -456,7 +456,7 @@ async function notifyCallEnded(userId: string, body: any) {
   const pushPayload = {
     kind: "call-ended",
     title: call.status === "rejected" ? "Call declined" : "Call ended",
-    body: call.status === "rejected" ? "The incoming call was declined." : "The other person ended the call.",
+    body: call.status === "rejected" ? "The other person declined your call." : "The other person ended the call.",
     tag: "wa-call-" + call.id,
     data: {
       kind: "call-ended",
@@ -502,7 +502,7 @@ async function persistDirectCallHistory(userClient: any, userId: string, call: a
   const durationSeconds = completed ? Math.max(0, Math.min(86400, Math.floor((Date.now() - connectedAt) / 1000))) : 0;
   const event = {
     v: 1, callId: String(call.id), callerId, calleeId,
-    outcome: completed ? "completed" : "missed",
+    outcome: call.status === "rejected" ? "declined" : completed ? "completed" : "missed",
     mediaType: call.media_type === "video" ? "video" : "audio",
     durationSeconds
   };
@@ -528,7 +528,7 @@ async function persistDirectCallHistory(userClient: any, userId: string, call: a
         existingBody.startsWith(CALL_MESSAGE_PREFIX)) {
       try {
         const prior = JSON.parse(existingBody.slice(CALL_MESSAGE_PREFIX.length));
-        if (prior && prior.v === 1 && String(prior.callId) === String(call.id) && prior.outcome === "missed") {
+        if (prior && prior.v === 1 && String(prior.callId) === String(call.id) && prior.outcome === "missed" && event.outcome !== "missed") {
           const upgraded = await admin.from("aeroshell_messages")
             .update({ body: CALL_MESSAGE_PREFIX + JSON.stringify(event) })
             .eq("id", String(call.id)).eq("message_type", "text");
