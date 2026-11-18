@@ -314,7 +314,7 @@ check("App lock settings allow PIN setup, change and removal with a four-digit c
 });
 check("missed and connected call events are synced as WhatsApp-style chat cards", () => {
   includes(files.calls, "CALL_MESSAGE_PREFIX+JSON.stringify(event)");
-  includes(files.calls, 'const outcome=connected?"completed":"missed";');
+  includes(files.calls, 'const outcome=outcomeOverride==="declined"?"declined":connected?"completed":"missed";');
   includes(files.calls, "function markCallConnectedOnServer(callId)");
   includes(files.calls, 'action:"mark-call-connected"');
   includes(files.calls, "transitionBody.connectedAt=connectedAtForEnd");
@@ -331,6 +331,18 @@ check("missed and connected call events are synced as WhatsApp-style chat cards"
   includes(files.css, ".wa-call-event-card.completed{background:#128c7e");
   includes(files.app, "Missed outgoing ");
   includes(files.app, "Missed incoming ");
+});
+check("declining an incoming call creates an explicit declined event for the caller", () => {
+  includes(files.calls, "async function persistCallEvent(call,client,current,outcomeOverride)");
+  includes(files.calls, 'nextStatus==="rejected"?"declined":undefined');
+  includes(files.push, 'outcome: call.status === "rejected" ? "declined"');
+  includes(files.push, 'prior.outcome === "missed" && event.outcome !== "missed"');
+  includes(files.push, 'The other person declined your call.');
+  includes(files.backend, '["missed","completed","declined"].includes(value.outcome)');
+  includes(files.backend, 'Your "+callKind+" call was declined');
+  includes(files.backend, 'You declined the "+callKind+" call');
+  includes(files.app, 'const declinedCall=!!callEvent&&callEvent.outcome==="declined";');
+  includes(files.css, ".wa-call-event-card.declined{");
 });
 check("attachment menu opens the Android file picker before closing and has a WebView fallback", () => {
   const start = files.app.indexOf("function runMenuAction");
