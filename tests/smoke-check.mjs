@@ -1285,7 +1285,7 @@ check("call overlay has a full-screen native-app presentation", () => {
 check("welcome screen is responsive across phones, tablets and desktop safe areas", () => {
   includes(files.html, "entry.css?v=whatsapp-entry-20261116c");
   includes(files.sw, "/entry.css?v=whatsapp-entry-20261116c");
-  includes(files.sw, "whatsapp-final-shell-v83");
+  includes(files.sw, "whatsapp-final-shell-v84");
   includes(files.entryCss, "env(safe-area-inset-top)");
   includes(files.entryCss, "env(safe-area-inset-bottom)");
   includes(files.entryCss, "@media (max-width: 880px)");
@@ -1293,6 +1293,18 @@ check("welcome screen is responsive across phones, tablets and desktop safe area
   includes(files.entryCss, "@media (max-width: 420px)");
   includes(files.entryCss, "@media (max-height: 560px)");
   assert.equal((files.entryCss.match(/{/g)||[]).length, (files.entryCss.match(/}/g)||[]).length);
+});
+check("backgrounded chats refresh on resume and message notification taps open fresh data", () => {
+  includes(files.backend, 'document.addEventListener("visibilitychange"');
+  includes(files.backend, "window.waNativeAppResumed=scheduleForegroundRefresh");
+  includes(files.backend, "return new Promise(resolve=>refreshWaiters.push(resolve))");
+  includes(files.backend, "window.waBackend={client:db,load:()=>loadData(false),openMessageNotification");
+  includes(files.app, "window.waBackend&&window.waBackend.openMessageNotification");
+  includes(files.app, "scrollToMessage: (messageId) =>");
+  includes(files.sw, "messageId: data.messageId");
+  includes(files.sw, 'target.searchParams.set("waMessageId",String(data.messageId))');
+  includes(files.backend, 'const targetMessageId=params.get("waMessageId")');
+  includes(files.nativeNotifications, 'target.appendQueryParameter("waMessageId",messageId)');
 });
 
 console.log("\n" + passed + " passed, " + failed + " failed.");
