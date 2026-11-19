@@ -63,8 +63,10 @@
     if (!caption && !file) return say("Add a caption or choose a photo/video.");
     if (file && !allowedMedia(file)) return say("Choose an image or video no larger than 15 MB.");
     const type = file ? (file.type.startsWith("video/") ? "video" : "image") : "text";
+    // Let Postgres set expires_at (now() + 24 hours). The INSERT RLS policy
+    // validates against the database clock, so a device clock must not decide expiry.
     const row = { user_id: user.id, text: caption || (type === "video" ? "Video status" : "Photo status"),
-      content_type: type, expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() };
+      content_type: type };
     let path = "";
     try {
       if (file) {
@@ -400,13 +402,19 @@
   }
 
   const localListNames = () => (state()?.customLists || []).map(item => ({
-    id: String(item.id || ""), name: String(item.name || "").trim(),
+    id: String(item.id || ""), serverId: String(item.serverId || ""),
+    name: String(item.name || "").trim(),
     chatIds: Array.isArray(item.chatIds) ? item.chatIds.map(String) : []
   })).filter(item => item.name);
   let syncingLists = false;
+  let pendingListSyncMode = "";
   async function syncCustomLists(mode) {
     const user = me();
-    if (!user?.isSupabase || !db() || syncingLists) return;
+    if (!user?.isSupabase || !db()) return;
+    if (syncingLists) {
+      if (mode === "save" || !pendingListSyncMode) pendingListSyncMode = mode;
+      return;
+    }
     syncingLists = true;
     try {
       const { data: currentRows, error } = await db().from("whatsapp_custom_chat_lists")
@@ -414,51 +422,65 @@
       if (error) throw error;
       const current = currentRows || [], local = localListNames();
       const localByName = new Map(local.map(item => [item.name.toLowerCase(), item]));
+      const localByServerId = new Map(local.filter(item => item.serverId).map(item => [item.serverId, item]));
       if (mode === "initial" && current.length === 0 && local.length) {
         for (let i = 0; i < local.length; i++) {
           const item = local[i];
-          const created = await db().from("whatsapp_custom_chat_lists").insert({ user_id: user.id, name: item.name, chat_ids: item.chatIds, sort_order: i });
+          const created = await db().from("whatsapp_custom_chat_lists").insert({
+            user_id: user.id, name: item.name, chat_ids: item.chatIds, sort_order: i
+          });
           if (created.error) throw created.error;
         }
       } else if (mode === "save") {
+        const matchedLocal = new Set();
         for (const row of current) {
-          const item = localByName.get(String(row.name).toLowerCase());
+          const item = localByServerId.get(String(row.id)) || localByName.get(String(row.name).toLowerCase());
           if (!item) {
             const removed = await db().from("whatsapp_custom_chat_lists").delete().eq("id", row.id).eq("user_id", user.id);
             if (removed.error) throw removed.error;
-          } else {
-            const updated = await db().from("whatsapp_custom_chat_lists").update({
-              name: item.name, chat_ids: item.chatIds,
-              sort_order: local.findIndex(x => x.name.toLowerCase() === item.name.toLowerCase()),
-              updated_at: new Date().toISOString()
-            }).eq("id", row.id).eq("user_id", user.id);
-            if (updated.error) throw updated.error;
+            continue;
           }
+          matchedLocal.add(item);
+          const updated = await db().from("whatsapp_custom_chat_lists").update({
+            name: item.name, chat_ids: item.chatIds,
+            sort_order: local.indexOf(item),
+            updated_at: new Date().toISOString()
+          }).eq("id", row.id).eq("user_id", user.id);
+          if (updated.error) throw updated.error;
         }
-        const names = new Set(current.map(row => String(row.name).toLowerCase()));
         for (let i = 0; i < local.length; i++) {
           const item = local[i];
-          if (names.has(item.name.toLowerCase())) continue;
-          const created = await db().from("whatsapp_custom_chat_lists").insert({ user_id: user.id, name: item.name, chat_ids: item.chatIds, sort_order: i });
+          if (matchedLocal.has(item)) continue;
+          const created = await db().from("whatsapp_custom_chat_lists").insert({
+            user_id: user.id, name: item.name, chat_ids: item.chatIds, sort_order: i
+          });
           if (created.error) throw created.error;
         }
       }
       const refreshed = await db().from("whatsapp_custom_chat_lists")
         .select("id,name,chat_ids,sort_order").eq("user_id", user.id).order("sort_order", { ascending: true });
       if (refreshed.error) throw refreshed.error;
-      const oldByName = new Map(local.map(item => [item.name.toLowerCase(), item.id]));
-      const mapped = (refreshed.data || []).map(row => ({
-        id: oldByName.get(String(row.name).toLowerCase()) || row.id,
-        serverId: row.id, name: row.name,
-        chatIds: Array.isArray(row.chat_ids) ? row.chat_ids.map(String) : []
-      }));
+      const oldByName = new Map(local.map(item => [item.name.toLowerCase(), item]));
+      const oldByServerId = new Map(local.filter(item => item.serverId).map(item => [item.serverId, item]));
+      const mapped = (refreshed.data || []).map(row => {
+        const previous = oldByServerId.get(String(row.id)) || oldByName.get(String(row.name).toLowerCase());
+        return {
+          id: previous?.id || row.id, serverId: row.id, name: row.name,
+          chatIds: Array.isArray(row.chat_ids) ? row.chat_ids.map(String) : []
+        };
+      });
       const currentState = state();
       if (currentState) currentState.customLists = mapped;
       bridge()?.saveState?.(); bridge()?.renderSidebar?.(); bridge()?.renderMain?.();
     } catch (error) {
       console.warn("[feature-gaps] custom-list sync failed", error);
-      if (mode === "save") say("Your list was saved on this device, but could not sync to your account.");
-    } finally { syncingLists = false; }
+      if (mode === "save") say("Could not sync your chat lists: " + String(error?.message || "Check your connection and try again."));
+    } finally {
+      syncingLists = false;
+      const nextMode = pendingListSyncMode;
+      pendingListSyncMode = "";
+      if (nextMode) queueMicrotask(() => void syncCustomLists(nextMode));
+    }
   }
 
   async function onBackendData() {
