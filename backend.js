@@ -18,6 +18,8 @@
   let activityChannel = null, activityUserId = "", activityReady = false;
   const localChatActivities = new Map(), remoteChatActivities = new Map();
   let busy = false, loading = false, refreshQueued = false, searchTimer = null, searchCounter = 0;
+  let refreshWaiters = [], foregroundRefreshTimer = null, lastForegroundRefreshAt = 0;
+  let liveReconnectTimer = null;
   let deviceHeartbeatTimer = null, deviceSyncIdentity = "";
 
   const getUser = () => bridge.getCurrentUser();
@@ -403,7 +405,9 @@
     if(!db||!userId||(liveChannel&&liveUserId===userId))return;
     if(liveChannel)void db.removeChannel(liveChannel);
     liveUserId=userId;
-    liveChannel=db.channel("whatsapp-main-"+userId)
+    const channel=db.channel("whatsapp-main-"+userId);
+    liveChannel=channel;
+    channel
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"aeroshell_messages"},e=>insertMessageIntoUI(e.new))
       .on("postgres_changes",{event:"UPDATE",schema:"public",table:"aeroshell_messages"},()=>void loadData(true))
       .on("postgres_changes",{event:"DELETE",schema:"public",table:"aeroshell_messages"},()=>void loadData(true))
@@ -431,12 +435,26 @@
       .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_channel_follows"},()=>void loadData(true))
       .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_communities"},()=>void loadData(true))
       .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_community_members"},()=>void loadData(true))
-      .subscribe();
+      .subscribe(status=>{
+        if(!["CHANNEL_ERROR","TIMED_OUT","CLOSED"].includes(status)||liveChannel!==channel)return;
+        liveChannel=null;liveUserId="";
+        if(liveReconnectTimer!==null)clearTimeout(liveReconnectTimer);
+        liveReconnectTimer=setTimeout(()=>{
+          liveReconnectTimer=null;
+          if(getUser()?.id===userId){
+            void loadData(true);
+            subscribe(userId);
+          }
+        },1200);
+      });
   }
   async function loadData(quiet) {
     const me=getUser(),s=appState();
     if(!db||!me||!me.isSupabase||!s)return;
-    if(loading){refreshQueued=true;return;}
+    if(loading){
+      refreshQueued=true;
+      return new Promise(resolve=>refreshWaiters.push(resolve));
+    }
     loading=true;
     try{
       const [profileResult,requestResult,membershipResult,messageResult,callResult,statusResult,channelResult,channelPostResult,followResult,communityResult,communityMembershipResult]=await Promise.all([
@@ -611,8 +629,57 @@
         }else{void window.WhatsAppCalls.subscribe();}
       }
     }catch(error){if(!quiet)say(safeError(error,"Could not load messaging data from Supabase."));}
-    finally{loading=false;if(refreshQueued){refreshQueued=false;queueMicrotask(()=>void loadData(true));}}
+    finally{
+      loading=false;
+      if(refreshQueued){
+        refreshQueued=false;
+        try{await loadData(true);}catch(_){}
+      }
+      const waiters=refreshWaiters.splice(0);
+      waiters.forEach(resolve=>{try{resolve();}catch(_){}});
+    }
   }
+  function scheduleForegroundRefresh(){
+    if(document.visibilityState!=="visible")return;
+    const me=getUser();
+    if(!db||!me||!me.isSupabase)return;
+    if(foregroundRefreshTimer!==null)clearTimeout(foregroundRefreshTimer);
+    foregroundRefreshTimer=setTimeout(()=>{
+      foregroundRefreshTimer=null;
+      if(document.visibilityState!=="visible")return;
+      const current=getUser();
+      if(!current||!current.isSupabase||current.id!==me.id)return;
+      if(Date.now()-lastForegroundRefreshAt<900)return;
+      lastForegroundRefreshAt=Date.now();
+      void loadData(true);
+    },300);
+  }
+  document.addEventListener("visibilitychange",()=>{
+    if(document.visibilityState==="visible")scheduleForegroundRefresh();
+  });
+  window.addEventListener("focus",scheduleForegroundRefresh);
+  window.addEventListener("online",scheduleForegroundRefresh);
+  window.waNativeAppResumed=scheduleForegroundRefresh;
+
+  async function openMessageNotification(chatId,messageId){
+    const wantedChatId=String(chatId||"");
+    if(!wantedChatId)return false;
+    await loadData(true);
+    let target=(appState()?.chats||[]).find(chat=>String(chat.id)===wantedChatId);
+    if(!target){
+      await loadData(true);
+      target=(appState()?.chats||[]).find(chat=>String(chat.id)===wantedChatId);
+    }
+    if(!target){
+      say("The latest messages loaded, but this conversation is no longer available.");
+      return false;
+    }
+    bridge.selectChat(target.id);
+    const wantedMessageId=String(messageId||"");
+    if(wantedMessageId)requestAnimationFrame(()=>bridge.scrollToMessage?.(wantedMessageId));
+    return true;
+  }
+
   async function hydrate(authUser){
     const {data,error}=await db.from("aeroshell_profiles").select("id,username,display_name,about,custom_number,avatar_data,created_at").eq("id",authUser.id).maybeSingle();
     if(error)throw error;if(!data)throw new Error("Your WhatsApp profile could not be found for this saved account. Your sign-in is being kept; retry the connection before creating another account.");
@@ -641,14 +708,20 @@
     try{
       const params=new URLSearchParams(location.search);
       const targetId=params.get("waChatId");
+      const targetMessageId=params.get("waMessageId");
       const callActionPending=!!(window.WhatsAppCalls&&window.WhatsAppCalls.hasPendingNotificationAction&&window.WhatsAppCalls.hasPendingNotificationAction());
       if(targetId&&!callActionPending){
         params.delete("waChatId");
+        params.delete("waMessageId");
         history.replaceState(history.state,"",location.pathname+(params.toString()?"?"+params.toString():"")+location.hash);
         const target=(appState()?.chats||[]).find(chat=>String(chat.id)===String(targetId));
-        if(target)bridge.selectChat(target.id);
+        if(target){
+          bridge.selectChat(target.id);
+          if(targetMessageId)requestAnimationFrame(()=>bridge.scrollToMessage?.(targetMessageId));
+        }
       }else if(targetId&&callActionPending){
         params.delete("waChatId");
+        params.delete("waMessageId");
         history.replaceState(history.state,"",location.pathname+(params.toString()?"?"+params.toString():"")+location.hash);
       }
     }catch(_){}
@@ -1870,7 +1943,7 @@
   window.waBackendUpdatePushPreferences=updateDevicePushPreferences;
   window.waBackendTestCallPush=testCallPush;
   window.waBackendOpenLinkedDevices=openLinkedDevices;
-  window.waBackend={client:db,load:()=>loadData(false),safeError,searchPeople,sendMessage,hideMessageForMe,deleteMessageForEveryone,editMessage,forwardMessage,toggleMessageReaction,markAllRead,enableDevicePush,updateDevicePushPreferences,testCallPush,openLinkedDevices,revokeLinkedDevice};
+  window.waBackend={client:db,load:()=>loadData(false),openMessageNotification,safeError,searchPeople,sendMessage,hideMessageForMe,deleteMessageForEveryone,editMessage,forwardMessage,toggleMessageReaction,markAllRead,enableDevicePush,updateDevicePushPreferences,testCallPush,openLinkedDevices,revokeLinkedDevice};
   function showStartupRecovery(message) {
     if(typeof window.waShowStartupRecovery==="function")window.waShowStartupRecovery(String(message||"WhatsApp is still reconnecting. Retry when your connection is available."));
     else{
