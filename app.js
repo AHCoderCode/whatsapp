@@ -1588,7 +1588,14 @@
     closePopup();closeDialog();
     const menu=document.createElement("div");menu.className="popup-menu";menu.id="popup-menu";
     menu.innerHTML=items.map(it=>it.sep?"<div class='popup-separator'></div>":"<button type='button' class='"+(it.danger?"danger":"")+"' data-menu-action='"+esc(it.action)+"'>"+icon(it.icon||"info")+"<span>"+esc(it.label)+"</span></button>").join("");
-    // Menu items are handled by the single document-level action delegate below.
+    // Keep menu actions local and stop bubbling so each action is dispatched once.
+    menu.addEventListener("click",event=>{
+      const button=event.target.closest("[data-menu-action]");
+      if(!button||!menu.contains(button))return;
+      event.preventDefault();
+      event.stopPropagation();
+      runMenuAction(button.dataset.menuAction,findChat(menuChatId)||currentChat());
+    });
     overlayRoot.appendChild(menu);
     const rect=anchor.getBoundingClientRect();const width=Math.min(300,Math.max(220,menu.offsetWidth));
     const left=Math.max(8,Math.min(window.innerWidth-width-8,rect.right-width));
@@ -2284,8 +2291,8 @@ function openSharedItemsDialog(chat,kind) {
     if(action==="pick-file"||action==="pick-image"||action==="pick-audio"||action==="camera"||action==="share-contact"||action==="create-poll"||action==="create-event"){handleAction(action,{});return;}
     if(action==="search-all"){filter="all";archivedMode=false;searchQuery="";$("#chat-search").value="";renderSidebar();return;}
     if(action==="search-media"){toast("Search by media type preview.");return;}
-    if(action==="new-list"){handleAction(action,{});return;}
-    if(action==="manage-lists"){handleAction(action,{});return;}
+    if(action==="new-list"){handleAction(action,{dataset:{}});return;}
+    if(action==="manage-lists"){handleAction(action,{dataset:{}});return;}
     if(action==="accounts-center"){toast("Accounts Center is a preview only.");return;}
     toast("This menu item is included as a visual frontend preview.");
   }
