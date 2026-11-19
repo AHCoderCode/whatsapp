@@ -2907,6 +2907,16 @@ function openSharedItemsDialog(chat,kind) {
       return isOnScreen(main)&&isOnScreen($("#message-scroll",main));
     },
     appendBackendMessage: (message,chat) => appendBackendMessageToConversation(message,chat),
+    scrollToMessage: (messageId) => {
+      const wanted=String(messageId||"");
+      if(!wanted)return false;
+      const row=$(".message-row",main).find(node=>String(node.dataset.messageId||"")===wanted);
+      if(!row)return false;
+      row.scrollIntoView({behavior:"smooth",block:"center"});
+      row.classList.add("reply-target-flash");
+      setTimeout(()=>row.classList.remove("reply-target-flash"),1200);
+      return true;
+    },
     updateBackendMessageReadStatus: (messageIds) => {
       const ids=new Set((Array.isArray(messageIds)?messageIds:[messageIds]).map(String));
       main.querySelectorAll(".message-row").forEach(row=>{
@@ -3029,7 +3039,12 @@ function openSharedItemsDialog(chat,kind) {
       const data=event.data||{};
       if(data.type==="whatsapp-notification-action"){
         if(data.kind==="call"||data.kind==="call-ended")window.WhatsAppCalls?.handleNotificationAction?.(data);
-        else if(data.chatId&&window.waAppBridge)window.waAppBridge.selectChat(data.chatId);
+        else if(data.chatId&&window.waAppBridge){
+          const openMessage=window.waBackend&&window.waBackend.openMessageNotification;
+          if(typeof openMessage==="function"){
+            void openMessage(data.chatId,data.messageId).catch(()=>window.waAppBridge.selectChat(data.chatId));
+          }else window.waAppBridge.selectChat(data.chatId);
+        }
       }
     });
   }
