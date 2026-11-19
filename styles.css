@@ -1270,3 +1270,82 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,[role="button"]:
 .theme-dark .wa-voice-send-status{border-color:#3b494e;background:#202d32;color:#eef6f7}
 .theme-dark .wa-voice-send-status .wa-voice-send-discard{background:#35444a;color:#eef6f7}
 @media(max-width:420px){.wa-voice-send-status{gap:7px;padding:8px 9px}.wa-voice-send-status button{padding:0 9px;font-size:11px}}
+
+
+/* Global dark appearance for dialogs, menus, and native form controls. */
+html.theme-dark {
+  color-scheme: dark;
+  background: #111b21;
+}
+html.theme-dark body {
+  background: #111b21;
+  color: #e9edef;
+}
+html.theme-dark .dialog-content,
+html.theme-dark .dialog-footer {
+  background: #202c33;
+  color: #e9edef;
+  border-color: #28363d;
+}
+html.theme-dark .dialog-header {
+  background: #111b21;
+  color: #e9edef;
+  border-color: #28363d;
+}
+html.theme-dark #overlay-root input,
+html.theme-dark #overlay-root textarea,
+html.theme-dark #overlay-root select {
+  color-scheme: dark;
+  background-color: #17232a;
+  color: #e9edef;
+  border-color: #3b494e;
+}
+html.theme-dark .dialog-field label,
+html.theme-dark .field-hint,
+html.theme-dark .screen-description {
+  color: #aebac1;
+}
+html.theme-dark .secondary-button {
+  background: #26343b;
+  color: #e9edef;
+  border-color: #3b494e;
+}
+html.theme-dark .secondary-button:hover {
+  background: #314149;
+}
+html.theme-dark .danger-button {
+  background: #302322;
+  color: #ff9b93;
+  border-color: #70413f;
+}
+html.theme-dark .dialog-search {
+  background: #17232a;
+  color: #e9edef;
+}
+html.theme-dark .auth-screen {
+  background: #111b21;
+  color: #e9edef;
+}
+html.theme-dark .auth-card {
+  background: #202c33;
+  color: #e9edef;
+  border-color: #34434a;
+}
+html.theme-dark .auth-heading,
+html.theme-dark .auth-subheading,
+html.theme-dark .auth-card-footer,
+html.theme-dark .auth-intro h1,
+html.theme-dark .auth-intro > p {
+  color: #e9edef;
+}
+html.theme-dark .auth-form input {
+  background: #111b21;
+  color: #e9edef;
+  border-color: #3b494e;
+}
+html.theme-dark .auth-tab {
+  color: #b7c4c9;
+}
+html.theme-dark .auth-tab.active {
+  color: #65d5a4;
+}
