@@ -1,26 +1,26 @@
-const CACHE_NAME = "whatsapp-final-shell-v83";
+const CACHE_NAME = "whatsapp-final-shell-v84";
 const APP_SHELL = [
   "/",
   "/index.html",
   "/privacy-policy.html",
   "/terms-of-service.html",
   "/account-deletion.html",
-  "/app.js?v=whatsapp-secure-release-20261118b",
-  "/feature-gaps.js?v=whatsapp-secure-release-20261118b",
-  "/group-calls.js?v=whatsapp-secure-release-20261118b",
-  "/backend.js?v=whatsapp-secure-release-20261118b",
-  "/calls.js?v=whatsapp-secure-release-20261118b",
-  "/updater.js?v=whatsapp-secure-release-20261118b",
-  "/styles.css?v=whatsapp-secure-release-20261118b",
+  "/app.js?v=whatsapp-secure-release-20261119c",
+  "/feature-gaps.js?v=whatsapp-secure-release-20261119c",
+  "/group-calls.js?v=whatsapp-secure-release-20261119c",
+  "/backend.js?v=whatsapp-secure-release-20261119c",
+  "/calls.js?v=whatsapp-secure-release-20261119c",
+  "/updater.js?v=whatsapp-secure-release-20261119c",
+  "/styles.css?v=whatsapp-secure-release-20261119c",
   "/entry.css?v=whatsapp-entry-20261116c",
-  "/manifest.webmanifest?v=whatsapp-secure-release-20261118b",
-  "/whatsapp-favicon.svg?v=whatsapp-secure-release-20261118b",
+  "/manifest.webmanifest?v=whatsapp-secure-release-20261119c",
+  "/whatsapp-favicon.svg?v=whatsapp-secure-release-20261119c",
   "/icon.svg",
   "/icon-192.svg",
   "/icon-512.svg",
-  "/icon.svg?v=whatsapp-secure-release-20261118b",
-  "/icon-192.svg?v=whatsapp-secure-release-20261118b",
-  "/icon-512.svg?v=whatsapp-secure-release-20261118b",
+  "/icon.svg?v=whatsapp-secure-release-20261119c",
+  "/icon-192.svg?v=whatsapp-secure-release-20261119c",
+  "/icon-512.svg?v=whatsapp-secure-release-20261119c",
 ];
 
 self.addEventListener("install", event => {
@@ -166,6 +166,7 @@ self.addEventListener("notificationclick", event => {
         type: "whatsapp-notification-action",
         kind: data.kind,
         chatId: data.chatId,
+        messageId: data.messageId,
         callId: data.callId,
         action
       });
@@ -178,6 +179,7 @@ self.addEventListener("notificationclick", event => {
       target.searchParams.set("waPushAction", action);
     } else if (data.chatId) {
       target.searchParams.set("waChatId", String(data.chatId));
+      if(data.messageId)target.searchParams.set("waMessageId",String(data.messageId));
     }
     await self.clients.openWindow(target.toString());
   }));
