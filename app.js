@@ -1374,7 +1374,7 @@
         "<span class='wa-contact-option-icon'>"+icon(iconName)+"</span><span class='wa-contact-option-copy'><strong>"+esc(title)+"</strong><small>"+esc(subtitle)+"</small></span>"+
         "<span class='wa-contact-option-chevron'>"+icon("chevron")+"</span></button>";
     };
-    let detail="<div class='contact-hero contact-hero-modern'>"+avatarHTML(chat)+"<h3>"+esc(chat.name)+"</h3><p>"+(chat.type==="group"?(chat.participants||[]).length+" participants":esc(chat.phone||"Custom in-app number"))+"</p>"+(chat.type==="person"?"<span class='contact-username'>@"+esc(chat.username||"user")+"</span>":"")+"<div class='contact-info-actions'>"+actions+"</div></div>";
+    let detail="<div class='contact-hero contact-hero-modern' data-profile-chat-id='"+esc(chat.id)+"' title='Double-click the profile to return to this chat'>"+avatarHTML(chat)+"<h3>"+esc(chat.name)+"</h3><p>"+(chat.type==="group"?(chat.participants||[]).length+" participants":esc(chat.phone||"Custom in-app number"))+"</p>"+(chat.type==="person"?"<span class='contact-username'>@"+esc(chat.username||"user")+"</span>":"")+"<div class='contact-info-actions'>"+actions+"</div><button type='button' class='primary-button contact-open-chat-button' data-action='open-chat-from-profile' data-chat-id='"+esc(chat.id)+"'>"+icon("chat")+" Message</button></div>";
     if(chat.type==="group"){
       detail+="<div class='description-card'><h4>Group description</h4><p>"+esc(chat.about||"No description added")+"</p></div><div class='section-card wa-contact-group-card'><h3 class='section-card-title'>Participants · "+(chat.participants||[]).length+"</h3><button type='button' class='setting-row' data-action='add-participants' data-chat-id='"+esc(chat.id)+"'>"+icon("user-plus")+"<span class='setting-copy'><span class='setting-title'>Add participants</span></span>"+icon("chevron")+"</button>"+(chat.participants||[]).map((person,i)=>{const name=typeof person==="string"?person:(person.name||person.username||"Member");return "<div class='member-row'>"+avatarHTML({name:name,avatar:(i%12)+1,avatarData:typeof person==="object"?person.avatarData:""})+"<span class='member-name'>"+esc(name)+"</span>"+(i===0?"<span class='member-role'>Admin</span>":"")+"</div>";}).join("")+"</div><div class='section-card wa-contact-group-card'>"+settingRow("edit","Edit group subject",chat.name,"edit-group")+"<button type='button' class='setting-row' data-action='edit-group-description' data-chat-id='"+esc(chat.id)+"'>"+icon("info")+"<span class='setting-copy'><span class='setting-title'>Edit group description</span><span class='setting-subtitle'>"+esc(chat.about||"Add a description")+"</span></span>"+icon("chevron")+"</button></div>";
     } else {
@@ -1557,7 +1557,7 @@
     app.classList.toggle("keyboard-nav",state.settings.keyboardNav!==false);
     document.querySelector('meta[name="theme-color"]').setAttribute("content",state.settings.dark?"#111b21":"#00a884");
     const conversation=main.querySelector(".conversation");
-    if(conversation) conversation.style.background=state.settings.wallpaper==="plain"?"#ffffff":state.settings.wallpaper==="green"?"#dbeee5":"#efeae2";
+    if(conversation) conversation.style.background=darkTheme?"#0b141a":state.settings.wallpaper==="plain"?"#ffffff":state.settings.wallpaper==="green"?"#dbeee5":"#efeae2";
     $$("#app-screen input,#app-screen textarea,[contenteditable='true']").forEach(field=>{
       field.spellcheck=state.settings.spellcheck!==false;
     });
@@ -2135,6 +2135,7 @@ function openSharedItemsDialog(chat,kind) {
   }
   function handleAction(action,el) {
     const chat=findChat(el.dataset.chatId)||currentChat();
+    if(action==="open-chat-from-profile"){if(chat){selectChat(chat.id);}else toast("This conversation is no longer available.");return;}
     if(action==="rename-contact" && chat && chat.type==="person"){
       openDialog("Rename contact","<p class='screen-description'>This name is saved on this device only.</p><div class='dialog-field'><label for='contact-alias-name'>Contact name</label><input id='contact-alias-name' maxlength='60' value='"+esc(chat.name)+"' autocomplete='off'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='save-contact-name' data-chat-id='"+esc(chat.id)+"'>Save name</button>");return;
     }
@@ -2636,6 +2637,26 @@ function openSharedItemsDialog(chat,kind) {
       }
       t.value="";
     }
+  });
+  let lastContactProfileTap=null;
+  main.addEventListener("pointerup",event=>{
+    if(event.pointerType!=="touch")return;
+    const profile=event.target.closest(".contact-hero-modern[data-profile-chat-id]");
+    if(!profile||event.target.closest("button,a,input,textarea,select")){lastContactProfileTap=null;return;}
+    const chatId=String(profile.dataset.profileChatId||"");
+    if(!chatId)return;
+    const now=Date.now();
+    if(lastContactProfileTap&&lastContactProfileTap.chatId===chatId&&now-lastContactProfileTap.at<650){
+      lastContactProfileTap=null;event.preventDefault();selectChat(chatId);return;
+    }
+    lastContactProfileTap={chatId,at:now};
+  },true);
+  main.addEventListener("dblclick",event=>{
+    const profile=event.target.closest(".contact-hero-modern[data-profile-chat-id]");
+    if(!profile||event.target.closest("button,a,input,textarea,select"))return;
+    const chatId=String(profile.dataset.profileChatId||"");
+    if(!chatId)return;
+    event.preventDefault();selectChat(chatId);
   });
   document.addEventListener("keydown",event=>{
     if(event.key==="Escape"){

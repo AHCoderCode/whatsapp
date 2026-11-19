@@ -1349,3 +1349,32 @@ html.theme-dark .auth-tab {
 html.theme-dark .auth-tab.active {
   color: #65d5a4;
 }
+
+
+/* Contact-profile navigation and complete dark appearance. */
+.contact-open-chat-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;margin-top:15px;padding:0 22px}
+.contact-open-chat-button svg{width:18px;height:18px;flex:0 0 18px}
+.contact-hero-modern[data-profile-chat-id]{user-select:none}
+html.theme-dark,html.theme-dark body,body.theme-dark{color-scheme:dark;background:#0b141a!important;color:#e9edef}
+.theme-dark #app-screen,.theme-dark .app-workspace,.theme-dark .main-pane,.theme-dark .details-layout,.theme-dark .details-content,.theme-dark .section-screen,.theme-dark .screen-content,.theme-dark .settings-detail,.theme-dark .settings-detail-content,.theme-dark .message-scroll,.theme-dark .conversation,.theme-dark .welcome-pane,.theme-dark .mobile-nav{background:#0b141a!important;color:#e9edef}
+.theme-dark .chat-sidebar,.theme-dark .sidebar-header,.theme-dark .chat-list,.theme-dark .sidebar-list-scroll,.theme-dark .details-header,.theme-dark .screen-header,.theme-dark .settings-list,.theme-dark .settings-detail-header,.theme-dark .settings-nav,.theme-dark .app-rail{background:#111b21!important;color:#e9edef;border-color:#28363d}
+.theme-dark .profile-card,.theme-dark .contact-hero,.theme-dark .contact-hero-modern,.theme-dark .description-card,.theme-dark .section-card,.theme-dark .setting-row,.theme-dark .setting-option,.theme-dark .settings-summary,.theme-dark .request-card,.theme-dark .requests-strip,.theme-dark .member-row,.theme-dark .status-row,.theme-dark .community-row,.theme-dark .channel-row,.theme-dark .shared-content-card,.theme-dark .wa-contact-details-card,.theme-dark .wa-contact-options-card,.theme-dark .wa-contact-group-card,.theme-dark .wa-call-history-row,.theme-dark .wa-settings-profile-card,.theme-dark .wa-settings-profile-top,.theme-dark .wa-profile-field{background:#111b21!important;color:#e9edef;border-color:#28363d}
+.theme-dark .chat-row,.theme-dark .archived-row,.theme-dark .wa-contact-option-row,.theme-dark .wa-contact-detail-row{background:#111b21!important;color:#e9edef;border-color:#28363d}
+.theme-dark .mobile-tab{color:#aebac1}
+.theme-dark .mobile-tab.active{color:#d9fdd3}
+.theme-dark .mobile-tab.active .mobile-tab-icon{background:#005c4b}
+.theme-dark .conversation-header,.theme-dark .composer,.theme-dark .pinned-banner,.theme-dark .composer-box,.theme-dark .search-box,.theme-dark .settings-search,.theme-dark .dialog-search{background:#202c33!important;color:#e9edef;border-color:#28363d}
+.theme-dark .message-row.incoming .message-bubble,.theme-dark .message-reply-quote,.theme-dark .reply-preview{background:#202c33;color:#e9edef}
+.theme-dark .message-row.outgoing .message-bubble{background:#005c4b;color:#e9edef}
+.theme-dark .popup-menu,.theme-dark .popup-menu button,.theme-dark .dialog,.theme-dark .dialog-content,.theme-dark .dialog-footer,.theme-dark .dialog-header,.theme-dark .wa-contact-detail-row,.theme-dark .wa-contact-option-row{background:#202c33;color:#e9edef;border-color:#28363d}
+.theme-dark .popup-menu button:hover,.theme-dark .wa-contact-option-row:hover,.theme-dark .setting-row:hover,.theme-dark .chat-row:hover{background:#263640!important}
+.theme-dark .setting-title,.theme-dark .chat-name,.theme-dark .panel-title,.theme-dark .profile-card h3,.theme-dark .section-card-title,.theme-dark .contact-hero h3,.theme-dark .person-name,.theme-dark .settings-detail-header h3,.theme-dark .wa-contact-option-copy strong,.theme-dark .wa-contact-detail-copy strong,.theme-dark .status-copy strong,.theme-dark .community-copy strong,.theme-dark .channel-copy strong{color:#e9edef}
+.theme-dark .setting-subtitle,.theme-dark .chat-preview,.theme-dark .chat-time,.theme-dark .screen-description,.theme-dark .person-subtitle,.theme-dark .contact-hero p,.theme-dark .member-name,.theme-dark .wa-contact-option-copy small,.theme-dark .wa-contact-detail-copy small,.theme-dark .status-copy span,.theme-dark .community-copy span,.theme-dark .channel-copy span,.theme-dark .empty-state,.theme-dark .field-hint,.theme-dark .dialog-field label{color:#aebac1}
+.theme-dark #app-screen input:not([type=checkbox]):not([type=radio]),.theme-dark #app-screen textarea,.theme-dark #app-screen select,.theme-dark .dialog input:not([type=checkbox]):not([type=radio]),.theme-dark .dialog textarea,.theme-dark .dialog select{background:#202c33;color:#e9edef;border-color:#3b4b54}
+.theme-dark input::placeholder,.theme-dark textarea::placeholder{color:#8696a0}
+.theme-dark .icon-button,.theme-dark .back-button,.theme-dark .row-menu,.theme-dark .composer-tool{color:#cbd5da}
+.theme-dark .mobile-nav{border-color:#28363d}
+.theme-dark .chat-row:after{background:#28363d}
+.theme-dark .contact-open-chat-button{background:#008069;color:#fff}
+.theme-dark .wa-call-audio-stage,.theme-dark .wa-call-video-stage,.theme-dark .wa-call-controls{background:#202124;color:#f5f5f5}
+.theme-dark ::selection{background:#005c4b;color:#fff}

@@ -85,10 +85,10 @@ check("media, privacy, subgroup and synced-list handlers are present", () => {
   includes(files.app, "WhatsAppFeatureGaps.onBackendData");
 });
 check("feature-gap module is in the app shell cache", () => {
-  includes(files.html, "/feature-gaps.js?v=whatsapp-secure-release-20261119c");
-  includes(files.sw, "/feature-gaps.js?v=whatsapp-secure-release-20261119c");
-  includes(files.html, "/group-calls.js?v=whatsapp-secure-release-20261119c");
-  includes(files.sw, "/group-calls.js?v=whatsapp-secure-release-20261119c");
+  includes(files.html, "/feature-gaps.js?v=whatsapp-secure-release-20261119d");
+  includes(files.sw, "/feature-gaps.js?v=whatsapp-secure-release-20261119d");
+  includes(files.html, "/group-calls.js?v=whatsapp-secure-release-20261119d");
+  includes(files.sw, "/group-calls.js?v=whatsapp-secure-release-20261119d");
 });
 check("inline HTML scripts parse", () => {
   const scripts = [...files.html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
@@ -104,10 +104,10 @@ check("returning to Chats clears archived, locked and stale search filters", () 
   includes(files.app, 'if(t.dataset.view){setView(t.dataset.view);return;}');
 });
 check("current asset version is shared by HTML and service worker", () => {
-  includes(files.html, "whatsapp-secure-release-20261119c");
-  includes(files.sw, "whatsapp-secure-release-20261119c");
-  includes(files.manifest, "whatsapp-secure-release-20261119c");
-  includes(files.sw, "whatsapp-final-shell-v84");
+  includes(files.html, "whatsapp-secure-release-20261119d");
+  includes(files.sw, "whatsapp-secure-release-20261119d");
+  includes(files.manifest, "whatsapp-secure-release-20261119d");
+  includes(files.sw, "whatsapp-final-shell-v85");
 });
 check("mobile settings use a full-width account detail pane", () => {
   includes(files.css, ".settings-layout{display:flex!important;flex-direction:column!important");
@@ -178,7 +178,7 @@ check("web/PWA clients receive an actionable update banner while Android checks 
 });
 
 check("every Android Update tap refreshes and installs only the newest published APK", () => {
-  includes(files.updater, 'const APP_BUILD = "whatsapp-secure-release-20261118b"');
+  includes(files.updater, 'const APP_BUILD = "whatsapp-secure-release-20261119d"');
   includes(files.updater, "installAfterFreshCheck = true");
   includes(files.updater, "repeatFreshCheckAfterCurrent = true");
   includes(files.updater, "check(true)");
@@ -190,10 +190,10 @@ check("every Android Update tap refreshes and installs only the newest published
   includes(files.nativeActivity, "No older release was installed.");
 });
 check("PWA app shell and service worker share the current update build", () => {
-  includes(files.html, "whatsapp-secure-release-20261119c");
-  includes(files.sw, "whatsapp-secure-release-20261119c");
-  includes(files.manifest, "whatsapp-secure-release-20261119c");
-  includes(files.sw, "whatsapp-final-shell-v84");
+  includes(files.html, "whatsapp-secure-release-20261119d");
+  includes(files.sw, "whatsapp-secure-release-20261119d");
+  includes(files.manifest, "whatsapp-secure-release-20261119d");
+  includes(files.sw, "whatsapp-final-shell-v85");
 });
 check("Android update remains available from Settings after dismissing the banner", () => {
   includes(files.app, '["updates","download","App updates"]');
@@ -1285,7 +1285,7 @@ check("call overlay has a full-screen native-app presentation", () => {
 check("welcome screen is responsive across phones, tablets and desktop safe areas", () => {
   includes(files.html, "entry.css?v=whatsapp-entry-20261116c");
   includes(files.sw, "/entry.css?v=whatsapp-entry-20261116c");
-  includes(files.sw, "whatsapp-final-shell-v84");
+  includes(files.sw, "whatsapp-final-shell-v85");
   includes(files.entryCss, "env(safe-area-inset-top)");
   includes(files.entryCss, "env(safe-area-inset-bottom)");
   includes(files.entryCss, "@media (max-width: 880px)");
@@ -1305,6 +1305,22 @@ check("backgrounded chats refresh on resume and message notification taps open f
   includes(files.sw, 'target.searchParams.set("waMessageId",String(data.messageId))');
   includes(files.backend, 'const targetMessageId=params.get("waMessageId")');
   includes(files.nativeNotifications, 'target.appendQueryParameter("waMessageId",messageId)');
+});
+
+check("contact profile double-click and Message action open the matching conversation", () => {
+  includes(files.app, "data-profile-chat-id");
+  includes(files.app, 'main.addEventListener("dblclick"');
+  includes(files.app, 'main.addEventListener("pointerup"');
+  includes(files.app, 'action==="open-chat-from-profile"');
+  includes(files.app, "contact-open-chat-button");
+});
+check("dark mode covers app screens, details, mobile navigation and conversation wallpaper", () => {
+  includes(files.app, 'conversation.style.background=darkTheme?"#0b141a"');
+  includes(files.css, "html.theme-dark,html.theme-dark body,body.theme-dark");
+  includes(files.css, ".theme-dark .mobile-nav");
+  includes(files.css, ".theme-dark .details-content");
+  includes(files.css, "color-scheme:dark");
+  includes(files.html, '<meta name="color-scheme" content="light dark">');
 });
 
 console.log("\n" + passed + " passed, " + failed + " failed.");
