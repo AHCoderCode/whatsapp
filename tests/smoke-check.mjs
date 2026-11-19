@@ -948,6 +948,17 @@ check("attachment popup Poll, Event and Contact actions have a direct click hand
   includes(files.app, 'backdrop.addEventListener("click",event=>');
   includes(files.app, 'handleAction("share-contact-to-chat",button)');
 });
+check("create and manage list menu actions pass a dataset-safe element", () => {
+  includes(files.app, 'if(action==="new-list"){handleAction(action,{dataset:{}});return;}');
+  includes(files.app, 'if(action==="manage-lists"){handleAction(action,{dataset:{}});return;}');
+  includes(files.app, "data-action='new-list'>Create list</button>");
+});
+check("status expiry uses the database clock and dark mode includes global overlays", () => {
+  excludes(files.featureGaps, "expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()");
+  includes(files.featureGaps, "content_type: type };");
+  includes(files.app, 'document.documentElement.classList.toggle("theme-dark",darkTheme)');
+  includes(files.css, "html.theme-dark .dialog-content");
+});
 check("polls and events retain their Supabase create, vote and RSVP workflows", () => {
   includes(files.app, "sendBackendPoll");
   includes(files.app, "sendBackendEvent");
