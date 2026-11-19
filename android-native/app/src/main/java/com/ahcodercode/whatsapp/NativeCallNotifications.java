@@ -135,6 +135,7 @@ public final class NativeCallNotifications {
         if(id==0)id=83002;
         Uri.Builder target=Uri.parse(MainActivity.HOME_URL).buildUpon();
         if(!chatId.isEmpty())target.appendQueryParameter("waChatId",chatId);
+        if(!messageId.isEmpty())target.appendQueryParameter("waMessageId",messageId);
         Intent launch=new Intent(context,MainActivity.class);
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
         launch.putExtra("waNativeLaunchUrl",target.build().toString());
