@@ -1548,7 +1548,10 @@
   }
   function applySettings() {
     if(!state)return;
-    app.classList.toggle("theme-dark",!!state.settings.dark);
+    const darkTheme=!!state.settings.dark;
+    app.classList.toggle("theme-dark",darkTheme);
+    document.documentElement.classList.toggle("theme-dark",darkTheme);
+    if(document.body)document.body.classList.toggle("theme-dark",darkTheme);
     app.classList.toggle("reduce-motion",!!state.settings.reduceMotion);
     app.classList.toggle("high-contrast",!!state.settings.highContrast);
     app.classList.toggle("keyboard-nav",state.settings.keyboardNav!==false);
@@ -1585,13 +1588,7 @@
     closePopup();closeDialog();
     const menu=document.createElement("div");menu.className="popup-menu";menu.id="popup-menu";
     menu.innerHTML=items.map(it=>it.sep?"<div class='popup-separator'></div>":"<button type='button' class='"+(it.danger?"danger":"")+"' data-menu-action='"+esc(it.action)+"'>"+icon(it.icon||"info")+"<span>"+esc(it.label)+"</span></button>").join("");
-    menu.addEventListener("click",event=>{
-      const button=event.target.closest("[data-menu-action]");
-      if(!button||!menu.contains(button))return;
-      event.preventDefault();
-      event.stopPropagation();
-      runMenuAction(button.dataset.menuAction,findChat(menuChatId)||currentChat());
-    });
+    // Menu items are handled by the single document-level action delegate below.
     overlayRoot.appendChild(menu);
     const rect=anchor.getBoundingClientRect();const width=Math.min(300,Math.max(220,menu.offsetWidth));
     const left=Math.max(8,Math.min(window.innerWidth-width-8,rect.right-width));
@@ -2104,7 +2101,7 @@ function openSharedItemsDialog(chat,kind) {
   function openManageCustomListsDialog() {
     const lists=state.customLists||[];
     const rows=lists.map(item=>"<div class='custom-list-manage-row'><span class='custom-list-manage-icon'>"+icon("chat")+"</span><span class='custom-list-manage-copy'><strong>"+esc(item.name)+"</strong><small>"+(item.chatIds||[]).length+" chats</small></span><button type='button' class='secondary-button' data-action='edit-list' data-list-id='"+esc(item.id)+"'>Edit</button><button type='button' class='danger-button' data-action='remove-list' data-list-id='"+esc(item.id)+"' aria-label='Remove "+esc(item.name)+"'>Remove</button></div>").join("");
-    openDialog("Manage lists",rows||"<div class='empty-state'>No custom lists yet. Create one to organise your conversations.</div>","<button class='secondary-button' data-action='close-dialog'>Close</button>");
+    openDialog("Manage lists",rows||"<div class='empty-state'>No custom lists yet. Create one to organise your conversations.</div>","<button class='secondary-button' data-action='close-dialog'>Close</button><button class='primary-button' data-action='new-list'>Create list</button>");
   }
   function bindComposerDialogAction(action){
     const backdrop=$("#dialog-backdrop");
@@ -2488,9 +2485,10 @@ function openSharedItemsDialog(chat,kind) {
         const name=String($("#list-name")?.value||"").trim().slice(0,30);
         if(!name){toast("Enter a list name.");return;}
         const listId=String(t.dataset.listId||"");
-        const duplicate=(state.customLists||[]).some(item=>item.name.toLowerCase()===name.toLowerCase()&&String(item.id)!==listId);
+        state.customLists=Array.isArray(state.customLists)?state.customLists:[];
+        const duplicate=state.customLists.some(item=>String(item.name||"").toLowerCase()===name.toLowerCase()&&String(item.id)!==listId);
         if(duplicate){toast("A list with that name already exists.");return;}
-        const chatIds=$$("input[name='custom-list-chat']:checked").map(input=>String(input.value));
+        const chatIds=$("input[name='custom-list-chat']:checked").map(input=>String(input.value));
         let saved;
         if(action==="create-list"){saved={id:uid("list"),name,chatIds};state.customLists.push(saved);}
         else{saved=(state.customLists||[]).find(row=>String(row.id)===listId);if(!saved){toast("That list could not be found.");return;}saved.name=name;saved.chatIds=chatIds;}
