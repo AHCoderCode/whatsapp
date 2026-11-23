@@ -1328,6 +1328,8 @@ check("WhatsApp retains local chat history and queues text while offline", () =>
   includes(files.backend, 'window.addEventListener("online",()=>');
   includes(files.backend, 'status:"queued"');
   includes(files.backend, "if(!navigator.onLine)return await queueOfflineMessage(chat,body,quote,payload)");
+  includes(files.backend, "primaryFeeds.some(result=>result&&result.error&&isNetworkFailure(result.error))");
+  includes(files.backend, "const groupFeeds=[g,m,gm]");
 });
 check("Sent, delivered and read ticks use separate secure recipient receipts", () => {
   includes(files.backend, 'db.from("aeroshell_message_deliveries")');
