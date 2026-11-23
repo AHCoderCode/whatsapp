@@ -449,6 +449,7 @@
     if(!chat){void loadData(true);return;}
     if(chat.messages.some(m=>String(m.id)===String(row.id)))return;
     const msg=localMessage(row,me,chat);
+    if(msg.from==="them")void markDeliveredForMessages([row.id]);
     if(msg.from==="them"&&!msg.callEvent)void notifyIncomingMessage(chat,msg);
     if(msg.replyToId){
       const quoted=chat.messages.find(m=>String(m.id)===String(msg.replyToId));
@@ -463,6 +464,7 @@
       if(!appended)bridge.renderMain();
       if(msg.from==="them")void markReadForChat(chat);
     }
+    void persistCurrentOfflineSnapshot();
   }
   function isBackendUserOnline(userId){
     const id=String(userId||"");
