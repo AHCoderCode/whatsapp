@@ -2185,6 +2185,7 @@
   },true);
   window.addEventListener("pagehide",()=>{if(recorder&&recorder.state!=="inactive")try{recorder.stop();}catch(_){}cleanupRecorder();},{once:true});
   window.waBackendLogout=async()=>{
+    const cachedAccountId=String(getUser()?.id||"");
     if(deviceHeartbeatTimer!==null)clearInterval(deviceHeartbeatTimer);deviceHeartbeatTimer=null;deviceSyncIdentity="";
     if(liveChannel&&db)try{await db.removeChannel(liveChannel);}catch(_){}
     if(presenceChannel&&db)try{await db.removeChannel(presenceChannel);}catch(_){}
@@ -2195,6 +2196,7 @@
     liveChannel=null;liveUserId="";if(window.WhatsAppCalls)window.WhatsAppCalls.cleanup();
     const nativeToken=String(window.__waNativeFCMToken||"").trim();
     if(nativeToken)try{await unregisterNativeAndroidPushToken(nativeToken);}catch(error){console.warn("Could not unregister native Android push token:",error&&error.message||error);}
+    if(cachedAccountId)await clearOfflineQueueCache(cachedAccountId);
     try{await db.auth.signOut();}catch(_){}
     const root=$("#app-screen"),auth=$("#auth-screen");if(root)root.classList.add("hidden");if(auth)auth.classList.remove("hidden");
     try{localStorage.removeItem("wa_frontend_session_v2");}catch(_){}
