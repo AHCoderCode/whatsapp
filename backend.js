@@ -674,6 +674,7 @@
       refreshQueued=true;
       return new Promise(resolve=>refreshWaiters.push(resolve));
     }
+    if(!navigator.onLine){await restoreOfflineSnapshot(me);return;}
     loading=true;
     try{
       const [profileResult,requestResult,membershipResult,messageResult,callResult,statusResult,channelResult,channelPostResult,followResult,communityResult,communityMembershipResult]=await Promise.all([
@@ -860,7 +861,12 @@
           catch(callRecoveryError){console.warn("[backend] Incoming call recovery continues in the foreground:",callRecoveryError&&callRecoveryError.message||callRecoveryError);}
         }else{void window.WhatsAppCalls.subscribe();}
       }
-    }catch(error){if(!quiet)say(safeError(error,"Could not load messaging data from Supabase."));}
+    }catch(error){
+      if(isNetworkFailure(error)){
+        const restored=await restoreOfflineSnapshot(me);
+        if(!restored&&!quiet)say("You are offline and this device has no saved chat history yet. Connect once to load your messages.");
+      }else if(!quiet)say(safeError(error,"Could not load messaging data from Supabase."));
+    }
     finally{
       loading=false;
       if(refreshQueued){
@@ -890,13 +896,17 @@
     if(document.visibilityState==="visible")scheduleForegroundRefresh();
   });
   window.addEventListener("focus",scheduleForegroundRefresh);
-  window.addEventListener("online",scheduleForegroundRefresh);
+  window.addEventListener("online",()=>{
+    scheduleForegroundRefresh();
+    const me=getUser();if(me&&me.isSupabase)void syncOfflineOutbox(me.id);
+  });
   window.waNativeAppResumed=scheduleForegroundRefresh;
 
   async function openMessageNotification(chatId,messageId){
     const wantedChatId=String(chatId||"");
     if(!wantedChatId)return false;
-    await loadData(true);
+    if(navigator.onLine)await loadData(true);
+    else await restoreOfflineSnapshot(getUser());
     let target=(appState()?.chats||[]).find(chat=>String(chat.id)===wantedChatId);
     if(!target){
       await loadData(true);
