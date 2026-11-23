@@ -984,21 +984,28 @@
   }
   async function sendMessage(value, replyToMessageId){
     const me=getUser(),chat=bridge.getCurrentChat(),body=String(value||"").trim();
-    if(!me||!me.isSupabase){say("Sign in with a Supabase account to send real messages.");return;}
-    if(!chat||!body)return;if(body.length>2000)return say("Messages are limited to 2,000 characters.");
+    if(!me||!me.isSupabase){say("Sign in with a WhatsApp account to send real messages.");return false;}
+    if(!chat||!body)return false;
+    if(body.length>2000){say("Messages are limited to 2,000 characters.");return false;}
     setChatActivity("typing",false,chat);
     const quote=replyToMessageId?chat.messages.find(m=>String(m.id)===String(replyToMessageId)):null;
-    if(replyToMessageId&&!quote)return say("That message is no longer in this conversation. Select it again to reply.");
+    if(replyToMessageId&&!quote){say("That message is no longer in this conversation. Select it again to reply.");return false;}
+    const messageId=newMessageUuid();
+    const payload={id:messageId,sender_id:me.id,recipient_id:chat.type==="group"?null:chat.id,group_id:chat.type==="group"?chat.id:null,body,message_type:"text",reply_to_message_id:quote?quote.id:null,forwarded_from_message_id:null};
     const button=$(".send-button");if(button)button.disabled=true;
     try{
-      const payload={sender_id:me.id,recipient_id:chat.type==="group"?null:chat.id,group_id:chat.type==="group"?chat.id:null,body,message_type:"text",reply_to_message_id:quote?quote.id:null,forwarded_from_message_id:null};
-      const {data,error}=await db.from("aeroshell_messages").insert(payload).select("id,sender_id,recipient_id,group_id,body,message_type,created_at,edited_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms,reply_to_message_id,forwarded_from_message_id").single();
-      if(error)throw error;if(data){insertMessageIntoUI(data);void dispatchServerPush("notify-message",{messageId:data.id});}
+      if(!navigator.onLine)return await queueOfflineMessage(chat,body,quote,payload);
+      const data=await insertTextMessage(payload);
+      if(data){insertMessageIntoUI(data);void dispatchServerPush("notify-message",{messageId:data.id});}
       if(quote&&bridge.clearReplyToMessage)bridge.clearReplyToMessage(quote.id);
       const input=$("#message-input");if(input){input.value="";input.style.height="";input.dispatchEvent(new Event("input",{bubbles:true}));}
+      void persistCurrentOfflineSnapshot();
       return true;
-    }catch(error){say(safeError(error,"Message was not delivered."));return false;}
-    finally{if(button)button.disabled=false;}
+    }catch(error){
+      if(isNetworkFailure(error))return await queueOfflineMessage(chat,body,quote,payload);
+      say(safeError(error,"Message was not delivered."));
+      return false;
+    }finally{if(button)button.disabled=false;}
   }
 
   async function toggleMessageReaction(messageId,emoji){
