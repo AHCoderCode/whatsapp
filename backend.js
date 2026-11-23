@@ -642,6 +642,7 @@
         void loadData(true);
       })
       .on("postgres_changes",{event:"*",schema:"public",table:"aeroshell_message_reactions"},()=>void loadData(true))
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"aeroshell_message_deliveries"},()=>void loadData(true))
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"whatsapp_polls"},()=>void loadData(true))
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"whatsapp_events"},()=>void loadData(true))
       .on("postgres_changes",{event:"*",schema:"public",table:"whatsapp_poll_votes"},()=>void loadData(true))
@@ -839,7 +840,13 @@
       }));
       const joined=new Map((communityMembershipResult.data||[]).map(row=>[row.community_id,row.role]));
       const communities=(communityResult.data||[]).map(row=>({id:row.id,name:row.name,description:row.description||"",createdBy:row.created_by,createdAt:row.created_at,joined:joined.has(row.id),role:joined.get(row.id)||"",groups:[]}));
-      bridge.setBackendData({profile:{username:self.username,name:self.name,phone:self.phone,about:self.about,avatar:self.avatar,avatarColor:self.avatarColor,avatarData:self.avatarData},chats,requests:received,sentRequests:sent,calls,statuses,channels,channelPosts,communities});
+      const backendData={profile:{username:self.username,name:self.name,phone:self.phone,about:self.about,avatar:self.avatar,avatarColor:self.avatarColor,avatarData:self.avatarData},chats,requests:received,sentRequests:sent,calls,statuses,channels,channelPosts,communities};
+      try{await saveOfflineSnapshot(me.id,profileResult.data,backendData);}
+      catch(cacheError){console.warn("WhatsApp chats could not be cached for offline use:",cacheError&&cacheError.message||cacheError);}
+      bridge.setBackendData(backendData);
+      await applyOfflineOutbox(me.id);
+      void markDeliveredForMessages(all.filter(row=>row.sender_id!==me.id).map(row=>row.id));
+      void syncOfflineOutbox(me.id);
       // Only mark read when the matching conversation is actually visible.
       const visibleChat=bridge.getCurrentChat();
       if(visibleChat&&typeof bridge.isConversationVisible==="function"&&bridge.isConversationVisible(visibleChat.id))void markReadForChat(visibleChat);
