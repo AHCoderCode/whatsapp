@@ -1352,9 +1352,6 @@ html.theme-dark .auth-tab.active {
 
 
 /* Contact-profile navigation and complete dark appearance. */
-.contact-open-chat-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;margin-top:15px;padding:0 22px}
-.contact-open-chat-button svg{width:18px;height:18px;flex:0 0 18px}
-.contact-hero-modern[data-profile-chat-id]{user-select:none}
 html.theme-dark,html.theme-dark body,body.theme-dark{color-scheme:dark;background:#0b141a!important;color:#e9edef}
 .theme-dark #app-screen,.theme-dark .app-workspace,.theme-dark .main-pane,.theme-dark .details-layout,.theme-dark .details-content,.theme-dark .section-screen,.theme-dark .screen-content,.theme-dark .settings-detail,.theme-dark .settings-detail-content,.theme-dark .message-scroll,.theme-dark .conversation,.theme-dark .welcome-pane,.theme-dark .mobile-nav{background:#0b141a!important;color:#e9edef}
 .theme-dark .chat-sidebar,.theme-dark .sidebar-header,.theme-dark .chat-list,.theme-dark .sidebar-list-scroll,.theme-dark .details-header,.theme-dark .screen-header,.theme-dark .settings-list,.theme-dark .settings-detail-header,.theme-dark .settings-nav,.theme-dark .app-rail{background:#111b21!important;color:#e9edef;border-color:#28363d}
@@ -1378,3 +1375,9 @@ html.theme-dark,html.theme-dark body,body.theme-dark{color-scheme:dark;backgroun
 .theme-dark .contact-open-chat-button{background:#008069;color:#fff}
 .theme-dark .wa-call-audio-stage,.theme-dark .wa-call-video-stage,.theme-dark .wa-call-controls{background:#202124;color:#f5f5f5}
 .theme-dark ::selection{background:#005c4b;color:#fff}
+
+/* Offline outbox indicators: clock = waiting to upload, one tick = sent, two grey = delivered, blue = read. */
+.message-meta .message-read-status.is-queued,.message-meta .message-read-status.is-queued svg,.preview-check.is-queued{color:#d29a32!important}
+.message-meta .message-read-status.is-failed,.message-meta .message-read-status.is-failed svg,.preview-check.is-failed{color:#d9534f!important}
+.message-meta .message-read-status.is-sent,.message-meta .message-read-status.is-sent svg,.preview-check.is-delivered{color:#7a8b91!important}
+.theme-dark .message-meta .message-read-status.is-queued,.theme-dark .message-meta .message-read-status.is-queued svg{color:#e3b45b!important}
