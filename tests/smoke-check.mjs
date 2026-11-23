@@ -388,7 +388,8 @@ check("legacy ESC compatibility aliases exist as browser globals", () => {
 check("checkmark icons use outlined strokes and blue read-state styling", () => {
   includes(files.html, 'id="i-checks" viewBox="0 0 24 24"><path');
   includes(files.html, 'fill="none" stroke="currentColor"');
-  includes(files.app, 'icon(isRead?"checks":"check")');
+  includes(files.app, 'const tickIcon=isQueued?"clock":isFailed?"alert-circle":isDelivered?"checks":"check"');
+  includes(files.app, 'const tickClass=isQueued?"is-queued":isFailed?"is-failed":isRead?"is-read":isDelivered?"is-delivered":"is-sent"');
   includes(files.css, ".message-meta .message-read-status svg{fill:none!important;stroke:currentColor!important");
   includes(files.css, ".message-meta .message-read-status.is-read svg{color:#078ee8!important}");
 });
@@ -479,7 +480,7 @@ check("message selection uses querySelectorAll for a list of message rows", () =
 check("incoming read receipts update visible blue ticks immediately", () => {
   includes(files.backend, 'table:"aeroshell_message_reads"},event=>{');
   includes(files.backend, 'if(message)message.status="read"');
-  includes(files.app, 'outgoingIsRead?" is-read":""');
+  includes(files.app, 'outgoingIsRead?" is-read":outgoingIsDelivered?" is-delivered":outgoingIsQueued?" is-queued":outgoingIsFailed?" is-failed":""');
   includes(files.css, ".preview-check.is-read{color:#53bdeb}");
   includes(files.css, ".preview-check{width:17px;height:17px;flex:0 0 17px;color:#8696a0}");
 });
@@ -795,7 +796,8 @@ check("read ticks have distinct grey and blue states", () => {
   includes(files.css, ".message-read-status.is-read");
   includes(files.css, ".message-read-status:not(.is-read)");
   includes(files.app, 'const isRead=message.status==="read"');
-  includes(files.app, 'icon(isRead?"checks":"check")');
+  includes(files.app, 'const tickIcon=isQueued?"clock":isFailed?"alert-circle":isDelivered?"checks":"check"');
+  includes(files.app, 'const tickClass=isQueued?"is-queued":isFailed?"is-failed":isRead?"is-read":isDelivered?"is-delivered":"is-sent"');
 });
 check("message date separators distinguish today and yesterday", () => {
   includes(files.app, 'return "TODAY"');
@@ -1341,7 +1343,7 @@ check("Sent, delivered and read ticks use separate secure recipient receipts", (
 });
 check("Notification activation still carries the exact message and chat identifiers", () => {
   includes(files.sw, "messageId: data.messageId");
-  includes(files.sw, 'target.searchParams.set("waChatId",String(data.chatId))');
+  includes(files.sw, 'target.searchParams.set("waChatId", String(data.chatId))');
   includes(files.sw, 'target.searchParams.set("waMessageId",String(data.messageId))');
   includes(files.backend, "async function openMessageNotification(chatId,messageId)");
   includes(files.backend, 'bridge.selectChat(target.id)');
