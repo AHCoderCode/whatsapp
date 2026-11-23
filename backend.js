@@ -923,10 +923,28 @@
   }
 
   async function hydrate(authUser){
-    const {data,error}=await db.from("aeroshell_profiles").select("id,username,display_name,about,custom_number,avatar_data,created_at").eq("id",authUser.id).maybeSingle();
-    if(error)throw error;if(!data)throw new Error("Your WhatsApp profile could not be found for this saved account. Your sign-in is being kept; retry the connection before creating another account.");
     const sessionUser=Object.assign({},authUser,{isSupabase:true});
-    bridge.setBackendUser(sessionUser,data);
+    let profile=null,offlineSnapshot=null;
+    try{
+      if(!navigator.onLine)throw new TypeError("The device is offline.");
+      const {data,error}=await db.from("aeroshell_profiles").select("id,username,display_name,about,custom_number,avatar_data,created_at").eq("id",authUser.id).maybeSingle();
+      if(error)throw error;
+      if(!data)throw new Error("Your WhatsApp profile could not be found for this saved account. Your sign-in is being kept; retry the connection before creating another account.");
+      profile=data;
+    }catch(error){
+      if(!isNetworkFailure(error))throw error;
+      offlineSnapshot=await getOfflineSnapshot(authUser.id);
+      if(!offlineSnapshot||!offlineSnapshot.profile||!offlineSnapshot.data){
+        throw new Error("This device has no saved WhatsApp history for offline use yet. Connect to the internet once to load your chats.");
+      }
+      profile=offlineSnapshot.profile;
+    }
+    signedProfile=profile;
+    bridge.setBackendUser(sessionUser,profile);
+    if(offlineSnapshot){
+      bridge.setBackendData(offlineSnapshot.data);
+      await applyOfflineOutbox(authUser.id);
+    }
     // Reveal the signed-in app as soon as the account profile is restored. Chat feeds can finish loading in the background.
     finishStartup(false);
     // A notification Accept must not wait for the full chat list, linked-device
@@ -939,9 +957,9 @@
     await loadData(false);
     // These registrations are useful but are not prerequisites for showing or
     // accepting a call. Run them in the background so startup cannot stall.
-    void registerCurrentDevice().catch(deviceError=>console.warn("Could not register linked device:",deviceError&&deviceError.message||deviceError));
+    if(navigator.onLine)void registerCurrentDevice().catch(deviceError=>console.warn("Could not register linked device:",deviceError&&deviceError.message||deviceError));
     const nativeToken=String(window.__waNativeFCMToken||"").trim();
-    if(nativeToken){
+    if(nativeToken&&navigator.onLine){
       void registerNativeAndroidPushToken(nativeToken,appState()?.settings||{}).catch(nativeError=>{
         console.warn("Could not register native Android push token:",nativeError&&nativeError.message||nativeError);
       });
