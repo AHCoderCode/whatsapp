@@ -690,9 +690,22 @@
         db.from("whatsapp_communities").select("id,name,description,created_by,created_at").order("created_at",{ascending:false}).limit(100),
         db.from("whatsapp_community_members").select("community_id,user_id,role").eq("user_id",me.id)
       ]);
+      const primaryFeeds=[profileResult,requestResult,membershipResult,messageResult,callResult,statusResult,channelResult,channelPostResult,followResult,communityResult,communityMembershipResult];
+      if(primaryFeeds.some(result=>result&&result.error&&isNetworkFailure(result.error))){
+        const restored=await restoreOfflineSnapshot(me);
+        if(!restored&&!quiet)say("Connection interrupted. This device has no saved chat history yet; reconnect once to load your messages.");
+        return;
+      }
       let blockRows=[];
       try{const blockResult=await db.from("whatsapp_user_blocks").select("blocker_id,blocked_id").or("blocker_id.eq."+me.id+",blocked_id.eq."+me.id);if(blockResult.error)throw blockResult.error;blockRows=blockResult.data||[];}
-      catch(blockError){console.warn("Block relationships could not be loaded:",blockError&&blockError.message||blockError);}
+      catch(blockError){
+        if(isNetworkFailure(blockError)){
+          const restored=await restoreOfflineSnapshot(me);
+          if(!restored&&!quiet)say("Connection interrupted. Showing the last saved chats on this device.");
+          return;
+        }
+        console.warn("Block relationships could not be loaded:",blockError&&blockError.message||blockError);
+      }
       if(profileResult.error)throw profileResult.error;
       if(!profileResult.data)throw new Error("Your profile is missing. Sign out and create a new account after applying the Supabase profile migration.");
       // Failures in optional feeds should not hide the user's direct-message list.
@@ -717,6 +730,12 @@
           db.from("aeroshell_group_members").select("group_id,user_id,role").in("group_id",groupIds),
           db.from("aeroshell_messages").select("id,sender_id,recipient_id,group_id,body,message_type,created_at,edited_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms,reply_to_message_id,forwarded_from_message_id").in("group_id",groupIds).order("created_at",{ascending:true}).limit(800)
         ]);
+        const groupFeeds=[g,m,gm];
+        if(groupFeeds.some(result=>result&&result.error&&isNetworkFailure(result.error))){
+          const restored=await restoreOfflineSnapshot(me);
+          if(!restored&&!quiet)say("Connection interrupted. Showing the last saved chats on this device.");
+          return;
+        }
         if(g.error)console.warn("Group list could not be loaded:",g.error.message||g.error);
         if(m.error)console.warn("Group members could not be loaded:",m.error.message||m.error);
         if(gm.error)console.warn("Group messages could not be loaded:",gm.error.message||gm.error);
@@ -727,6 +746,11 @@
       let profileRows=[];
       if(uniqueIds.length){
         const pr=await db.from("aeroshell_profiles").select("id,username,display_name,about,custom_number,avatar_data,created_at").in("id",uniqueIds);
+        if(pr.error&&isNetworkFailure(pr.error)){
+          const restored=await restoreOfflineSnapshot(me);
+          if(!restored&&!quiet)say("Connection interrupted. Showing the last saved chats on this device.");
+          return;
+        }
         if(pr.error)console.warn("Some contact profiles could not be loaded:",pr.error.message||pr.error);
         profileRows=pr.error?[]:(pr.data||[]);
       }
