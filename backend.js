@@ -25,6 +25,222 @@
   const getUser = () => bridge.getCurrentUser();
   const appState = () => bridge.getState();
   const say = message => bridge.toast(message);
+  const OFFLINE_DB_NAME="wa-offline-cache-v1";
+  const OFFLINE_DB_VERSION=1;
+  let offlineDatabasePromise=null,offlineSyncRunning=false;
+  const MESSAGE_SELECT="id,sender_id,recipient_id,group_id,body,message_type,created_at,edited_at,attachment_name,attachment_path,attachment_mime,attachment_size,voice_duration_ms,reply_to_message_id,forwarded_from_message_id";
+  function openOfflineDatabase(){
+    if(!window.indexedDB)return Promise.reject(new Error("This browser does not support offline message storage."));
+    if(offlineDatabasePromise)return offlineDatabasePromise;
+    offlineDatabasePromise=new Promise((resolve,reject)=>{
+      const request=window.indexedDB.open(OFFLINE_DB_NAME,OFFLINE_DB_VERSION);
+      request.onupgradeneeded=()=>{
+        const database=request.result;
+        if(!database.objectStoreNames.contains("snapshots"))database.createObjectStore("snapshots",{keyPath:"userId"});
+        if(!database.objectStoreNames.contains("outbox")){
+          const store=database.createObjectStore("outbox",{keyPath:"id"});
+          store.createIndex("byUserId","userId",{unique:false});
+        }
+      };
+      request.onsuccess=()=>resolve(request.result);
+      request.onerror=()=>{offlineDatabasePromise=null;reject(request.error||new Error("Could not open offline storage."));};
+      request.onblocked=()=>{offlineDatabasePromise=null;reject(new Error("Offline storage is busy in another WhatsApp tab. Close the other tab and retry."));};
+    });
+    return offlineDatabasePromise;
+  }
+  async function offlineStoreRequest(storeName,mode,operation){
+    const database=await openOfflineDatabase();
+    return new Promise((resolve,reject)=>{
+      const transaction=database.transaction(storeName,mode);
+      let value;
+      const request=operation(transaction.objectStore(storeName));
+      request.onsuccess=()=>{value=request.result;};
+      request.onerror=()=>reject(request.error||new Error("Offline storage request failed."));
+      transaction.oncomplete=()=>resolve(value);
+      transaction.onerror=()=>reject(transaction.error||new Error("Offline storage transaction failed."));
+      transaction.onabort=()=>reject(transaction.error||new Error("Offline storage transaction was cancelled."));
+    });
+  }
+  function getOfflineSnapshot(userId){return offlineStoreRequest("snapshots","readonly",store=>store.get(String(userId)));}
+  function saveOfflineSnapshot(userId,profile,data){return offlineStoreRequest("snapshots","readwrite",store=>store.put({userId:String(userId),profile,data,savedAt:new Date().toISOString()}));}
+  function getOfflineOutbox(userId){return offlineStoreRequest("outbox","readonly",store=>store.index("byUserId").getAll(String(userId)));}
+  function putOfflineOutbox(item){return offlineStoreRequest("outbox","readwrite",store=>store.put(item));}
+  function deleteOfflineOutbox(id){return offlineStoreRequest("outbox","readwrite",store=>store.delete(String(id)));}
+  async function clearOfflineAccount(userId){
+    const database=await openOfflineDatabase();
+    await new Promise((resolve,reject)=>{
+      const transaction=database.transaction(["snapshots","outbox"],"readwrite");
+      transaction.objectStore("snapshots").delete(String(userId));
+      const index=transaction.objectStore("outbox").index("byUserId");
+      const request=index.openCursor(window.IDBKeyRange.only(String(userId)));
+      request.onsuccess=()=>{
+        const cursor=request.result;
+        if(cursor){cursor.delete();cursor.continue();}
+      };
+      transaction.oncomplete=resolve;
+      transaction.onerror=()=>reject(transaction.error||new Error("Could not clear offline account data."));
+      transaction.onabort=()=>reject(transaction.error||new Error("Could not clear offline account data."));
+    });
+  }
+  function isNetworkFailure(error){
+    if(typeof navigator!=="undefined"&&navigator.onLine===false)return true;
+    const name=String(error&&error.name||"").toLowerCase();
+    const message=String(error&&error.message||error||"").toLowerCase();
+    return name==="typeerror"||name==="timeouterror"||/failed to fetch|fetch failed|network error|network request failed|load failed|offline|connection (?:lost|closed|refused)|timed? out|aborted/.test(message);
+  }
+  function newMessageUuid(){
+    if(window.crypto&&typeof window.crypto.randomUUID==="function")return window.crypto.randomUUID();
+    const bytes=new Uint8Array(16);
+    if(window.crypto&&typeof window.crypto.getRandomValues==="function")window.crypto.getRandomValues(bytes);
+    else for(let i=0;i<bytes.length;i++)bytes[i]=Math.floor(Math.random()*256);
+    bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;
+    const hex=Array.from(bytes,value=>value.toString(16).padStart(2,"0")).join("");
+    return hex.slice(0,8)+"-"+hex.slice(8,12)+"-"+hex.slice(12,16)+"-"+hex.slice(16,20)+"-"+hex.slice(20);
+  }
+  function offlineDataFromState(state){
+    if(!state)return null;
+    return {profile:state.profile,chats:state.chats||[],requests:state.requests||[],sentRequests:state.sentRequests||[],
+      calls:state.calls||[],statuses:state.backendStatuses||[],channels:state.backendChannels||[],
+      channelPosts:state.backendChannelPosts||[],communities:state.backendCommunities||[]};
+  }
+  async function persistCurrentOfflineSnapshot(){
+    const me=getUser(),state=appState();
+    if(!me||!me.isSupabase||!state||!signedProfile)return false;
+    try{await saveOfflineSnapshot(me.id,signedProfile,offlineDataFromState(state));return true;}
+    catch(error){console.warn("WhatsApp offline chat cache could not be saved:",error&&error.message||error);return false;}
+  }
+  function offlineMessageFromItem(item){
+    const message=Object.assign({},item.message||{});
+    message.id=String(item.id);
+    message.status=item.status==="failed"?"failed":"queued";
+    message.queuedOffline=true;
+    return message;
+  }
+  async function applyOfflineOutbox(userId){
+    const state=appState();
+    if(!state||!Array.isArray(state.chats))return;
+    let changed=false;
+    try{
+      const items=await getOfflineOutbox(userId);
+      items.sort((a,b)=>Date.parse(a.createdAt||0)-Date.parse(b.createdAt||0));
+      for(const item of items){
+        const chat=state.chats.find(row=>String(row.id)===String(item.chatId));
+        if(!chat)continue;
+        chat.messages=Array.isArray(chat.messages)?chat.messages:[];
+        if(chat.messages.some(message=>String(message.id)===String(item.id)))continue;
+        const message=offlineMessageFromItem(item);
+        chat.messages.push(message);
+        chat.preview=message.text||chat.preview;
+        chat.time=message.time||chat.time;
+        chat.lastOutgoing=true;
+        chat.lastMessageType="text";
+        changed=true;
+      }
+      if(changed){bridge.renderSidebar();bridge.renderMain();}
+    }catch(error){console.warn("WhatsApp offline messages could not be restored:",error&&error.message||error);}
+  }
+  async function restoreOfflineSnapshot(me){
+    if(!me||!me.id)return false;
+    try{
+      const snapshot=await getOfflineSnapshot(me.id);
+      if(!snapshot||!snapshot.data)return false;
+      signedProfile=snapshot.profile||signedProfile;
+      bridge.setBackendData(snapshot.data);
+      await applyOfflineOutbox(me.id);
+      return true;
+    }catch(error){
+      console.warn("WhatsApp offline cache could not be opened:",error&&error.message||error);
+      return false;
+    }
+  }
+  function localQueuedMessage(item,chat){
+    const stamp=new Date(item.createdAt||Date.now());
+    const today=new Date();
+    const yesterday=new Date(Date.now()-86400000);
+    const msg={
+      id:String(item.id),from:"me",text:String(item.payload.body||""),
+      time:stamp.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}),
+      date:stamp.toDateString()===today.toDateString()?"TODAY":stamp.toDateString()===yesterday.toDateString()?"YESTERDAY":stamp.toLocaleDateString([],{month:"short",day:"numeric"}),
+      createdAt:stamp.toISOString(),status:"queued",queuedOffline:true,reactions:[],sender:"You",
+      messageType:"text",replyToId:item.payload.reply_to_message_id||null
+    };
+    const quoted=item.replyToMessageId&&chat.messages.find(row=>String(row.id)===String(item.replyToMessageId));
+    if(quoted)msg.replyTo={id:quoted.id,text:quoted.text||quoted.attachmentName||"Attachment",sender:quoted.from==="me"?"You":(quoted.sender||chat.name)};
+    return msg;
+  }
+  async function queueOfflineMessage(chat,body,quote,payload){
+    const me=getUser(),state=appState();
+    if(!me||!me.isSupabase||!chat||!state)return false;
+    const createdAt=new Date().toISOString();
+    const stablePayload=Object.assign({},payload,{id:String(payload.id||newMessageUuid()),created_at:createdAt});
+    const item={id:stablePayload.id,userId:String(me.id),chatId:String(chat.id),replyToMessageId:quote?String(quote.id):null,createdAt,status:"queued",payload:stablePayload};
+    try{await putOfflineOutbox(item);}
+    catch(error){say("WhatsApp could not save this message offline. Keep it in the composer and retry when storage is available.");return false;}
+    const message=localQueuedMessage(item,chat);
+    if(!chat.messages.some(row=>String(row.id)===String(item.id)))chat.messages.push(message);
+    chat.preview=message.text;chat.time=message.time;chat.lastOutgoing=true;chat.lastMessageType="text";chat.unread=0;
+    if(quote&&bridge.clearReplyToMessage)bridge.clearReplyToMessage(quote.id);
+    const input=$("#message-input");if(input){input.value="";input.style.height="";input.dispatchEvent(new Event("input",{bubbles:true}));}
+    bridge.renderSidebar();bridge.renderMain();
+    say("Saved on this device. This message will send automatically when your connection returns.");
+    void persistCurrentOfflineSnapshot();
+    return true;
+  }
+  async function insertTextMessage(payload){
+    const {data,error}=await db.from("aeroshell_messages").insert(payload).select(MESSAGE_SELECT).single();
+    if(!error)return data;
+    if(error.code==="23505"||/duplicate key|unique constraint/i.test(String(error.message||""))){
+      const existing=await db.from("aeroshell_messages").select(MESSAGE_SELECT).eq("id",payload.id).eq("sender_id",payload.sender_id).maybeSingle();
+      if(!existing.error&&existing.data)return existing.data;
+    }
+    throw error;
+  }
+  async function syncOfflineOutbox(userId){
+    const me=getUser();
+    if(offlineSyncRunning||!navigator.onLine||!me||!me.isSupabase||String(me.id)!==String(userId||me.id))return;
+    offlineSyncRunning=true;
+    try{
+      const items=await getOfflineOutbox(me.id);
+      items.sort((a,b)=>Date.parse(a.createdAt||0)-Date.parse(b.createdAt||0));
+      for(const item of items){
+        if(item.status==="failed")continue;
+        if(!navigator.onLine)break;
+        try{
+          const data=await insertTextMessage(item.payload);
+          const state=appState(),chat=state&&state.chats.find(row=>String(row.id)===String(item.chatId));
+          if(chat)chat.messages=chat.messages.filter(message=>String(message.id)!==String(item.id));
+          await deleteOfflineOutbox(item.id);
+          if(data)insertMessageIntoUI(data);
+          if(data)void dispatchServerPush("notify-message",{messageId:data.id});
+          await persistCurrentOfflineSnapshot();
+        }catch(error){
+          if(isNetworkFailure(error))break;
+          item.status="failed";item.error=String(error&&error.message||"Message could not be sent.");
+          try{await putOfflineOutbox(item);}catch(_){}
+          const state=appState(),chat=state&&state.chats.find(row=>String(row.id)===String(item.chatId));
+          const message=chat&&chat.messages.find(row=>String(row.id)===String(item.id));
+          if(message){message.status="failed";message.sendError=item.error;}
+          bridge.renderSidebar();bridge.renderMain();
+          say("An offline message could not be sent: "+item.error);
+        }
+      }
+    }catch(error){console.warn("Offline message sync paused:",error&&error.message||error);}
+    finally{offlineSyncRunning=false;}
+  }
+  async function markDeliveredForMessages(messageIds){
+    const me=getUser();
+    const ids=Array.from(new Set((Array.isArray(messageIds)?messageIds:[messageIds]).map(String).filter(id=>/^[0-9a-f-]{36}$/i.test(id))));
+    if(!db||!me||!me.isSupabase||!ids.length||!navigator.onLine)return;
+    const rows=ids.map(message_id=>({message_id,user_id:me.id}));
+    try{
+      const {error}=await db.from("aeroshell_message_deliveries").upsert(rows,{onConflict:"message_id,user_id",ignoreDuplicates:true});
+      if(error)throw error;
+    }catch(error){console.warn("Message delivery receipt could not be saved:",error&&error.message||error);}
+  }
+  function clearOfflineQueueCache(userId){
+    return clearOfflineAccount(userId).catch(error=>console.warn("Offline chat data could not be removed on this device:",error&&error.message||error));
+  }
+
   const safeError = (error, fallback) => {
     const m = String(error && error.message || "");
     if (/invalid login credentials/i.test(m)) return "Username or in-app number or password is incorrect.";
