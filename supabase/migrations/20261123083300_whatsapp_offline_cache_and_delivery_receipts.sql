@@ -8,6 +8,9 @@ create table if not exists public.aeroshell_message_deliveries (
   primary key (message_id, user_id)
 );
 
+create index if not exists aeroshell_message_deliveries_user_id_idx
+  on public.aeroshell_message_deliveries(user_id);
+
 alter table public.aeroshell_message_deliveries enable row level security;
 revoke all on table public.aeroshell_message_deliveries from anon, public;
 grant select, insert on table public.aeroshell_message_deliveries to authenticated;
@@ -16,13 +19,13 @@ drop policy if exists "Participants can read message delivery receipts" on publi
 create policy "Participants can read message delivery receipts"
   on public.aeroshell_message_deliveries for select to authenticated
   using (
-    private.aeroshell_chat_actor_is_valid()
+    (select private.aeroshell_chat_actor_is_valid())
     and exists (
       select 1 from public.aeroshell_messages m
       where m.id = aeroshell_message_deliveries.message_id
         and (
-          (m.group_id is null and (auth.uid() = m.sender_id or auth.uid() = m.recipient_id))
-          or (m.group_id is not null and private.aeroshell_group_is_member(m.group_id, auth.uid()))
+          (m.group_id is null and ((select auth.uid()) = m.sender_id or (select auth.uid()) = m.recipient_id))
+          or (m.group_id is not null and private.aeroshell_group_is_member(m.group_id, (select auth.uid())))
         )
     )
   );
@@ -32,14 +35,14 @@ create policy "Recipients can record message delivery"
   on public.aeroshell_message_deliveries for insert to authenticated
   with check (
     private.aeroshell_chat_actor_is_valid()
-    and user_id = auth.uid()
+    and user_id = (select auth.uid())
     and exists (
       select 1 from public.aeroshell_messages m
       where m.id = aeroshell_message_deliveries.message_id
-        and m.sender_id <> auth.uid()
+        and m.sender_id <> (select auth.uid())
         and (
-          (m.group_id is null and m.recipient_id = auth.uid())
-          or (m.group_id is not null and private.aeroshell_group_is_member(m.group_id, auth.uid()))
+          (m.group_id is null and m.recipient_id = (select auth.uid()))
+          or (m.group_id is not null and private.aeroshell_group_is_member(m.group_id, (select auth.uid())))
         )
     )
   );
