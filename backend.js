@@ -746,11 +746,17 @@
       const all=Array.from(new Map((messageResult.data||[]).concat(groupMessages).map(m=>[m.id,m])).values()).sort((a,b)=>Date.parse(a.created_at)-Date.parse(b.created_at));
       const messageById=new Map(all.map(row=>[row.id,row]));
       const chatMap=new Map(chats.map(c=>[c.id,c]));
-      const readSet=new Set();
+      const readSet=new Set(),deliveredSet=new Set();
       const ownMessageIds=all.filter(row=>row.sender_id===me.id).map(row=>row.id);
       if(ownMessageIds.length){
-        const readResult=await db.from("aeroshell_message_reads").select("message_id,user_id").in("message_id",ownMessageIds).neq("user_id",me.id);
+        const [readResult,deliveryResult]=await Promise.all([
+          db.from("aeroshell_message_reads").select("message_id,user_id").in("message_id",ownMessageIds).neq("user_id",me.id),
+          db.from("aeroshell_message_deliveries").select("message_id,user_id").in("message_id",ownMessageIds).neq("user_id",me.id)
+        ]);
         if(!readResult.error)(readResult.data||[]).forEach(row=>readSet.add(row.message_id));
+        else console.warn("Message read receipts could not be loaded:",readResult.error.message||readResult.error);
+        if(!deliveryResult.error)(deliveryResult.data||[]).forEach(row=>deliveredSet.add(row.message_id));
+        else console.warn("Message delivery receipts could not be loaded:",deliveryResult.error.message||deliveryResult.error);
       }
       const messageIds=all.map(row=>row.id);
       let pollRows=[],eventRows=[],voteRows=[],rsvpRows=[],reactionRows=[];
@@ -785,6 +791,7 @@
         if(!chat)continue;
         const msg=localMessage(row,me,chat);
         if(row.sender_id===me.id&&readSet.has(row.id))msg.status="read";
+        else if(row.sender_id===me.id&&deliveredSet.has(row.id))msg.status="delivered";
         const ownReactionRows=reactionsByMessage.get(row.id)||[];
         const reactionCounts=new Map();
         ownReactionRows.forEach(reaction=>reactionCounts.set(reaction.emoji,(reactionCounts.get(reaction.emoji)||0)+1));
