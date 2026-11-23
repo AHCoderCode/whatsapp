@@ -388,7 +388,7 @@ check("legacy ESC compatibility aliases exist as browser globals", () => {
 check("checkmark icons use outlined strokes and blue read-state styling", () => {
   includes(files.html, 'id="i-checks" viewBox="0 0 24 24"><path');
   includes(files.html, 'fill="none" stroke="currentColor"');
-  includes(files.app, 'const tickIcon=isQueued?"clock":isFailed?"alert-circle":isDelivered?"checks":"check"');
+  includes(files.app, 'const tickIcon=isQueued?"clock":isFailed?"x":isDelivered?"checks":"check"');
   includes(files.app, 'const tickClass=isQueued?"is-queued":isFailed?"is-failed":isRead?"is-read":isDelivered?"is-delivered":"is-sent"');
   includes(files.css, ".message-meta .message-read-status svg{fill:none!important;stroke:currentColor!important");
   includes(files.css, ".message-meta .message-read-status.is-read svg{color:#078ee8!important}");
@@ -796,7 +796,7 @@ check("read ticks have distinct grey and blue states", () => {
   includes(files.css, ".message-read-status.is-read");
   includes(files.css, ".message-read-status:not(.is-read)");
   includes(files.app, 'const isRead=message.status==="read"');
-  includes(files.app, 'const tickIcon=isQueued?"clock":isFailed?"alert-circle":isDelivered?"checks":"check"');
+  includes(files.app, 'const tickIcon=isQueued?"clock":isFailed?"x":isDelivered?"checks":"check"');
   includes(files.app, 'const tickClass=isQueued?"is-queued":isFailed?"is-failed":isRead?"is-read":isDelivered?"is-delivered":"is-sent"');
 });
 check("message date separators distinguish today and yesterday", () => {

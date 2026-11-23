@@ -424,7 +424,7 @@
     const isDelivered=isRead||message.status==="delivered";
     const isQueued=message.status==="queued";
     const isFailed=message.status==="failed";
-    const tickIcon=isQueued?"clock":isFailed?"alert-circle":isDelivered?"checks":"check";
+    const tickIcon=isQueued?"clock":isFailed?"x":isDelivered?"checks":"check";
     const tickClass=isQueued?"is-queued":isFailed?"is-failed":isRead?"is-read":isDelivered?"is-delivered":"is-sent";
     const tickLabel=isQueued?"Waiting for connection":isFailed?"Could not send":isRead?"Read by recipient":isDelivered?"Delivered":"Sent";
     const checks=outgoing&&!callEvent?"<span class='message-read-status "+tickClass+"' title='"+tickLabel+"' aria-label='"+tickLabel+"'>"+icon(tickIcon)+"</span>":"";
