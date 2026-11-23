@@ -34,7 +34,7 @@ drop policy if exists "Recipients can record message delivery" on public.aeroshe
 create policy "Recipients can record message delivery"
   on public.aeroshell_message_deliveries for insert to authenticated
   with check (
-    private.aeroshell_chat_actor_is_valid()
+    (select private.aeroshell_chat_actor_is_valid())
     and user_id = (select auth.uid())
     and exists (
       select 1 from public.aeroshell_messages m
