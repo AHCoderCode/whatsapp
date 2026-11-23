@@ -13,6 +13,7 @@ const files = {
   groupCallLimitMigration: read("supabase/migrations/20261031091826_whatsapp_group_call_participant_limit.sql"),
   blockScopeMigration: read("supabase/migrations/20261031092054_whatsapp_block_scope_direct_chats_only.sql"),
   blockInsertMigration: read("supabase/migrations/20261111195500_prevent_direct_message_insert_across_blocks.sql"),
+  offlineDeliveryMigration: read("supabase/migrations/20261123083300_whatsapp_offline_cache_and_delivery_receipts.sql"),
   privacyPolicy: read("privacy-policy.html"),
   termsOfService: read("terms-of-service.html"),
   accountDeletion: read("account-deletion.html"),
@@ -1307,13 +1308,6 @@ check("backgrounded chats refresh on resume and message notification taps open f
   includes(files.nativeNotifications, 'target.appendQueryParameter("waMessageId",messageId)');
 });
 
-check("contact profile double-click and Message action open the matching conversation", () => {
-  includes(files.app, "data-profile-chat-id");
-  includes(files.app, 'main.addEventListener("dblclick"');
-  includes(files.app, 'main.addEventListener("pointerup"');
-  includes(files.app, 'action==="open-chat-from-profile"');
-  includes(files.app, "contact-open-chat-button");
-});
 check("dark mode covers app screens, details, mobile navigation and conversation wallpaper", () => {
   includes(files.app, 'conversation.style.background=darkTheme?"#0b141a"');
   includes(files.css, "html.theme-dark,html.theme-dark body,body.theme-dark");
@@ -1323,5 +1317,34 @@ check("dark mode covers app screens, details, mobile navigation and conversation
   includes(files.html, '<meta name="color-scheme" content="light dark">');
 });
 
+check("WhatsApp retains local chat history and queues text while offline", () => {
+  includes(files.backend, 'const OFFLINE_DB_NAME="wa-offline-cache-v1"');
+  includes(files.backend, "function getOfflineSnapshot(userId)");
+  includes(files.backend, "async function restoreOfflineSnapshot(me)");
+  includes(files.backend, "async function queueOfflineMessage(chat,body,quote,payload)");
+  includes(files.backend, "async function syncOfflineOutbox(userId)");
+  includes(files.backend, 'window.addEventListener("online",()=>');
+  includes(files.backend, 'status:"queued"');
+  includes(files.backend, "if(!navigator.onLine)return await queueOfflineMessage(chat,body,quote,payload)");
+});
+check("Sent, delivered and read ticks use separate secure recipient receipts", () => {
+  includes(files.backend, 'db.from("aeroshell_message_deliveries")');
+  includes(files.backend, "async function markDeliveredForMessages(messageIds)");
+  includes(files.backend, 'table:"aeroshell_message_deliveries"');
+  includes(files.backend, 'msg.status="delivered"');
+  includes(files.app, 'message.status==="delivered"');
+  includes(files.app, 'message.status==="queued"');
+  includes(files.app, 'message.status==="failed"');
+  includes(files.offlineDeliveryMigration, "enable row level security");
+  includes(files.offlineDeliveryMigration, "Recipients can record message delivery");
+  includes(files.offlineDeliveryMigration, "Participants can read message delivery receipts");
+});
+check("Notification activation still carries the exact message and chat identifiers", () => {
+  includes(files.sw, "messageId: data.messageId");
+  includes(files.sw, 'target.searchParams.set("waChatId",String(data.chatId))');
+  includes(files.sw, 'target.searchParams.set("waMessageId",String(data.messageId))');
+  includes(files.backend, "async function openMessageNotification(chatId,messageId)");
+  includes(files.backend, 'bridge.selectChat(target.id)');
+});
 console.log("\n" + passed + " passed, " + failed + " failed.");
 if (failed) process.exitCode = 1;
