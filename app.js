@@ -374,7 +374,13 @@
         if(chat.unread>0) meta.push("<span class='unread-badge'>" + chat.unread + "</span>");
         const lastOutgoingMessage=(chat.messages||[]).slice().reverse().find(message=>message&&message.from==="me");
         const outgoingIsRead=!!lastOutgoingMessage&&lastOutgoingMessage.status==="read";
-        const checks = chat.lastOutgoing ? "<span class='preview-check"+(outgoingIsRead?" is-read":"")+"' title='"+(outgoingIsRead?"Read by recipient":"Sent")+"' aria-label='"+(outgoingIsRead?"Read by recipient":"Sent")+"'>" + icon("checks") + "</span>" : "";
+        const outgoingIsDelivered=outgoingIsRead||!!lastOutgoingMessage&&lastOutgoingMessage.status==="delivered";
+        const outgoingIsQueued=!!lastOutgoingMessage&&lastOutgoingMessage.status==="queued";
+        const outgoingIsFailed=!!lastOutgoingMessage&&lastOutgoingMessage.status==="failed";
+        const previewIcon=outgoingIsQueued?"clock":outgoingIsFailed?"alert-circle":outgoingIsDelivered?"checks":"check";
+        const previewLabel=outgoingIsQueued?"Waiting for connection":outgoingIsFailed?"Could not send":outgoingIsRead?"Read by recipient":outgoingIsDelivered?"Delivered":"Sent";
+        const previewClass=outgoingIsRead?" is-read":outgoingIsDelivered?" is-delivered":outgoingIsQueued?" is-queued":outgoingIsFailed?" is-failed":"";
+        const checks=chat.lastOutgoing?"<span class='preview-check"+previewClass+"' title='"+previewLabel+"' aria-label='"+previewLabel+"'>"+icon(previewIcon)+"</span>":"";
         const preview = chat.lastMessageType==="attachment" ? "📎 " + chat.preview : chat.preview;
         return "<div class='chat-row" + (selectedChatId===chat.id&&view==="chats"?" selected":"") + "' data-chat-id='" + esc(chat.id) + "' role='listitem' tabindex='0' aria-label='Open " + esc(chat.name) + "'>" +
           avatarHTML(chat) + "<div class='chat-copy'><div class='chat-line'><span class='chat-name'>" + esc(chat.name) + "</span><span class='chat-time" + (chat.unread>0?" unread":"") + "'>" + esc(chat.time || "") + "</span></div>" +
@@ -415,7 +421,13 @@
     const edited = message.editedAt ? "<span class='message-edited-label' title='Message edited'>Edited</span>" : "";
     const reactions = message.reactions && message.reactions.length ? "<span class='reaction'>" + esc(message.reactions.join(" ")) + "</span>" : "";
     const isRead=message.status==="read";
-    const checks = outgoing&&!callEvent ? "<span class='message-read-status " + (isRead?"is-read":"is-delivered") + "' title='" + (isRead?"Read by recipient":"Sent") + "' aria-label='" + (isRead?"Read by recipient":"Sent") + "'>" + icon(isRead?"checks":"check") + "</span>" : "";
+    const isDelivered=isRead||message.status==="delivered";
+    const isQueued=message.status==="queued";
+    const isFailed=message.status==="failed";
+    const tickIcon=isQueued?"clock":isFailed?"alert-circle":isDelivered?"checks":"check";
+    const tickClass=isQueued?"is-queued":isFailed?"is-failed":isRead?"is-read":isDelivered?"is-delivered":"is-sent";
+    const tickLabel=isQueued?"Waiting for connection":isFailed?"Could not send":isRead?"Read by recipient":isDelivered?"Delivered":"Sent";
+    const checks=outgoing&&!callEvent?"<span class='message-read-status "+tickClass+"' title='"+tickLabel+"' aria-label='"+tickLabel+"'>"+icon(tickIcon)+"</span>":"";
     const isVoiceAttachment = message.attachmentType==="voice" || message.messageType==="voice";
     const voiceDurationMs=Math.max(0,Math.min(120000,Number(message.voiceDurationMs)||0));
     const voiceDurationSeconds=Math.ceil(voiceDurationMs/1000);
@@ -1374,7 +1386,7 @@
         "<span class='wa-contact-option-icon'>"+icon(iconName)+"</span><span class='wa-contact-option-copy'><strong>"+esc(title)+"</strong><small>"+esc(subtitle)+"</small></span>"+
         "<span class='wa-contact-option-chevron'>"+icon("chevron")+"</span></button>";
     };
-    let detail="<div class='contact-hero contact-hero-modern' data-profile-chat-id='"+esc(chat.id)+"' title='Double-click the profile to return to this chat'>"+avatarHTML(chat)+"<h3>"+esc(chat.name)+"</h3><p>"+(chat.type==="group"?(chat.participants||[]).length+" participants":esc(chat.phone||"Custom in-app number"))+"</p>"+(chat.type==="person"?"<span class='contact-username'>@"+esc(chat.username||"user")+"</span>":"")+"<div class='contact-info-actions'>"+actions+"</div><button type='button' class='primary-button contact-open-chat-button' data-action='open-chat-from-profile' data-chat-id='"+esc(chat.id)+"'>"+icon("chat")+" Message</button></div>";
+    let detail="<div class='contact-hero contact-hero-modern'>"+avatarHTML(chat)+"<h3>"+esc(chat.name)+"</h3><p>"+(chat.type==="group"?(chat.participants||[]).length+" participants":esc(chat.phone||"Custom in-app number"))+"</p>"+(chat.type==="person"?"<span class='contact-username'>@"+esc(chat.username||"user")+"</span>":"")+"<div class='contact-info-actions'>"+actions+"</div></div>";
     if(chat.type==="group"){
       detail+="<div class='description-card'><h4>Group description</h4><p>"+esc(chat.about||"No description added")+"</p></div><div class='section-card wa-contact-group-card'><h3 class='section-card-title'>Participants · "+(chat.participants||[]).length+"</h3><button type='button' class='setting-row' data-action='add-participants' data-chat-id='"+esc(chat.id)+"'>"+icon("user-plus")+"<span class='setting-copy'><span class='setting-title'>Add participants</span></span>"+icon("chevron")+"</button>"+(chat.participants||[]).map((person,i)=>{const name=typeof person==="string"?person:(person.name||person.username||"Member");return "<div class='member-row'>"+avatarHTML({name:name,avatar:(i%12)+1,avatarData:typeof person==="object"?person.avatarData:""})+"<span class='member-name'>"+esc(name)+"</span>"+(i===0?"<span class='member-role'>Admin</span>":"")+"</div>";}).join("")+"</div><div class='section-card wa-contact-group-card'>"+settingRow("edit","Edit group subject",chat.name,"edit-group")+"<button type='button' class='setting-row' data-action='edit-group-description' data-chat-id='"+esc(chat.id)+"'>"+icon("info")+"<span class='setting-copy'><span class='setting-title'>Edit group description</span><span class='setting-subtitle'>"+esc(chat.about||"Add a description")+"</span></span>"+icon("chevron")+"</button></div>";
     } else {
@@ -2135,7 +2147,6 @@ function openSharedItemsDialog(chat,kind) {
   }
   function handleAction(action,el) {
     const chat=findChat(el.dataset.chatId)||currentChat();
-    if(action==="open-chat-from-profile"){if(chat){selectChat(chat.id);}else toast("This conversation is no longer available.");return;}
     if(action==="rename-contact" && chat && chat.type==="person"){
       openDialog("Rename contact","<p class='screen-description'>This name is saved on this device only.</p><div class='dialog-field'><label for='contact-alias-name'>Contact name</label><input id='contact-alias-name' maxlength='60' value='"+esc(chat.name)+"' autocomplete='off'></div>","<button class='secondary-button' data-action='close-dialog'>Cancel</button><button class='primary-button' data-dialog-action='save-contact-name' data-chat-id='"+esc(chat.id)+"'>Save name</button>");return;
     }
@@ -2637,26 +2648,6 @@ function openSharedItemsDialog(chat,kind) {
       }
       t.value="";
     }
-  });
-  let lastContactProfileTap=null;
-  main.addEventListener("pointerup",event=>{
-    if(event.pointerType!=="touch")return;
-    const profile=event.target.closest(".contact-hero-modern[data-profile-chat-id]");
-    if(!profile||event.target.closest("button,a,input,textarea,select")){lastContactProfileTap=null;return;}
-    const chatId=String(profile.dataset.profileChatId||"");
-    if(!chatId)return;
-    const now=Date.now();
-    if(lastContactProfileTap&&lastContactProfileTap.chatId===chatId&&now-lastContactProfileTap.at<650){
-      lastContactProfileTap=null;event.preventDefault();selectChat(chatId);return;
-    }
-    lastContactProfileTap={chatId,at:now};
-  },true);
-  main.addEventListener("dblclick",event=>{
-    const profile=event.target.closest(".contact-hero-modern[data-profile-chat-id]");
-    if(!profile||event.target.closest("button,a,input,textarea,select"))return;
-    const chatId=String(profile.dataset.profileChatId||"");
-    if(!chatId)return;
-    event.preventDefault();selectChat(chatId);
   });
   document.addEventListener("keydown",event=>{
     if(event.key==="Escape"){
